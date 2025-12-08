@@ -97,7 +97,12 @@ The backend automatically detects the presence of built static files and serves 
 ├── openfin/              # OpenFin deployment configuration
 │   ├── app.json          # Application manifest
 │   ├── fdc3-intents.json # FDC3 intent declarations
-│   └── provider.json     # Service provider config
+│   ├── provider.json     # Service provider config
+│   └── README.md         # OpenFin deployment guide
+├── finsemble/            # Finsemble deployment configuration
+│   ├── appConfig.json    # Finsemble app configuration
+│   ├── channels.json     # Channel bindings
+│   └── README.md         # Finsemble deployment guide
 └── server.py             # FastAPI application entry point
 ```
 
@@ -151,8 +156,30 @@ Located in the `openfin/` directory:
 - `finos.creditnexus.esgData` - ESG analytics data
 
 ### App Channels
-- `creditnexus.workflow` - Workflow state updates
+- `creditnexus.workflow` - Workflow state updates and approvals
 - `creditnexus.extraction` - Document extraction events
+- `creditnexus.portfolio` - Portfolio analytics and updates
+
+## Finsemble Deployment
+
+CreditNexus is also compatible with Finsemble platform deployment for enterprise desktop integration.
+
+### Configuration Files
+Located in the `finsemble/` directory:
+- **`appConfig.json`**: Finsemble application configuration with component settings
+- **`channels.json`**: Channel bindings for inter-application communication
+- **`README.md`**: Detailed deployment instructions
+
+### Key Features
+- Component-based architecture for Finsemble workspace integration
+- Same FDC3 2.0 intents and context types as OpenFin deployment
+- App channels for workflow, extraction, and portfolio events
+- Context handlers for navigation and action routing
+
+### App Channels
+- `creditnexus.workflow` - Workflow state updates and approvals
+- `creditnexus.extraction` - Document extraction events
+- `creditnexus.portfolio` - Portfolio analytics and updates
 
 ## Recent Changes (December 2024)
 - Created FastAPI backend with extraction endpoints

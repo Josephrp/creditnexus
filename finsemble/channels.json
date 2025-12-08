@@ -1,0 +1,155 @@
+{
+  "$schema": "https://documentation.finsemble.com/schemas/channels.schema.json",
+  "version": "1.0.0",
+  "channels": {
+    "system": {
+      "description": "Standard FDC3 system channels for cross-application communication",
+      "channels": [
+        {
+          "id": "fdc3.channel.1",
+          "type": "user",
+          "displayMetadata": {
+            "name": "Channel 1",
+            "color": "#FF5733",
+            "glyph": "1"
+          }
+        },
+        {
+          "id": "fdc3.channel.2",
+          "type": "user",
+          "displayMetadata": {
+            "name": "Channel 2",
+            "color": "#33FF57",
+            "glyph": "2"
+          }
+        },
+        {
+          "id": "fdc3.channel.3",
+          "type": "user",
+          "displayMetadata": {
+            "name": "Channel 3",
+            "color": "#3357FF",
+            "glyph": "3"
+          }
+        },
+        {
+          "id": "fdc3.channel.4",
+          "type": "user",
+          "displayMetadata": {
+            "name": "Channel 4",
+            "color": "#FF33F5",
+            "glyph": "4"
+          }
+        }
+      ]
+    },
+    "app": {
+      "description": "Application-specific channels for CreditNexus workflows",
+      "channels": [
+        {
+          "id": "creditnexus.workflow",
+          "type": "app",
+          "displayMetadata": {
+            "name": "CreditNexus Workflow",
+            "color": "#1E40AF",
+            "description": "Channel for workflow state updates and approvals"
+          },
+          "broadcasts": [
+            "finos.creditnexus.agreement",
+            "finos.creditnexus.approvalResult"
+          ],
+          "listensFor": [
+            "finos.creditnexus.approvalResult"
+          ]
+        },
+        {
+          "id": "creditnexus.extraction",
+          "type": "app",
+          "displayMetadata": {
+            "name": "CreditNexus Extraction",
+            "color": "#059669",
+            "description": "Channel for document extraction events"
+          },
+          "broadcasts": [
+            "finos.creditnexus.agreement"
+          ],
+          "listensFor": [
+            "finos.creditnexus.document"
+          ]
+        },
+        {
+          "id": "creditnexus.portfolio",
+          "type": "app",
+          "displayMetadata": {
+            "name": "CreditNexus Portfolio",
+            "color": "#7C3AED",
+            "description": "Channel for portfolio analytics and updates"
+          },
+          "broadcasts": [
+            "finos.creditnexus.portfolio",
+            "finos.creditnexus.esgData"
+          ],
+          "listensFor": [
+            "finos.creditnexus.portfolio"
+          ]
+        }
+      ]
+    }
+  },
+  "channelBindings": {
+    "creditnexus": {
+      "description": "Default channel bindings for CreditNexus application",
+      "defaultChannel": "creditnexus.workflow",
+      "autoJoin": true,
+      "bindings": [
+        {
+          "contextType": "finos.creditnexus.agreement",
+          "channels": ["creditnexus.workflow", "creditnexus.extraction"]
+        },
+        {
+          "contextType": "finos.creditnexus.document",
+          "channels": ["creditnexus.extraction"]
+        },
+        {
+          "contextType": "finos.creditnexus.approvalResult",
+          "channels": ["creditnexus.workflow"]
+        },
+        {
+          "contextType": "finos.creditnexus.portfolio",
+          "channels": ["creditnexus.portfolio"]
+        },
+        {
+          "contextType": "finos.creditnexus.esgData",
+          "channels": ["creditnexus.portfolio"]
+        }
+      ]
+    }
+  },
+  "contextHandlers": {
+    "finos.creditnexus.agreement": {
+      "handler": "handleAgreementContext",
+      "description": "Navigate to agreement detail view",
+      "actions": ["view", "edit", "approve"]
+    },
+    "finos.creditnexus.document": {
+      "handler": "handleDocumentContext",
+      "description": "Initiate document extraction workflow",
+      "actions": ["extract"]
+    },
+    "finos.creditnexus.portfolio": {
+      "handler": "handlePortfolioContext",
+      "description": "Navigate to portfolio dashboard",
+      "actions": ["view", "analyze"]
+    },
+    "finos.creditnexus.approvalResult": {
+      "handler": "handleApprovalResult",
+      "description": "Process approval workflow result",
+      "actions": ["notify", "update"]
+    },
+    "finos.creditnexus.esgData": {
+      "handler": "handleESGContext",
+      "description": "Display ESG analytics",
+      "actions": ["view", "report"]
+    }
+  }
+}
