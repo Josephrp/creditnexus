@@ -1,323 +1,293 @@
 # CreditNexus: FINOS-Compliant Financial AI Agent
 
-A production-grade financial AI agent that extracts structured data from credit agreements using OpenAI's GPT-4o, LangChain, and the FINOS Common Domain Model (CDM). Built as a full-stack application with a React frontend and Python backend.
+A production-grade financial AI agent that extracts structured data from credit agreements using OpenAI's GPT-4o, LangChain, and the FINOS Common Domain Model (CDM). Built as a full-stack enterprise application with a React frontend and Python backend.
+
+## Features
+
+### AI-Powered Extraction
+- **Structured Data Extraction**: Extracts FINOS CDM-compliant data from unstructured credit agreement text
+- **Smart Strategy Selection**: Automatically chooses between simple and map-reduce extraction based on document length
+- **Reflexion Pattern**: Automatic retry with validation error feedback for improved accuracy
+- **Long Document Processing**: Map-reduce strategy for documents > 50k characters
+
+### Enterprise Features
+- **User Authentication**: Secure login with Replit OAuth2 PKCE flow
+- **Document Library**: Browse, search, and manage saved documents
+- **Version History**: Track all versions of a document with full audit trail
+- **Workflow Management**: Draft → Under Review → Approved → Published state machine
+- **Audit Logging**: Full audit trail for all user actions with timestamps and metadata
+- **Dashboard Analytics**: Portfolio overview with total commitments, ESG scores, and maturity timelines
+- **Export Capabilities**: Download extracted data as JSON, CSV, or Excel
+
+### Desktop Interoperability
+- **FDC3 2.0 Compliant**: Full support for Financial Desktop Connectivity standard
+- **OpenFin Ready**: Pre-configured app manifests and intent declarations
+- **Finsemble Ready**: Application configuration with channel bindings
+- **App Channels**: Real-time communication for workflow, extraction, and portfolio events
 
 ## Architecture
 
-This system implements a "Validation-First" paradigm that bridges the gap between probabilistic LLMs and deterministic financial systems:
-
-- **Frontend Layer**: React + TypeScript with FDC3 integration for desktop interoperability
-- **API Layer**: FastAPI REST API (to be implemented)
-- **Cognitive Layer**: OpenAI GPT-4o for semantic parsing and extraction
-- **Orchestration Layer**: LangChain for context management and chain execution
-- **Validation Layer**: Pydantic for schema enforcement and type checking
-- **Ontology Layer**: FINOS CDM for standardized financial data representation
-- **Data Layer**: PostgreSQL + SQLModel for persistence, ChromaDB for RAG (to be implemented)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         CreditNexus Architecture                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Frontend Layer        │  React + TypeScript + Tailwind CSS             │
+│  (Port 5000)           │  FDC3 Integration for desktop interoperability │
+├─────────────────────────────────────────────────────────────────────────┤
+│  API Layer             │  FastAPI REST API                              │
+│  (Port 8000)           │  Authentication, CORS, Static file serving     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Cognitive Layer       │  OpenAI GPT-4o for semantic parsing            │
+│                        │  LangChain for orchestration                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Validation Layer      │  Pydantic for schema enforcement               │
+│                        │  Business logic validation                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Data Layer            │  PostgreSQL for persistence                    │
+│                        │  SQLModel ORM                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Ontology Layer        │  FINOS CDM for standardized representation     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Project Structure
 
 ```
 creditnexus/
 ├── app/                          # Python backend application
+│   ├── api/                      # FastAPI routes
+│   │   └── routes.py             # API endpoints
 │   ├── core/
-│   │   └── config.py             # Configuration management with pydantic-settings
+│   │   └── config.py             # Configuration management
+│   ├── db/
+│   │   ├── models.py             # SQLModel database models
+│   │   └── session.py            # Database session management
 │   ├── models/
 │   │   ├── cdm.py                # FINOS CDM Pydantic models
-│   │   └── partial_cdm.py        # Partial models for map-reduce extraction
+│   │   └── partial_cdm.py        # Partial models for map-reduce
 │   ├── chains/
-│   │   ├── extraction_chain.py   # LangChain orchestration (simple extraction)
-│   │   └── map_reduce_chain.py   # Map-reduce strategy for long documents
+│   │   ├── extraction_chain.py   # Simple extraction chain
+│   │   └── map_reduce_chain.py   # Map-reduce for long documents
 │   └── utils/
 │       ├── document_splitter.py  # Article-based document splitting
-│       └── pdf_extractor.py     # PDF text extraction utilities
+│       └── pdf_extractor.py      # PDF text extraction
 ├── client/                       # React frontend application
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ReviewInterface.tsx  # Human-in-the-loop review UI
-│   │   │   └── ui/               # shadcn/ui components
-│   │   ├── hooks/
-│   │   │   └── useFDC3.ts        # FDC3 integration hook
+│   │   │   ├── Dashboard.tsx     # Portfolio analytics dashboard
+│   │   │   ├── DocumentHistory.tsx # Document history and version management
+│   │   │   ├── ReviewInterface.tsx # Extraction review UI
+│   │   │   └── ui/               # Reusable UI components
+│   │   ├── context/
+│   │   │   └── FDC3Context.tsx   # FDC3 integration context
 │   │   ├── App.tsx               # Main application component
 │   │   └── main.tsx              # Application entry point
-│   └── package.json
-├── tests/                        # Test suite
-│   └── test_cdm.py               # CDM model validation tests
-├── main.py                       # Demo script (simple extraction)
-├── main_long_doc.py              # Demo script (map-reduce extraction)
-├── verify_env.py                 # Environment validation script
+│   └── dist/                     # Built static files (production)
+├── openfin/                      # OpenFin deployment configuration
+│   ├── app.json                  # Application manifest
+│   ├── fdc3-intents.json         # FDC3 intent declarations
+│   ├── provider.json             # Service provider config
+│   └── README.md                 # OpenFin deployment guide
+├── finsemble/                    # Finsemble deployment configuration
+│   ├── appConfig.json            # Finsemble app configuration
+│   ├── channels.json             # Channel bindings
+│   └── README.md                 # Finsemble deployment guide
+├── server.py                     # FastAPI application entry point
 ├── requirements.txt              # Python dependencies
-└── .env                          # Environment variables (create this)
+└── README.md                     # This file
 ```
 
-## Features
-
-### ✅ Implemented
-
-- **Structured Data Extraction**: Extracts FINOS CDM-compliant data from unstructured credit agreement text
-- **Deterministic Validation**: Pydantic models enforce strict validation (type checking, business logic, schema compliance)
-- **Spread Normalization**: Automatically converts percentage spreads to basis points (e.g., 2.75% → 275.0 bps)
-- **Long Document Processing**: Map-reduce strategy for documents > 50k characters
-  - Article-based document splitting
-  - Parallel partial extraction
-  - Intelligent merging of partial results
-- **PDF Support**: Text extraction from PDF documents
-- **Frontend UI**: React-based review interface with document comparison
-- **FDC3 Integration**: Desktop interoperability hook (with mock mode for browser testing)
-- **Reflexion Pattern**: Automatic retry with validation error feedback
-
-### 🚧 In Progress / To Be Implemented
-
-- **FastAPI Backend**: REST API server with extraction endpoints
-- **Database Integration**: PostgreSQL with SQLModel for data persistence
-- **Staging Area**: Backend storage for approved/rejected extractions
-- **ChromaDB RAG**: Vector store for semantic search and document similarity
-- **PDF Upload**: Frontend file upload with backend processing
-- **LangSmith Integration**: Observability and monitoring
-- **Production Deployment**: Docker configuration, environment setup
-
-## Setup Instructions
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
 - Node.js 18+ and npm
-- PostgreSQL (for future database integration)
+- PostgreSQL database
 - OpenAI API key
 
-### Backend Setup
+### Environment Variables
 
-1. **Install Python Dependencies**
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key for GPT-4o access |
+| `DATABASE_URL` | PostgreSQL connection string |
 
-```bash
-pip install -r requirements.txt
-```
+### Development
 
-2. **Configure Environment**
-
-Create a `.env` file in the project root:
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-# Future: Database configuration
-# DATABASE_URL=postgresql://user:password@localhost/creditnexus
-```
-
-3. **Verify Environment**
+Both frontend and backend run concurrently:
 
 ```bash
-python verify_env.py
+# Backend (runs on port 8000)
+uvicorn server:app --host 127.0.0.1 --port 8000 --reload
+
+# Frontend (runs on port 5000)
+cd client && npm run dev
 ```
 
-You should see: `Environment Configured Successfully`
+The Vite frontend proxies `/api` requests to the backend automatically.
 
-4. **Run Demo Scripts**
+### Production Build
 
 ```bash
-# Simple extraction demo
-python main.py
+# Build frontend
+cd client && npm run build
 
-# Long document extraction demo
-python main_long_doc.py
+# Start production server (serves both API and static files)
+uvicorn server:app --host 0.0.0.0 --port 5000
 ```
 
-### Frontend Setup
+## API Reference
 
-1. **Navigate to Client Directory**
+### Extraction
 
-```bash
-cd client
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `POST /api/extract` | POST | Extract structured data from credit agreement text |
+| `GET /api/health` | GET | Health check endpoint |
 
-2. **Install Dependencies**
+### Documents
 
-```bash
-npm install
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/documents` | GET | List all documents |
+| `GET /api/documents/{id}` | GET | Get document by ID |
+| `POST /api/documents` | POST | Create new document |
+| `PUT /api/documents/{id}` | PUT | Update document |
+| `DELETE /api/documents/{id}` | DELETE | Delete document |
+| `GET /api/documents/{id}/versions` | GET | Get document version history |
+| `GET /api/documents/{id}/export` | GET | Export document (format: json, csv, excel) |
 
-3. **Start Development Server**
+### Workflows
 
-```bash
-npm run dev
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/workflows/{document_id}` | GET | Get workflow state |
+| `POST /api/workflows/{document_id}/transition` | POST | Transition workflow state |
 
-The frontend will be available at `http://localhost:5173` (or the port Vite assigns).
+### Analytics
 
-4. **Build for Production**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/analytics/portfolio` | GET | Get portfolio analytics |
 
-```bash
-npm run build
-```
+### Authentication
 
-## Usage
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/auth/login` | GET | Initiate OAuth login |
+| `GET /api/auth/callback` | GET | OAuth callback handler |
+| `GET /api/auth/me` | GET | Get current user |
+| `POST /api/auth/logout` | POST | Logout user |
 
-### Python API (Current)
+## Data Models (FINOS CDM)
+
+All extracted data conforms to the FINOS Common Domain Model:
 
 ```python
-from app.chains.extraction_chain import extract_data, extract_data_smart
-from app.utils.pdf_extractor import extract_text_from_pdf
-
-# Simple extraction (for documents < 50k characters)
-agreement_text = """
-This CREDIT AGREEMENT, dated as of October 15, 2023...
-"""
-result = extract_data(agreement_text)
-
-# Smart extraction (auto-selects strategy based on document length)
-result = extract_data_smart(agreement_text)
-
-# Force map-reduce strategy for long documents
-result = extract_data_smart(agreement_text, force_map_reduce=True)
-
-# Extract from PDF
-text = extract_text_from_pdf('agreement.pdf')
-result = extract_data_smart(text)
-
-# Access extracted data
-if result.status == ExtractionStatus.SUCCESS:
-    agreement = result.agreement
-    print(f"Agreement Date: {agreement.agreement_date}")
-    print(f"Borrower: {agreement.parties[0].name}")
-    print(f"Commitment: ${agreement.facilities[0].commitment_amount.amount:,.0f}")
+CreditAgreement
+├── agreement_date: date
+├── effective_date: date (optional)
+├── governing_law: str
+├── parties: List[Party]
+│   ├── name: str
+│   ├── role: PartyRole (Borrower, Lender, AdministrativeAgent, etc.)
+│   └── jurisdiction: str (optional)
+├── facilities: List[LoanFacility]
+│   ├── facility_type: FacilityType (Revolving, TermLoan, etc.)
+│   ├── commitment_amount: Money
+│   ├── maturity_date: date
+│   └── interest_rate_payout: InterestRatePayout
+│       ├── rate_type: str (Floating, Fixed)
+│       ├── floating_rate_option: FloatingRateOption
+│       │   ├── benchmark: str (SOFR, LIBOR, etc.)
+│       │   └── spread_bps: Decimal (basis points)
+│       └── payment_frequency: str
+└── covenants: List[Covenant] (optional)
 ```
-
-### Frontend (Current)
-
-1. Upload a credit agreement PDF or paste text
-2. Click "Extract Data" to process the document
-3. Review the extracted data in the review interface
-4. Approve or reject the extraction
-5. Approved data is broadcast via FDC3 (if available)
-
-### REST API (To Be Implemented)
-
-```bash
-# Extract from text
-curl -X POST http://localhost:8000/api/extract \
-  -H "Content-Type: application/json" \
-  -d '{"text": "This CREDIT AGREEMENT..."}'
-
-# Extract from PDF
-curl -X POST http://localhost:8000/api/extract/pdf \
-  -F "file=@agreement.pdf"
-
-# Approve extraction
-curl -X POST http://localhost:8000/api/staging/approve \
-  -H "Content-Type: application/json" \
-  -d '{"extraction_id": "..."}'
-```
-
-## Long Document Processing
-
-The system automatically handles long credit agreements (300+ pages) using a Map-Reduce strategy:
-
-1. **Document Splitting**: Splits documents by Articles (Article I, Article II, etc.)
-2. **Map Phase**: Extracts partial data from each section independently
-3. **Reduce Phase**: Merges all partial extractions into a complete CreditAgreement
-
-The system automatically chooses between simple extraction and map-reduce based on document length (threshold: 50k characters).
 
 ## Validation Rules
 
-The system enforces strict validation to ensure data quality:
+The system enforces strict validation:
 
-- **Type Safety**: All fields must match their declared types (dates, decimals, enums)
-- **Business Logic**: 
+- **Type Safety**: All fields must match declared types
+- **Business Logic**:
+  - Agreement date cannot be in the future
   - Maturity date must be after agreement date
   - All facilities must use the same currency
   - At least one party must have role "Borrower"
-- **Schema Compliance**: Output must conform to FINOS CDM structure
-- **Date Validation**: Agreement dates cannot be in the future
-- **Spread Conversion**: Percentage spreads are automatically converted to basis points
+- **Spread Normalization**: Percentages automatically converted to basis points (3.5% → 350.0)
+- **Precision**: All monetary amounts use Decimal for financial precision
 
 ## FDC3 Integration
 
-CreditNexus supports FDC3 (Financial Desktop Connectivity) for desktop interoperability:
+### Supported Intents
 
-- **Context Type**: `fdc3.creditnexus.loan`
-- **Broadcast**: Approved extractions are broadcast to other FDC3-compliant applications
-- **Listen**: Can receive loan context from other applications
-- **Mock Mode**: Automatically falls back to console logging when FDC3 is unavailable (browser mode)
+| Intent | Description |
+|--------|-------------|
+| `ViewLoanAgreement` | View credit agreement details |
+| `ApproveLoanAgreement` | Approve or reject agreements |
+| `ViewESGAnalytics` | View ESG scores and metrics |
+| `ExtractCreditAgreement` | Extract data from documents |
+| `ViewPortfolio` | View portfolio overview |
+
+### Custom Context Types
+
+| Context Type | Description |
+|--------------|-------------|
+| `finos.creditnexus.agreement` | Credit agreement context |
+| `finos.creditnexus.document` | Document for extraction |
+| `finos.creditnexus.portfolio` | Portfolio context |
+| `finos.creditnexus.approvalResult` | Approval workflow result |
+| `finos.creditnexus.esgData` | ESG analytics data |
+
+### App Channels
+
+| Channel | Purpose |
+|---------|---------|
+| `creditnexus.workflow` | Workflow state updates and approvals |
+| `creditnexus.extraction` | Document extraction events |
+| `creditnexus.portfolio` | Portfolio analytics and updates |
+
+## Desktop Deployment
+
+### OpenFin
+
+See [openfin/README.md](openfin/README.md) for detailed OpenFin deployment instructions.
+
+```bash
+# Install OpenFin CLI
+npm install -g openfin-cli
+
+# Launch application
+openfin -l -c openfin/app.json
+```
+
+### Finsemble
+
+See [finsemble/README.md](finsemble/README.md) for detailed Finsemble deployment instructions.
+
+1. Copy `finsemble/appConfig.json` to your Finsemble configs directory
+2. Update the `url` field with your deployed application URL
+3. Restart Finsemble to load the new component
 
 ## Security
 
-- API keys stored in environment variables (12-Factor App principles)
-- `.env` file excluded from version control
-- Configuration validated at startup using `pydantic-settings`
-- Type-safe secret handling with `SecretStr`
-
-## Development
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Code Quality
-
-The codebase follows:
-- Type hints throughout (Python and TypeScript)
-- Pydantic v2 for validation
-- LangChain Expression Language (LCEL) for chain composition
-- Strict TypeScript configuration
-- ESLint for frontend code quality
-
-### Project Standards
-
-- **Backend**: Python 3.11+, FastAPI, Pydantic v2, LangChain
-- **Frontend**: React 19, TypeScript, Tailwind CSS, shadcn/ui, FDC3
-- **Data**: FINOS CDM compliance required for all financial data structures
-- **Architecture**: Monorepo structure with strict separation between `/client` and `/app`
-
-## Roadmap
-
-### Completed ✅
-
-- [x] Core extraction logic with structured outputs
-- [x] Map-reduce strategy for long documents
-- [x] Document splitting by Articles
-- [x] PDF text extraction
-- [x] Frontend UI with review interface
-- [x] FDC3 integration hook
-- [x] Validation-first architecture
-- [x] Spread normalization (percentage to basis points)
-
-### In Progress 🚧
-
-- [ ] FastAPI backend server
-- [ ] REST API endpoints
-- [ ] Database integration (PostgreSQL + SQLModel)
-- [ ] Staging area for approved/rejected data
-- [ ] PDF upload handling
-
-### Planned 📋
-
-- [ ] ChromaDB RAG implementation
-- [ ] LangSmith integration for observability
-- [ ] Enhanced error handling and logging
-- [ ] Production deployment configuration
-- [ ] Support for additional CDM entities (amendments, waivers, etc.)
-- [ ] Unit and integration test coverage expansion
-
-## Contributing
-
-This project implements the FINOS Common Domain Model (CDM) for financial data interoperability. When contributing:
-
-1. Ensure all financial data structures align with FINOS CDM
-2. Use Pydantic v2 BaseModel for all entities
-3. Include detailed Field descriptions (these serve as LLM prompts)
-4. Always use `llm.with_structured_output()` for LLM interactions
-5. Catch `pydantic.ValidationError` explicitly and implement retry logic
-
-## License
-
-This project implements the FINOS Common Domain Model (CDM) for financial data interoperability.
+- OAuth2 PKCE authentication flow
+- Role-based access control (Viewer, Analyst, Reviewer, Admin)
+- API keys stored as encrypted secrets
+- Session management with secure cookies
+- Full audit logging for compliance
 
 ## References
 
 - [FINOS Common Domain Model](https://cdm.finos.org/)
-- [LangChain Documentation](https://docs.langchain.com/)
-- [Pydantic Documentation](https://docs.pydantic.dev/)
-- [OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
 - [FDC3 Specification](https://fdc3.finos.org/)
+- [OpenFin Documentation](https://developers.openfin.co/)
+- [Finsemble Documentation](https://documentation.finsemble.com/)
+- [LangChain Documentation](https://docs.langchain.com/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
+
+## License
+
+This project implements the FINOS Common Domain Model (CDM) for financial data interoperability.
