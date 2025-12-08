@@ -1068,6 +1068,137 @@ async def get_portfolio_analytics(
         )
 
 
+@router.get("/analytics/dashboard")
+async def get_dashboard_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get enhanced dashboard analytics with activity feed and key metrics.
+    
+    Returns:
+        Dashboard analytics including key metrics, activity feed from audit logs,
+        pending approvals, and trend indicators.
+    """
+    from sqlalchemy import func
+    from datetime import timedelta
+    
+    try:
+        now = datetime.utcnow()
+        week_ago = now - timedelta(days=7)
+        two_weeks_ago = now - timedelta(days=14)
+        
+        total_documents = db.query(Document).count()
+        
+        docs_this_week = db.query(Document).filter(
+            Document.created_at >= week_ago
+        ).count()
+        
+        docs_last_week = db.query(Document).filter(
+            Document.created_at >= two_weeks_ago,
+            Document.created_at < week_ago
+        ).count()
+        
+        pending_review = db.query(Workflow).filter(
+            Workflow.state == WorkflowState.UNDER_REVIEW.value
+        ).count()
+        
+        approved_this_week = db.query(Workflow).filter(
+            Workflow.state == WorkflowState.APPROVED.value,
+            Workflow.updated_at >= week_ago
+        ).count()
+        
+        published_count = db.query(Workflow).filter(
+            Workflow.state == WorkflowState.PUBLISHED.value
+        ).count()
+        
+        draft_count = db.query(Workflow).filter(
+            Workflow.state == WorkflowState.DRAFT.value
+        ).count()
+        
+        commitment_result = db.query(
+            func.sum(Document.total_commitment)
+        ).filter(
+            Document.currency == "USD",
+            Document.total_commitment.isnot(None)
+        ).scalar()
+        total_commitment_usd = float(commitment_result) if commitment_result else 0
+        
+        sustainability_count = db.query(Document).filter(
+            Document.sustainability_linked == True
+        ).count()
+        sustainability_percentage = (sustainability_count / total_documents * 100) if total_documents > 0 else 0
+        
+        activity_logs = db.query(AuditLog).options(
+            joinedload(AuditLog.user)
+        ).order_by(AuditLog.occurred_at.desc()).limit(15).all()
+        
+        activity_feed = []
+        for log in activity_logs:
+            action_descriptions = {
+                "create": "created",
+                "update": "updated",
+                "delete": "deleted",
+                "approve": "approved",
+                "reject": "rejected",
+                "publish": "published",
+                "export": "exported",
+                "submit_review": "submitted for review",
+                "login": "logged in",
+                "logout": "logged out",
+                "broadcast": "broadcast message"
+            }
+            
+            action_text = action_descriptions.get(log.action, log.action)
+            target_name = None
+            if log.action_metadata:
+                target_name = log.action_metadata.get("title") or log.action_metadata.get("name")
+            
+            activity_feed.append({
+                "id": log.id,
+                "action": log.action,
+                "action_text": action_text,
+                "target_type": log.target_type,
+                "target_id": log.target_id,
+                "target_name": target_name,
+                "user_name": log.user.display_name if log.user else "System",
+                "user_id": log.user_id,
+                "occurred_at": log.occurred_at.isoformat() if log.occurred_at else None,
+                "metadata": log.action_metadata
+            })
+        
+        docs_trend = 0
+        if docs_last_week > 0:
+            docs_trend = round(((docs_this_week - docs_last_week) / docs_last_week) * 100, 1)
+        elif docs_this_week > 0:
+            docs_trend = 100.0
+        
+        return {
+            "status": "success",
+            "dashboard": {
+                "key_metrics": {
+                    "total_documents": total_documents,
+                    "docs_this_week": docs_this_week,
+                    "docs_trend_percent": docs_trend,
+                    "pending_review": pending_review,
+                    "approved_this_week": approved_this_week,
+                    "published_count": published_count,
+                    "draft_count": draft_count,
+                    "total_commitment_usd": total_commitment_usd,
+                    "sustainability_count": sustainability_count,
+                    "sustainability_percentage": round(sustainability_percentage, 1)
+                },
+                "activity_feed": activity_feed,
+                "last_updated": now.isoformat()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dashboard analytics: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to fetch dashboard analytics: {str(e)}"}
+        )
+
+
 class WorkflowTransitionRequest(BaseModel):
     """Request model for workflow transitions."""
     comment: Optional[str] = Field(None, description="Optional comment for the transition")

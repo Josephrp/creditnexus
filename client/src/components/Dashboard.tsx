@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Leaf,
   FileText,
   Clock,
@@ -10,7 +11,16 @@ import {
   AlertCircle,
   RefreshCw,
   Calendar,
-  Building2
+  Building2,
+  Activity,
+  Eye,
+  Edit,
+  Trash2,
+  Send,
+  Download,
+  LogIn,
+  LogOut,
+  FileCheck
 } from 'lucide-react';
 import { fetchWithAuth } from '@/context/AuthContext';
 import { SkeletonDashboard, EmptyState } from '@/components/ui/skeleton';
@@ -47,12 +57,68 @@ interface PortfolioAnalytics {
   }>;
 }
 
+interface DashboardMetrics {
+  key_metrics: {
+    total_documents: number;
+    docs_this_week: number;
+    docs_trend_percent: number;
+    pending_review: number;
+    approved_this_week: number;
+    published_count: number;
+    draft_count: number;
+    total_commitment_usd: number;
+    sustainability_count: number;
+    sustainability_percentage: number;
+  };
+  activity_feed: Array<{
+    id: number;
+    action: string;
+    action_text: string;
+    target_type: string;
+    target_id: number | null;
+    target_name: string | null;
+    user_name: string;
+    user_id: number | null;
+    occurred_at: string;
+    metadata: Record<string, unknown> | null;
+  }>;
+  last_updated: string;
+}
+
 const workflowStateColors: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
   under_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Under Review' },
   approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Approved' },
   published: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Published' },
   archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
+};
+
+const actionIcons: Record<string, typeof FileText> = {
+  create: FileText,
+  update: Edit,
+  delete: Trash2,
+  approve: CheckCircle,
+  reject: AlertCircle,
+  publish: Send,
+  export: Download,
+  submit_review: Eye,
+  login: LogIn,
+  logout: LogOut,
+  broadcast: Activity
+};
+
+const actionColors: Record<string, { bg: string; text: string }> = {
+  create: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  update: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  delete: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  approve: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  reject: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  publish: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  export: { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
+  submit_review: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  login: { bg: 'bg-green-500/20', text: 'text-green-400' },
+  logout: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  broadcast: { bg: 'bg-indigo-500/20', text: 'text-indigo-400' }
 };
 
 function formatCurrency(amount: number, currency: string = 'USD'): string {
@@ -76,41 +142,135 @@ function formatTimeAgo(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   
   if (days > 0) return `${days}d ago`;
   if (hours > 0) return `${hours}h ago`;
+  if (minutes > 0) return `${minutes}m ago`;
   return 'Just now';
+}
+
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: typeof FileText;
+  iconBg: string;
+  iconColor: string;
+  trend?: number;
+  trendLabel?: string;
+}
+
+function MetricCard({ title, value, subtitle, icon: Icon, iconBg, iconColor, trend, trendLabel }: MetricCardProps) {
+  return (
+    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-colors">
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center`}>
+          <Icon className={`h-5 w-5 ${iconColor}`} />
+        </div>
+        <span className="text-sm text-slate-400">{title}</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <p className="text-3xl font-bold text-white">{value}</p>
+        {trend !== undefined && (
+          <span className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {Math.abs(trend)}%
+          </span>
+        )}
+      </div>
+      {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+      {trendLabel && <p className="text-xs text-slate-500 mt-1">{trendLabel}</p>}
+    </div>
+  );
+}
+
+interface ActivityItemProps {
+  activity: DashboardMetrics['activity_feed'][0];
+}
+
+function ActivityItem({ activity }: ActivityItemProps) {
+  const Icon = actionIcons[activity.action] || Activity;
+  const colors = actionColors[activity.action] || { bg: 'bg-slate-500/20', text: 'text-slate-400' };
+  
+  return (
+    <div className="flex items-start gap-3 p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors">
+      <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+        <Icon className={`h-4 w-4 ${colors.text}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-white">
+          <span className="font-medium">{activity.user_name}</span>
+          <span className="text-slate-400"> {activity.action_text} </span>
+          {activity.target_name && (
+            <span className="font-medium text-slate-200">{activity.target_name}</span>
+          )}
+          {!activity.target_name && activity.target_type && activity.target_type !== 'user' && (
+            <span className="text-slate-400">{activity.target_type}</span>
+          )}
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          {activity.occurred_at ? formatTimeAgo(activity.occurred_at) : ''}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function Dashboard() {
   const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
-  const fetchAnalytics = async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsLoading(true);
+      else setIsRefreshing(true);
       setError(null);
-      const response = await fetchWithAuth('/api/analytics/portfolio');
-      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.detail?.message || 'Failed to fetch analytics');
+      const [portfolioRes, dashboardRes] = await Promise.all([
+        fetchWithAuth('/api/analytics/portfolio'),
+        fetchWithAuth('/api/analytics/dashboard')
+      ]);
+      
+      const portfolioData = await portfolioRes.json();
+      const dashboardData = await dashboardRes.json();
+      
+      if (!portfolioRes.ok) {
+        throw new Error(portfolioData.detail?.message || 'Failed to fetch portfolio analytics');
       }
       
-      setAnalytics(data.analytics);
+      setAnalytics(portfolioData.analytics);
+      
+      if (dashboardRes.ok && dashboardData.dashboard) {
+        setDashboardMetrics(dashboardData.dashboard);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAnalytics();
-  }, []);
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchData]);
 
   if (isLoading) {
     return <SkeletonDashboard />;
@@ -123,7 +283,7 @@ export function Dashboard() {
           <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
           <p className="text-slate-300 mb-4">{error}</p>
           <button
-            onClick={fetchAnalytics}
+            onClick={() => fetchData()}
             className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm mx-auto"
           >
             <RefreshCw className="h-4 w-4" />
@@ -140,6 +300,7 @@ export function Dashboard() {
 
   const { summary, workflow_distribution, esg_breakdown, maturity_timeline, recent_activity } = analytics;
   const totalWorkflowDocs = Object.values(workflow_distribution).reduce((a, b) => a + b, 0);
+  const metrics = dashboardMetrics?.key_metrics;
 
   return (
     <div className="space-y-6">
@@ -148,13 +309,25 @@ export function Dashboard() {
           <h2 className="text-2xl font-semibold text-white">Portfolio Dashboard</h2>
           <p className="text-slate-400 mt-1">Overview of your credit agreement portfolio</p>
         </div>
-        <button
-          onClick={fetchAnalytics}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20"
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={() => fetchData(false)}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {summary.total_documents === 0 && (
@@ -171,69 +344,114 @@ export function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <FileText className="h-5 w-5 text-blue-400" />
-            </div>
-            <span className="text-sm text-slate-400">Total Documents</span>
-          </div>
-          <p className="text-3xl font-bold text-white">{summary.total_documents}</p>
-          <p className="text-sm text-slate-500 mt-1">Credit agreements</p>
-        </div>
+        <MetricCard
+          title="Total Documents"
+          value={summary.total_documents}
+          subtitle="Credit agreements"
+          icon={FileText}
+          iconBg="bg-blue-500/20"
+          iconColor="text-blue-400"
+          trend={metrics?.docs_trend_percent}
+          trendLabel={metrics?.docs_this_week ? `${metrics.docs_this_week} this week` : undefined}
+        />
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-emerald-400" />
-            </div>
-            <span className="text-sm text-slate-400">Total Commitments</span>
-          </div>
-          <p className="text-3xl font-bold text-white">
-            {formatCurrency(summary.total_commitment_usd)}
-          </p>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {Object.entries(summary.commitments_by_currency).map(([currency, amount]) => (
-              <span key={currency} className="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
-                {currency}: {formatCurrency(amount, currency)}
-              </span>
-            ))}
-          </div>
-        </div>
+        <MetricCard
+          title="Total Commitments"
+          value={formatCurrency(summary.total_commitment_usd)}
+          icon={DollarSign}
+          iconBg="bg-emerald-500/20"
+          iconColor="text-emerald-400"
+          subtitle={Object.keys(summary.commitments_by_currency).length > 0 
+            ? `Across ${Object.keys(summary.commitments_by_currency).length} currencies`
+            : undefined}
+        />
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-              <Leaf className="h-5 w-5 text-green-400" />
-            </div>
-            <span className="text-sm text-slate-400">Sustainability-Linked</span>
-          </div>
-          <p className="text-3xl font-bold text-white">{summary.sustainability_percentage}%</p>
-          <p className="text-sm text-slate-500 mt-1">
-            {summary.sustainability_linked_count} of {summary.total_documents} documents
-          </p>
-        </div>
+        <MetricCard
+          title="Pending Review"
+          value={metrics?.pending_review ?? (workflow_distribution.under_review || 0)}
+          subtitle={metrics?.approved_this_week ? `${metrics.approved_this_week} approved this week` : undefined}
+          icon={Clock}
+          iconBg="bg-amber-500/20"
+          iconColor="text-amber-400"
+        />
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-purple-400" />
-            </div>
-            <span className="text-sm text-slate-400">Workflow Status</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-bold text-white">
-              {workflow_distribution.approved || 0}
-            </p>
-            <span className="text-sm text-emerald-400">approved</span>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            {workflow_distribution.under_review || 0} pending review
-          </p>
-        </div>
+        <MetricCard
+          title="Sustainability-Linked"
+          value={`${summary.sustainability_percentage}%`}
+          subtitle={`${summary.sustainability_linked_count} of ${summary.total_documents} documents`}
+          icon={Leaf}
+          iconBg="bg-green-500/20"
+          iconColor="text-green-400"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Published"
+          value={metrics?.published_count ?? (workflow_distribution.published || 0)}
+          subtitle="Final documents"
+          icon={FileCheck}
+          iconBg="bg-purple-500/20"
+          iconColor="text-purple-400"
+        />
+
+        <MetricCard
+          title="In Draft"
+          value={metrics?.draft_count ?? (workflow_distribution.draft || 0)}
+          subtitle="Work in progress"
+          icon={Edit}
+          iconBg="bg-slate-500/20"
+          iconColor="text-slate-400"
+        />
+
+        <MetricCard
+          title="Approved"
+          value={workflow_distribution.approved || 0}
+          subtitle="Ready to publish"
+          icon={CheckCircle}
+          iconBg="bg-emerald-500/20"
+          iconColor="text-emerald-400"
+        />
+
+        <MetricCard
+          title="Workflow Progress"
+          value={`${totalWorkflowDocs > 0 ? Math.round(((workflow_distribution.approved || 0) + (workflow_distribution.published || 0)) / totalWorkflowDocs * 100) : 0}%`}
+          subtitle="Completed rate"
+          icon={TrendingUp}
+          iconBg="bg-indigo-500/20"
+          iconColor="text-indigo-400"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-slate-400" />
+              <h3 className="text-lg font-medium text-white">Activity Feed</h3>
+            </div>
+            {dashboardMetrics?.last_updated && (
+              <span className="text-xs text-slate-500">
+                Updated {formatTimeAgo(dashboardMetrics.last_updated)}
+              </span>
+            )}
+          </div>
+          
+          {!dashboardMetrics?.activity_feed || dashboardMetrics.activity_feed.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+              <Activity className="h-8 w-8 mb-2" />
+              <p className="text-sm">No recent activity</p>
+              <p className="text-xs mt-1">Actions will appear here as they happen</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {dashboardMetrics.activity_feed.slice(0, 10).map((activity) => (
+                <ActivityItem key={activity.id} activity={activity} />
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="lg:col-span-2 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="h-5 w-5 text-slate-400" />
@@ -268,55 +486,18 @@ export function Dashboard() {
             </div>
           )}
         </div>
-
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Leaf className="h-5 w-5 text-green-400" />
-            <h3 className="text-lg font-medium text-white">ESG Breakdown</h3>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                <span className="text-sm text-green-300">Sustainability-Linked</span>
-              </div>
-              <span className="font-semibold text-green-400">{esg_breakdown.sustainability_linked}</span>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border border-slate-600">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-400" />
-                <span className="text-sm text-slate-300">Standard</span>
-              </div>
-              <span className="font-semibold text-slate-300">{esg_breakdown.non_sustainability}</span>
-            </div>
-            
-            {Object.keys(esg_breakdown.esg_score_distribution).length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">ESG Categories</p>
-                {Object.entries(esg_breakdown.esg_score_distribution).map(([category, count]) => (
-                  <div key={category} className="flex items-center justify-between py-1">
-                    <span className="text-sm text-slate-400">{category}</span>
-                    <span className="text-sm font-medium text-slate-300">{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-medium text-white">Recent Activity</h3>
+            <h3 className="text-lg font-medium text-white">Recent Documents</h3>
           </div>
           
           {recent_activity.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-slate-500">
-              No recent activity
+              No recent documents
             </div>
           ) : (
             <div className="space-y-3">
@@ -392,6 +573,51 @@ export function Dashboard() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Leaf className="h-5 w-5 text-green-400" />
+          <h3 className="text-lg font-medium text-white">ESG Breakdown</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-center justify-between p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+              <div>
+                <span className="text-sm text-green-300 block">Sustainability-Linked</span>
+                <span className="text-xs text-green-400/70">ESG compliant</span>
+              </div>
+            </div>
+            <span className="text-2xl font-bold text-green-400">{esg_breakdown.sustainability_linked}</span>
+          </div>
+          
+          <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5 text-slate-400" />
+              <div>
+                <span className="text-sm text-slate-300 block">Standard</span>
+                <span className="text-xs text-slate-400/70">Traditional agreements</span>
+              </div>
+            </div>
+            <span className="text-2xl font-bold text-slate-300">{esg_breakdown.non_sustainability}</span>
+          </div>
+          
+          {Object.keys(esg_breakdown.esg_score_distribution).length > 0 && (
+            <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">ESG Categories</p>
+              <div className="space-y-2">
+                {Object.entries(esg_breakdown.esg_score_distribution).map(([category, count]) => (
+                  <div key={category} className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">{category}</span>
+                    <span className="text-sm font-medium text-slate-300">{count}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
