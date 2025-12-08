@@ -42,7 +42,7 @@
                   "componentName": "view",
                   "componentState": {
                     "name": "creditnexus-main",
-                    "url": "${APP_URL}",
+                    "url": "http://localhost:5000",
                     "processAffinity": "main"
                   },
                   "title": "CreditNexus"

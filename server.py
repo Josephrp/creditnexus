@@ -69,6 +69,27 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(auth_router, prefix="/api")
 
+# Serve OpenFin manifest files
+openfin_dir = Path(__file__).parent / "openfin"
+if openfin_dir.exists():
+    @app.get("/openfin/app.json")
+    async def serve_openfin_manifest():
+        """Serve the OpenFin application manifest."""
+        manifest_path = openfin_dir / "app.json"
+        if manifest_path.exists():
+            return FileResponse(str(manifest_path), media_type="application/json")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="OpenFin manifest not found")
+    
+    @app.get("/openfin/{filename}")
+    async def serve_openfin_file(filename: str):
+        """Serve other OpenFin configuration files."""
+        file_path = openfin_dir / filename
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path), media_type="application/json")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="File not found")
+
 static_dir = Path(__file__).parent / "client" / "dist"
 if static_dir.exists():
     logger.info(f"Serving static files from {static_dir}")
