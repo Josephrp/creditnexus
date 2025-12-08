@@ -2,11 +2,15 @@
 
 import logging
 import io
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from typing import Optional, List
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult
+from app.db import get_db
+from app.db.models import StagedExtraction, ExtractionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -224,3 +228,149 @@ async def upload_and_extract(file: UploadFile = File(...)):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "CreditNexus API"}
+
+
+class ApproveRequest(BaseModel):
+    """Request model for approving an extraction."""
+    agreement_data: dict = Field(..., description="The extracted agreement data to approve")
+    original_text: Optional[str] = Field(None, description="The original document text")
+    source_filename: Optional[str] = Field(None, description="The source file name")
+    reviewed_by: Optional[str] = Field(None, description="Who reviewed the extraction")
+
+
+class RejectRequest(BaseModel):
+    """Request model for rejecting an extraction."""
+    agreement_data: dict = Field(..., description="The extracted agreement data being rejected")
+    rejection_reason: str = Field(..., description="Reason for rejecting the extraction")
+    original_text: Optional[str] = Field(None, description="The original document text")
+    source_filename: Optional[str] = Field(None, description="The source file name")
+    reviewed_by: Optional[str] = Field(None, description="Who reviewed the extraction")
+
+
+@router.post("/approve")
+async def approve_extraction(request: ApproveRequest, db: Session = Depends(get_db)):
+    """Approve and store an extraction in the staging database.
+    
+    Args:
+        request: ApproveRequest containing the agreement data and metadata.
+        db: Database session.
+        
+    Returns:
+        The created staged extraction record.
+    """
+    try:
+        staged = StagedExtraction(
+            status=ExtractionStatus.APPROVED.value,
+            agreement_data=request.agreement_data,
+            original_text=request.original_text,
+            source_filename=request.source_filename,
+            reviewed_by=request.reviewed_by,
+        )
+        db.add(staged)
+        db.commit()
+        db.refresh(staged)
+        
+        logger.info(f"Approved extraction saved with ID: {staged.id}")
+        
+        return {
+            "status": "success",
+            "message": "Extraction approved and saved",
+            "extraction": staged.to_dict()
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving approved extraction: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to save extraction: {str(e)}"}
+        )
+
+
+@router.post("/reject")
+async def reject_extraction(request: RejectRequest, db: Session = Depends(get_db)):
+    """Reject and store an extraction in the staging database with a reason.
+    
+    Args:
+        request: RejectRequest containing the agreement data, reason, and metadata.
+        db: Database session.
+        
+    Returns:
+        The created staged extraction record.
+    """
+    try:
+        staged = StagedExtraction(
+            status=ExtractionStatus.REJECTED.value,
+            agreement_data=request.agreement_data,
+            original_text=request.original_text,
+            source_filename=request.source_filename,
+            rejection_reason=request.rejection_reason,
+            reviewed_by=request.reviewed_by,
+        )
+        db.add(staged)
+        db.commit()
+        db.refresh(staged)
+        
+        logger.info(f"Rejected extraction saved with ID: {staged.id}")
+        
+        return {
+            "status": "success",
+            "message": "Extraction rejected and saved",
+            "extraction": staged.to_dict()
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving rejected extraction: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to save rejection: {str(e)}"}
+        )
+
+
+@router.get("/extractions")
+async def list_extractions(
+    status: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected)"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db)
+):
+    """List staged extractions with optional filtering.
+    
+    Args:
+        status: Optional status filter.
+        limit: Maximum number of results (default 50, max 100).
+        offset: Pagination offset.
+        db: Database session.
+        
+    Returns:
+        List of staged extractions.
+    """
+    try:
+        query = db.query(StagedExtraction)
+        
+        if status:
+            if status not in [s.value for s in ExtractionStatus]:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid status: {status}. Must be one of: pending, approved, rejected"}
+                )
+            query = query.filter(StagedExtraction.status == status)
+        
+        total = query.count()
+        
+        extractions = query.order_by(StagedExtraction.created_at.desc()).offset(offset).limit(limit).all()
+        
+        return {
+            "status": "success",
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "extractions": [e.to_dict() for e in extractions]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing extractions: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list extractions: {str(e)}"}
+        )

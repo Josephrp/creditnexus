@@ -48,8 +48,15 @@ export function ReviewInterface({
   const [rejectionReason, setRejectionReason] = useState('');
   const [activeTab, setActiveTab] = useState('summary');
 
+  const isDataValid = Boolean(
+    extractedData &&
+    extractedData.agreement_date &&
+    extractedData.parties?.length > 0 &&
+    extractedData.governing_law
+  );
+
   const handleApprove = () => {
-    if (extractedData) {
+    if (extractedData && isDataValid) {
       broadcast({
         type: 'fdc3.creditnexus.loan',
         loan: {
@@ -314,8 +321,9 @@ export function ReviewInterface({
               <Button
                 size="lg"
                 onClick={handleApprove}
-                disabled={!extractedData || isFailure}
+                disabled={!isDataValid || isFailure}
                 className="gap-2"
+                title={!isDataValid ? "Missing required fields: agreement date, parties, or governing law" : ""}
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Approve & Stage

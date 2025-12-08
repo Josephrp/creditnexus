@@ -19,6 +19,7 @@ interface CreditAgreement {
 function App() {
   const [documentText, setDocumentText] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [sourceFilename, setSourceFilename] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<CreditAgreement | undefined>();
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ function App() {
 
     setExtractedData(undefined);
     setError(null);
+    setSourceFilename(file.name);
 
     if (isPdfFile(file)) {
       setUploadedFile(file);
@@ -112,19 +114,89 @@ function App() {
     }
   };
 
-  const handleApprove = (data: CreditAgreement) => {
-    console.log('Approved:', data);
-    alert('Data approved and sent to staging area');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleApprove = async (data: CreditAgreement) => {
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agreement_data: data,
+          original_text: documentText,
+          source_filename: sourceFilename || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail;
+        const message = typeof detail === 'object' && detail.message 
+          ? detail.message 
+          : 'Failed to save approved extraction';
+        setError(message);
+        return;
+      }
+
+      alert('Data approved and saved to staging database');
+      handleReset();
+    } catch (err) {
+      console.error('Approve error:', err);
+      setError('Failed to connect to server. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleReject = (reason?: string) => {
-    console.log('Rejected:', reason);
-    alert(`Data rejected: ${reason || 'No reason provided'}`);
+  const handleReject = async (reason?: string) => {
+    if (!reason) {
+      setError('Please provide a reason for rejection');
+      return;
+    }
+    
+    if (!extractedData) {
+      setError('No extracted data to reject');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agreement_data: extractedData,
+          rejection_reason: reason,
+          original_text: documentText,
+          source_filename: sourceFilename || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail;
+        const message = typeof detail === 'object' && detail.message 
+          ? detail.message 
+          : 'Failed to save rejection';
+        setError(message);
+        return;
+      }
+
+      alert('Extraction rejected and saved to staging database');
+      handleReset();
+    } catch (err) {
+      console.error('Reject error:', err);
+      setError('Failed to connect to server. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
     setDocumentText('');
     setUploadedFile(null);
+    setSourceFilename(null);
     setExtractedData(undefined);
     setError(null);
     setWarningMessage(null);
