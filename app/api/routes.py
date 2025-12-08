@@ -12,10 +12,57 @@ from sqlalchemy.orm import Session, joinedload
 from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult
 from app.db import get_db
-from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User
+from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction
 from app.auth.dependencies import get_current_user, get_optional_user
 
 logger = logging.getLogger(__name__)
+
+
+def log_audit_action(
+    db: Session,
+    action: AuditAction,
+    target_type: str,
+    target_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    request: Optional[Request] = None
+) -> AuditLog:
+    """Log an audit action to the database.
+    
+    Args:
+        db: Database session.
+        action: The type of action being logged.
+        target_type: The type of entity being acted upon (e.g., 'document', 'workflow').
+        target_id: The ID of the target entity.
+        user_id: The ID of the user performing the action.
+        metadata: Additional context data for the action.
+        request: The HTTP request (to extract IP and user agent).
+        
+    Returns:
+        The created AuditLog record.
+    """
+    ip_address = None
+    user_agent = None
+    
+    if request:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            ip_address = forwarded.split(",")[0].strip()
+        else:
+            ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")[:500]
+    
+    audit_log = AuditLog(
+        user_id=user_id,
+        action=action.value,
+        target_type=target_type,
+        target_id=target_id,
+        action_metadata=metadata,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    db.add(audit_log)
+    return audit_log
 
 
 MAX_FILE_SIZE_MB = 20
@@ -444,14 +491,16 @@ def extract_document_metadata(agreement_data: dict) -> dict:
 
 @router.post("/documents")
 async def create_document(
-    request: CreateDocumentRequest,
+    doc_request: CreateDocumentRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Create a new document with its first version.
     
     Args:
-        request: CreateDocumentRequest containing the document data.
+        doc_request: CreateDocumentRequest containing the document data.
+        request: The HTTP request.
         db: Database session.
         current_user: The authenticated user.
         
@@ -459,10 +508,10 @@ async def create_document(
         The created document with its first version.
     """
     try:
-        metadata = extract_document_metadata(request.agreement_data)
+        metadata = extract_document_metadata(doc_request.agreement_data)
         
         doc = Document(
-            title=request.title,
+            title=doc_request.title,
             borrower_name=metadata.get("borrower_name"),
             borrower_lei=metadata.get("borrower_lei"),
             governing_law=metadata.get("governing_law"),
@@ -479,10 +528,10 @@ async def create_document(
         version = DocumentVersion(
             document_id=doc.id,
             version_number=1,
-            extracted_data=request.agreement_data,
-            original_text=request.original_text,
-            source_filename=request.source_filename,
-            extraction_method=request.extraction_method,
+            extracted_data=doc_request.agreement_data,
+            original_text=doc_request.original_text,
+            source_filename=doc_request.source_filename,
+            extraction_method=doc_request.extraction_method,
             created_by=current_user.id,
         )
         db.add(version)
@@ -496,6 +545,16 @@ async def create_document(
             priority="normal",
         )
         db.add(workflow)
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="document",
+            target_id=doc.id,
+            user_id=current_user.id,
+            metadata={"title": doc_request.title, "borrower_name": metadata.get("borrower_name")},
+            request=request
+        )
         
         db.commit()
         db.refresh(doc)
@@ -720,7 +779,8 @@ async def get_document_version(
 @router.post("/documents/{document_id}/versions")
 async def create_document_version(
     document_id: int,
-    request: CreateVersionRequest,
+    version_request: CreateVersionRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -728,7 +788,8 @@ async def create_document_version(
     
     Args:
         document_id: The document ID.
-        request: CreateVersionRequest containing the new version data.
+        version_request: CreateVersionRequest containing the new version data.
+        request: The HTTP request.
         db: Database session.
         current_user: The authenticated user.
         
@@ -753,16 +814,16 @@ async def create_document_version(
         version = DocumentVersion(
             document_id=document_id,
             version_number=new_version_number,
-            extracted_data=request.agreement_data,
-            original_text=request.original_text,
-            source_filename=request.source_filename,
-            extraction_method=request.extraction_method,
+            extracted_data=version_request.agreement_data,
+            original_text=version_request.original_text,
+            source_filename=version_request.source_filename,
+            extraction_method=version_request.extraction_method,
             created_by=current_user.id,
         )
         db.add(version)
         db.flush()
         
-        metadata = extract_document_metadata(request.agreement_data)
+        metadata = extract_document_metadata(version_request.agreement_data)
         doc.borrower_name = metadata.get("borrower_name", doc.borrower_name)
         doc.borrower_lei = metadata.get("borrower_lei", doc.borrower_lei)
         doc.governing_law = metadata.get("governing_law", doc.governing_law)
@@ -773,6 +834,16 @@ async def create_document_version(
         if metadata.get("esg_metadata"):
             doc.esg_metadata = metadata["esg_metadata"]
         doc.current_version_id = version.id
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="document",
+            target_id=document_id,
+            user_id=current_user.id,
+            metadata={"version_number": new_version_number, "version_id": version.id},
+            request=request
+        )
         
         db.commit()
         db.refresh(version)
@@ -798,6 +869,7 @@ async def create_document_version(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -805,6 +877,7 @@ async def delete_document(
     
     Args:
         document_id: The document ID.
+        request: The HTTP request.
         db: Database session.
         current_user: The authenticated user.
         
@@ -825,6 +898,18 @@ async def delete_document(
                 status_code=403,
                 detail={"status": "error", "message": "You don't have permission to delete this document"}
             )
+        
+        doc_title = doc.title
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.DELETE,
+            target_type="document",
+            target_id=document_id,
+            user_id=current_user.id,
+            metadata={"title": doc_title},
+            request=request
+        )
         
         db.query(DocumentVersion).filter(DocumentVersion.document_id == document_id).delete()
         db.query(Workflow).filter(Workflow.document_id == document_id).delete()
@@ -1007,7 +1092,8 @@ def get_workflow_or_404(db: Session, document_id: int) -> Workflow:
 @router.post("/documents/{document_id}/workflow/submit")
 async def submit_for_review(
     document_id: int,
-    request: WorkflowTransitionRequest = None,
+    request: Request,
+    transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1031,22 +1117,33 @@ async def submit_for_review(
                 detail={"status": "error", "message": f"Cannot submit for review: document is in '{workflow.state}' state, must be 'draft'"}
             )
         
+        previous_state = workflow.state
         workflow.state = WorkflowState.UNDER_REVIEW.value
         workflow.submitted_at = datetime.utcnow()
         workflow.rejection_reason = None
         
-        if request:
-            if request.assigned_to:
-                assignee = db.query(User).filter(User.id == request.assigned_to).first()
+        if transition_request:
+            if transition_request.assigned_to:
+                assignee = db.query(User).filter(User.id == transition_request.assigned_to).first()
                 if assignee and assignee.role in ["reviewer", "admin"]:
-                    workflow.assigned_to = request.assigned_to
-            if request.priority:
-                workflow.priority = request.priority
-            if request.due_date:
+                    workflow.assigned_to = transition_request.assigned_to
+            if transition_request.priority:
+                workflow.priority = transition_request.priority
+            if transition_request.due_date:
                 try:
-                    workflow.due_date = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
+                    workflow.due_date = datetime.fromisoformat(transition_request.due_date.replace("Z", "+00:00"))
                 except ValueError:
                     pass
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="workflow",
+            target_id=workflow.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "transition": "submit", "from_state": previous_state, "to_state": WorkflowState.UNDER_REVIEW.value},
+            request=request
+        )
         
         db.commit()
         db.refresh(workflow)
@@ -1072,7 +1169,8 @@ async def submit_for_review(
 @router.post("/documents/{document_id}/workflow/approve")
 async def approve_document(
     document_id: int,
-    request: WorkflowTransitionRequest = None,
+    request: Request,
+    transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1096,9 +1194,20 @@ async def approve_document(
                 detail={"status": "error", "message": f"Cannot approve: document is in '{workflow.state}' state, must be 'under_review'"}
             )
         
+        previous_state = workflow.state
         workflow.state = WorkflowState.APPROVED.value
         workflow.approved_at = datetime.utcnow()
         workflow.approved_by = current_user.id
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.APPROVE,
+            target_type="workflow",
+            target_id=workflow.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "transition": "approve", "from_state": previous_state, "to_state": WorkflowState.APPROVED.value},
+            request=request
+        )
         
         db.commit()
         db.refresh(workflow)
@@ -1124,7 +1233,8 @@ async def approve_document(
 @router.post("/documents/{document_id}/workflow/reject")
 async def reject_document(
     document_id: int,
-    request: WorkflowRejectRequest,
+    reject_request: WorkflowRejectRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1148,17 +1258,28 @@ async def reject_document(
                 detail={"status": "error", "message": f"Cannot reject: document is in '{workflow.state}' state, must be 'under_review'"}
             )
         
+        previous_state = workflow.state
         workflow.state = WorkflowState.DRAFT.value
-        workflow.rejection_reason = request.reason
+        workflow.rejection_reason = reject_request.reason
         workflow.approved_at = None
         workflow.approved_by = None
         workflow.assigned_to = None
         workflow.due_date = None
         
+        log_audit_action(
+            db=db,
+            action=AuditAction.REJECT,
+            target_type="workflow",
+            target_id=workflow.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "transition": "reject", "from_state": previous_state, "to_state": WorkflowState.DRAFT.value, "reason": reject_request.reason},
+            request=request
+        )
+        
         db.commit()
         db.refresh(workflow)
         
-        logger.info(f"Document {document_id} rejected by user {current_user.id}: {request.reason}")
+        logger.info(f"Document {document_id} rejected by user {current_user.id}: {reject_request.reason}")
         
         return {
             "status": "success",
@@ -1179,7 +1300,8 @@ async def reject_document(
 @router.post("/documents/{document_id}/workflow/publish")
 async def publish_document(
     document_id: int,
-    request: WorkflowTransitionRequest = None,
+    request: Request,
+    transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1203,8 +1325,19 @@ async def publish_document(
                 detail={"status": "error", "message": f"Cannot publish: document is in '{workflow.state}' state, must be 'approved'"}
             )
         
+        previous_state = workflow.state
         workflow.state = WorkflowState.PUBLISHED.value
         workflow.published_at = datetime.utcnow()
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.PUBLISH,
+            target_type="workflow",
+            target_id=workflow.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "transition": "publish", "from_state": previous_state, "to_state": WorkflowState.PUBLISHED.value},
+            request=request
+        )
         
         db.commit()
         db.refresh(workflow)
@@ -1230,7 +1363,8 @@ async def publish_document(
 @router.post("/documents/{document_id}/workflow/archive")
 async def archive_document(
     document_id: int,
-    request: WorkflowTransitionRequest = None,
+    request: Request,
+    transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1254,7 +1388,18 @@ async def archive_document(
                 detail={"status": "error", "message": "Document is already archived"}
             )
         
+        previous_state = workflow.state
         workflow.state = WorkflowState.ARCHIVED.value
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="workflow",
+            target_id=workflow.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "transition": "archive", "from_state": previous_state, "to_state": WorkflowState.ARCHIVED.value},
+            request=request
+        )
         
         db.commit()
         db.refresh(workflow)
@@ -1324,4 +1469,158 @@ async def get_document_workflow(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to get workflow: {str(e)}"}
+        )
+
+
+@router.get("/audit-logs")
+async def list_audit_logs(
+    action: Optional[str] = Query(None, description="Filter by action type (create, update, delete, approve, reject, publish, export, login, logout, broadcast)"),
+    target_type: Optional[str] = Query(None, description="Filter by target type (document, workflow, user)"),
+    target_id: Optional[int] = Query(None, description="Filter by target ID"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    start_date: Optional[str] = Query(None, description="Filter logs from this date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Filter logs until this date (ISO format)"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List audit logs with optional filtering.
+    
+    Returns a paginated list of audit log entries. Only accessible by authenticated users.
+    Admins and reviewers can see all logs; other users can only see logs related to their actions.
+    """
+    try:
+        query = db.query(AuditLog).options(joinedload(AuditLog.user))
+        
+        if current_user.role not in ["admin", "reviewer"]:
+            query = query.filter(AuditLog.user_id == current_user.id)
+        
+        if action:
+            valid_actions = [a.value for a in AuditAction]
+            if action not in valid_actions:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid action: {action}. Must be one of: {', '.join(valid_actions)}"}
+                )
+            query = query.filter(AuditLog.action == action)
+        
+        if target_type:
+            query = query.filter(AuditLog.target_type == target_type)
+        
+        if target_id:
+            query = query.filter(AuditLog.target_id == target_id)
+        
+        if user_id:
+            if current_user.role in ["admin", "reviewer"]:
+                query = query.filter(AuditLog.user_id == user_id)
+        
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+                query = query.filter(AuditLog.occurred_at >= start_dt)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid start_date format: {start_date}. Use ISO format."}
+                )
+        
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+                query = query.filter(AuditLog.occurred_at <= end_dt)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid end_date format: {end_date}. Use ISO format."}
+                )
+        
+        total = query.count()
+        
+        logs = query.order_by(AuditLog.occurred_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for log in logs:
+            log_dict = log.to_dict()
+            log_dict["user_name"] = log.user.display_name if log.user else None
+            log_dict["user_email"] = log.user.email if log.user else None
+            result.append(log_dict)
+        
+        return {
+            "status": "success",
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "logs": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing audit logs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list audit logs: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/audit-logs")
+async def list_document_audit_logs(
+    document_id: int,
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """List audit logs for a specific document.
+    
+    Returns audit log entries related to a specific document, including workflow changes.
+    """
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        workflow = db.query(Workflow).filter(Workflow.document_id == document_id).first()
+        workflow_id = workflow.id if workflow else None
+        
+        query = db.query(AuditLog).options(joinedload(AuditLog.user))
+        
+        if workflow_id:
+            query = query.filter(
+                ((AuditLog.target_type == "document") & (AuditLog.target_id == document_id)) |
+                ((AuditLog.target_type == "workflow") & (AuditLog.target_id == workflow_id))
+            )
+        else:
+            query = query.filter(
+                (AuditLog.target_type == "document") & (AuditLog.target_id == document_id)
+            )
+        
+        total = query.count()
+        
+        logs = query.order_by(AuditLog.occurred_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for log in logs:
+            log_dict = log.to_dict()
+            log_dict["user_name"] = log.user.display_name if log.user else None
+            result.append(log_dict)
+        
+        return {
+            "status": "success",
+            "document_id": document_id,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "logs": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing audit logs for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list document audit logs: {str(e)}"}
         )
