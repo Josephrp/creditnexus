@@ -22,7 +22,7 @@ import {
   FileSpreadsheet,
   Table
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import { WorkflowActions } from './WorkflowActions';
 
 interface DocumentSummary {
@@ -143,7 +143,7 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
     }
     
     try {
-      const response = await fetch(`/api/documents/${documentId}`, {
+      const response = await fetchWithAuth(`/api/documents/${documentId}`, {
         method: 'DELETE',
       });
       if (!response.ok) {

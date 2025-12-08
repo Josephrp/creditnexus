@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen } from 'lucide-react';
 import { useFDC3 } from '@/context/FDC3Context';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
 
 interface DocuDigitizerProps {
@@ -164,7 +164,7 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
         ? `${borrower.name} Credit Agreement` 
         : `Credit Agreement - ${editableData.agreement_date || 'Untitled'}`;
 
-      const response = await fetch('/api/documents', {
+      const response = await fetchWithAuth('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

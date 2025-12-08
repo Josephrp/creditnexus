@@ -13,7 +13,7 @@ import {
   User,
   Calendar
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 
 interface WorkflowData {
   id: number;
@@ -52,7 +52,7 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/documents/${documentId}/workflow/${action}`, {
+      const response = await fetchWithAuth(`/api/documents/${documentId}/workflow/${action}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
