@@ -2,15 +2,18 @@
 
 import logging
 import io
+from datetime import datetime, date
+from decimal import Decimal
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult
 from app.db import get_db
-from app.db.models import StagedExtraction, ExtractionStatus
+from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User
+from app.auth.dependencies import get_current_user, get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -373,4 +376,473 @@ async def list_extractions(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to list extractions: {str(e)}"}
+        )
+
+
+class CreateDocumentRequest(BaseModel):
+    """Request model for creating a new document."""
+    title: str = Field(..., description="Document title")
+    agreement_data: dict = Field(..., description="The extracted agreement data")
+    original_text: Optional[str] = Field(None, description="The original document text")
+    source_filename: Optional[str] = Field(None, description="The source file name")
+    extraction_method: str = Field("simple", description="The extraction method used")
+
+
+class CreateVersionRequest(BaseModel):
+    """Request model for creating a new document version."""
+    agreement_data: dict = Field(..., description="The updated extracted agreement data")
+    original_text: Optional[str] = Field(None, description="The original document text")
+    source_filename: Optional[str] = Field(None, description="The source file name")
+    extraction_method: str = Field("simple", description="The extraction method used")
+
+
+def extract_document_metadata(agreement_data: dict) -> dict:
+    """Extract document-level metadata from agreement data."""
+    metadata = {}
+    
+    if "agreement_date" in agreement_data and agreement_data["agreement_date"]:
+        try:
+            if isinstance(agreement_data["agreement_date"], str):
+                metadata["agreement_date"] = datetime.fromisoformat(agreement_data["agreement_date"].replace("Z", "+00:00")).date()
+            else:
+                metadata["agreement_date"] = agreement_data["agreement_date"]
+        except (ValueError, TypeError):
+            pass
+    
+    if "governing_law" in agreement_data:
+        metadata["governing_law"] = agreement_data["governing_law"]
+    
+    parties = agreement_data.get("parties", [])
+    for party in parties:
+        if party.get("role") == "Borrower":
+            metadata["borrower_name"] = party.get("legal_name")
+            metadata["borrower_lei"] = party.get("lei")
+            break
+    
+    facilities = agreement_data.get("facilities", [])
+    if facilities:
+        total = Decimal("0")
+        currency = None
+        for facility in facilities:
+            if facility.get("commitment"):
+                amount = facility["commitment"].get("amount")
+                if amount:
+                    total += Decimal(str(amount))
+                if not currency and facility["commitment"].get("currency"):
+                    currency = facility["commitment"]["currency"]
+        if total > 0:
+            metadata["total_commitment"] = total
+            metadata["currency"] = currency
+    
+    sustainability = agreement_data.get("sustainability_provisions")
+    if sustainability and isinstance(sustainability, dict):
+        metadata["sustainability_linked"] = sustainability.get("is_sustainability_linked", False)
+        metadata["esg_metadata"] = sustainability
+    
+    return metadata
+
+
+@router.post("/documents")
+async def create_document(
+    request: CreateDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new document with its first version.
+    
+    Args:
+        request: CreateDocumentRequest containing the document data.
+        db: Database session.
+        current_user: The authenticated user.
+        
+    Returns:
+        The created document with its first version.
+    """
+    try:
+        metadata = extract_document_metadata(request.agreement_data)
+        
+        doc = Document(
+            title=request.title,
+            borrower_name=metadata.get("borrower_name"),
+            borrower_lei=metadata.get("borrower_lei"),
+            governing_law=metadata.get("governing_law"),
+            total_commitment=metadata.get("total_commitment"),
+            currency=metadata.get("currency"),
+            agreement_date=metadata.get("agreement_date"),
+            sustainability_linked=metadata.get("sustainability_linked", False),
+            esg_metadata=metadata.get("esg_metadata"),
+            uploaded_by=current_user.id,
+        )
+        db.add(doc)
+        db.flush()
+        
+        version = DocumentVersion(
+            document_id=doc.id,
+            version_number=1,
+            extracted_data=request.agreement_data,
+            original_text=request.original_text,
+            source_filename=request.source_filename,
+            extraction_method=request.extraction_method,
+            created_by=current_user.id,
+        )
+        db.add(version)
+        db.flush()
+        
+        doc.current_version_id = version.id
+        
+        workflow = Workflow(
+            document_id=doc.id,
+            state=WorkflowState.DRAFT.value,
+            priority="normal",
+        )
+        db.add(workflow)
+        
+        db.commit()
+        db.refresh(doc)
+        db.refresh(version)
+        
+        logger.info(f"Created document {doc.id} with version {version.id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document created successfully",
+            "document": {
+                **doc.to_dict(),
+                "versions": [version.to_dict()],
+                "workflow": workflow.to_dict() if workflow else None,
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating document: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to create document: {str(e)}"}
+        )
+
+
+@router.get("/documents")
+async def list_documents(
+    search: Optional[str] = Query(None, description="Search term for title or borrower name"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """List documents with optional filtering.
+    
+    Args:
+        search: Optional search term.
+        limit: Maximum number of results (default 50, max 100).
+        offset: Pagination offset.
+        db: Database session.
+        current_user: The current user (optional).
+        
+    Returns:
+        List of documents with summary information.
+    """
+    try:
+        query = db.query(Document).options(
+            joinedload(Document.workflow),
+            joinedload(Document.uploaded_by_user)
+        )
+        
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                (Document.title.ilike(search_term)) |
+                (Document.borrower_name.ilike(search_term))
+            )
+        
+        total = query.count()
+        
+        documents = query.order_by(Document.updated_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for doc in documents:
+            doc_dict = doc.to_dict()
+            doc_dict["workflow_state"] = doc.workflow.state if doc.workflow else None
+            doc_dict["uploaded_by_name"] = doc.uploaded_by_user.display_name if doc.uploaded_by_user else None
+            result.append(doc_dict)
+        
+        return {
+            "status": "success",
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "documents": result
+        }
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list documents: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}")
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """Get a document with all its versions.
+    
+    Args:
+        document_id: The document ID.
+        db: Database session.
+        current_user: The current user (optional).
+        
+    Returns:
+        The document with all versions.
+    """
+    try:
+        doc = db.query(Document).options(
+            joinedload(Document.versions),
+            joinedload(Document.workflow),
+            joinedload(Document.uploaded_by_user)
+        ).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        doc_dict = doc.to_dict()
+        doc_dict["versions"] = [v.to_dict() for v in doc.versions]
+        doc_dict["workflow"] = doc.workflow.to_dict() if doc.workflow else None
+        doc_dict["uploaded_by_name"] = doc.uploaded_by_user.display_name if doc.uploaded_by_user else None
+        
+        return {
+            "status": "success",
+            "document": doc_dict
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get document: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/versions")
+async def list_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """List all versions of a document.
+    
+    Args:
+        document_id: The document ID.
+        db: Database session.
+        current_user: The current user (optional).
+        
+    Returns:
+        List of document versions.
+    """
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        versions = db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document_id
+        ).order_by(DocumentVersion.version_number.desc()).all()
+        
+        return {
+            "status": "success",
+            "document_id": document_id,
+            "current_version_id": doc.current_version_id,
+            "versions": [v.to_dict() for v in versions]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing versions for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list versions: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/versions/{version_id}")
+async def get_document_version(
+    document_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """Get a specific version of a document.
+    
+    Args:
+        document_id: The document ID.
+        version_id: The version ID.
+        db: Database session.
+        current_user: The current user (optional).
+        
+    Returns:
+        The document version with full extracted data.
+    """
+    try:
+        version = db.query(DocumentVersion).filter(
+            DocumentVersion.id == version_id,
+            DocumentVersion.document_id == document_id
+        ).first()
+        
+        if not version:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Version not found"}
+            )
+        
+        return {
+            "status": "success",
+            "version": version.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting version {version_id} for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get version: {str(e)}"}
+        )
+
+
+@router.post("/documents/{document_id}/versions")
+async def create_document_version(
+    document_id: int,
+    request: CreateVersionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new version of a document.
+    
+    Args:
+        document_id: The document ID.
+        request: CreateVersionRequest containing the new version data.
+        db: Database session.
+        current_user: The authenticated user.
+        
+    Returns:
+        The created version.
+    """
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        latest_version = db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document_id
+        ).order_by(DocumentVersion.version_number.desc()).first()
+        
+        new_version_number = (latest_version.version_number + 1) if latest_version else 1
+        
+        version = DocumentVersion(
+            document_id=document_id,
+            version_number=new_version_number,
+            extracted_data=request.agreement_data,
+            original_text=request.original_text,
+            source_filename=request.source_filename,
+            extraction_method=request.extraction_method,
+            created_by=current_user.id,
+        )
+        db.add(version)
+        db.flush()
+        
+        metadata = extract_document_metadata(request.agreement_data)
+        doc.borrower_name = metadata.get("borrower_name", doc.borrower_name)
+        doc.borrower_lei = metadata.get("borrower_lei", doc.borrower_lei)
+        doc.governing_law = metadata.get("governing_law", doc.governing_law)
+        doc.total_commitment = metadata.get("total_commitment", doc.total_commitment)
+        doc.currency = metadata.get("currency", doc.currency)
+        doc.agreement_date = metadata.get("agreement_date", doc.agreement_date)
+        doc.sustainability_linked = metadata.get("sustainability_linked", doc.sustainability_linked)
+        if metadata.get("esg_metadata"):
+            doc.esg_metadata = metadata["esg_metadata"]
+        doc.current_version_id = version.id
+        
+        db.commit()
+        db.refresh(version)
+        
+        logger.info(f"Created version {version.id} (v{new_version_number}) for document {document_id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": f"Version {new_version_number} created successfully",
+            "version": version.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating version for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to create version: {str(e)}"}
+        )
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a document and all its versions.
+    
+    Args:
+        document_id: The document ID.
+        db: Database session.
+        current_user: The authenticated user.
+        
+    Returns:
+        Success message.
+    """
+    try:
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        if doc.uploaded_by != current_user.id and current_user.role not in ["admin", "reviewer"]:
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to delete this document"}
+            )
+        
+        db.query(DocumentVersion).filter(DocumentVersion.document_id == document_id).delete()
+        db.query(Workflow).filter(Workflow.document_id == document_id).delete()
+        db.delete(doc)
+        db.commit()
+        
+        logger.info(f"Deleted document {document_id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to delete document: {str(e)}"}
         )

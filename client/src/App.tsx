@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { DocuDigitizer } from '@/apps/docu-digitizer/DocuDigitizer';
 import { TradeBlotter } from '@/apps/trade-blotter/TradeBlotter';
 import { GreenLens } from '@/apps/green-lens/GreenLens';
-import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2 } from 'lucide-react';
+import { DocumentHistory } from '@/components/DocumentHistory';
+import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
+import type { CreditAgreementData } from '@/context/FDC3Context';
 
-type AppView = 'docu-digitizer' | 'trade-blotter' | 'green-lens';
+type AppView = 'docu-digitizer' | 'trade-blotter' | 'green-lens' | 'library';
 
 const apps: { id: AppView; name: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -13,6 +15,12 @@ const apps: { id: AppView; name: string; icon: React.ReactNode; description: str
     name: 'Docu-Digitizer',
     icon: <FileText className="h-5 w-5" />,
     description: 'Extract & digitize credit agreements',
+  },
+  {
+    id: 'library',
+    name: 'Library',
+    icon: <BookOpen className="h-5 w-5" />,
+    description: 'Saved documents & history',
   },
   {
     id: 'trade-blotter',
@@ -31,10 +39,20 @@ const apps: { id: AppView; name: string; icon: React.ReactNode; description: str
 function App() {
   const [activeApp, setActiveApp] = useState<AppView>('docu-digitizer');
   const [hasBroadcast, setHasBroadcast] = useState(false);
+  const [viewData, setViewData] = useState<CreditAgreementData | null>(null);
   const { user, isLoading, isAuthenticated, login, logout } = useAuth();
 
   const handleBroadcast = () => {
     setHasBroadcast(true);
+  };
+
+  const handleViewData = (data: Record<string, unknown>) => {
+    setViewData(data as CreditAgreementData);
+    setActiveApp('docu-digitizer');
+  };
+
+  const handleSaveToLibrary = () => {
+    // Could refresh library or show notification
   };
 
   return (
@@ -127,7 +145,14 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {activeApp === 'docu-digitizer' && (
-          <DocuDigitizer onBroadcast={handleBroadcast} />
+          <DocuDigitizer 
+            onBroadcast={handleBroadcast} 
+            onSaveToLibrary={handleSaveToLibrary}
+            initialData={viewData}
+          />
+        )}
+        {activeApp === 'library' && (
+          <DocumentHistory onViewData={handleViewData} />
         )}
         {activeApp === 'trade-blotter' && <TradeBlotter />}
         {activeApp === 'green-lens' && <GreenLens />}

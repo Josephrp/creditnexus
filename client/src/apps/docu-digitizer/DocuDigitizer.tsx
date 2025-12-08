@@ -2,25 +2,32 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save } from 'lucide-react';
+import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen } from 'lucide-react';
 import { useFDC3 } from '@/context/FDC3Context';
+import { useAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
 
 interface DocuDigitizerProps {
   onBroadcast?: () => void;
+  onSaveToLibrary?: () => void;
+  initialData?: CreditAgreementData | null;
 }
 
-export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
+export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: DocuDigitizerProps) {
   const { broadcast } = useFDC3();
+  const { isAuthenticated } = useAuth();
   const [documentText, setDocumentText] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [extractedData, setExtractedData] = useState<CreditAgreementData | null>(null);
-  const [editableData, setEditableData] = useState<CreditAgreementData | null>(null);
+  const [extractedData, setExtractedData] = useState<CreditAgreementData | null>(initialData || null);
+  const [editableData, setEditableData] = useState<CreditAgreementData | null>(initialData || null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [sourceFilename, setSourceFilename] = useState<string | null>(null);
 
   const isPdfFile = (file: File) => {
     return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -34,6 +41,8 @@ export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
     setEditableData(null);
     setError(null);
     setBroadcastSuccess(false);
+    setSaveSuccess(false);
+    setSourceFilename(file.name);
 
     if (isPdfFile(file)) {
       setUploadedFile(file);
@@ -143,6 +152,48 @@ export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
     setEditableData({ ...editableData, [field]: value });
   };
 
+  const handleSaveToLibrary = async () => {
+    if (!editableData || !isAuthenticated) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const borrower = editableData.parties?.find(p => p.role.toLowerCase().includes('borrower'));
+      const title = borrower?.name 
+        ? `${borrower.name} Credit Agreement` 
+        : `Credit Agreement - ${editableData.agreement_date || 'Untitled'}`;
+
+      const response = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          agreement_data: editableData,
+          original_text: documentText || null,
+          source_filename: sourceFilename,
+          extraction_method: 'simple',
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail?.message || 'Failed to save document');
+      }
+
+      setSaveSuccess(true);
+      if (onSaveToLibrary) {
+        onSaveToLibrary();
+      }
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Error saving document:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save document');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleReset = () => {
     setDocumentText('');
     setUploadedFile(null);
@@ -151,7 +202,9 @@ export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
     setError(null);
     setWarningMessage(null);
     setBroadcastSuccess(false);
+    setSaveSuccess(false);
     setIsEditing(false);
+    setSourceFilename(null);
   };
 
   const borrower = editableData?.parties?.find(p => p.role.toLowerCase().includes('borrower'));
@@ -259,7 +312,7 @@ export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
             </div>
           )}
 
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <Button
               variant={isEditing ? "default" : "outline"}
               onClick={() => setIsEditing(!isEditing)}
@@ -268,6 +321,30 @@ export function DocuDigitizer({ onBroadcast }: DocuDigitizerProps) {
               {isEditing ? <Save className="h-4 w-4 mr-2" /> : <Edit2 className="h-4 w-4 mr-2" />}
               {isEditing ? 'Done Editing' : 'Edit Data'}
             </Button>
+            {isAuthenticated && (
+              <Button
+                onClick={handleSaveToLibrary}
+                disabled={isSaving || saveSuccess}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Saved!
+                  </>
+                ) : (
+                  <>
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Save to Library
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               onClick={handleBroadcast}
               disabled={broadcastSuccess}
