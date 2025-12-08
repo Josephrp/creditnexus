@@ -464,8 +464,9 @@ def extract_document_metadata(agreement_data: dict) -> dict:
     
     parties = agreement_data.get("parties", [])
     for party in parties:
-        if party.get("role") == "Borrower":
-            metadata["borrower_name"] = party.get("legal_name")
+        role = party.get("role", "")
+        if isinstance(role, str) and "borrower" in role.lower():
+            metadata["borrower_name"] = party.get("name") or party.get("legal_name")
             metadata["borrower_lei"] = party.get("lei")
             break
     
@@ -474,12 +475,15 @@ def extract_document_metadata(agreement_data: dict) -> dict:
         total = Decimal("0")
         currency = None
         for facility in facilities:
-            if facility.get("commitment"):
-                amount = facility["commitment"].get("amount")
+            if not isinstance(facility, dict):
+                continue
+            commitment = facility.get("commitment_amount") or facility.get("commitment")
+            if commitment and isinstance(commitment, dict):
+                amount = commitment.get("amount")
                 if amount:
                     total += Decimal(str(amount))
-                if not currency and facility["commitment"].get("currency"):
-                    currency = facility["commitment"]["currency"]
+                if not currency and commitment.get("currency"):
+                    currency = commitment["currency"]
         if total > 0:
             metadata["total_commitment"] = total
             metadata["currency"] = currency
@@ -488,6 +492,8 @@ def extract_document_metadata(agreement_data: dict) -> dict:
     if sustainability and isinstance(sustainability, dict):
         metadata["sustainability_linked"] = sustainability.get("is_sustainability_linked", False)
         metadata["esg_metadata"] = sustainability
+    elif agreement_data.get("sustainability_linked"):
+        metadata["sustainability_linked"] = agreement_data.get("sustainability_linked", False)
     
     return metadata
 
@@ -1645,18 +1651,18 @@ def flatten_agreement_data(agreement_data: dict) -> dict:
     flat["amendment_number"] = agreement_data.get("amendment_number")
     
     parties = agreement_data.get("parties", [])
-    borrowers = [p for p in parties if p.get("role") == "Borrower"]
+    borrowers = [p for p in parties if isinstance(p.get("role", ""), str) and "borrower" in p.get("role", "").lower()]
     lenders = [p for p in parties if p.get("role") in ["Lender", "Administrative Agent"]]
     
     if borrowers:
-        flat["borrower_name"] = borrowers[0].get("legal_name")
+        flat["borrower_name"] = borrowers[0].get("name") or borrowers[0].get("legal_name")
         flat["borrower_lei"] = borrowers[0].get("lei")
         flat["borrower_jurisdiction"] = borrowers[0].get("jurisdiction")
     
     if lenders:
         flat["lender_count"] = len(lenders)
         flat["administrative_agent"] = next(
-            (p.get("legal_name") for p in lenders if p.get("role") == "Administrative Agent"),
+            (p.get("name") or p.get("legal_name") for p in lenders if p.get("role") == "Administrative Agent"),
             None
         )
     
@@ -1666,12 +1672,14 @@ def flatten_agreement_data(agreement_data: dict) -> dict:
     total_commitment = Decimal("0")
     currency = None
     for i, facility in enumerate(facilities):
+        if not isinstance(facility, dict):
+            continue
         prefix = f"facility_{i+1}_"
         flat[f"{prefix}type"] = facility.get("facility_type")
         flat[f"{prefix}name"] = facility.get("facility_name")
         
-        commitment = facility.get("commitment", {})
-        if commitment:
+        commitment = facility.get("commitment_amount") or facility.get("commitment")
+        if commitment and isinstance(commitment, dict):
             amount = commitment.get("amount")
             if amount:
                 flat[f"{prefix}commitment_amount"] = float(amount)
@@ -1684,13 +1692,17 @@ def flatten_agreement_data(agreement_data: dict) -> dict:
         
         flat[f"{prefix}maturity_date"] = facility.get("maturity_date")
         
-        interest = facility.get("interest_rate_payout", {})
-        if interest:
-            floating = interest.get("floating_rate_option", {})
-            if floating:
-                flat[f"{prefix}benchmark_rate"] = floating.get("benchmark_rate")
-                flat[f"{prefix}spread_bps"] = floating.get("spread")
-            flat[f"{prefix}payment_frequency"] = interest.get("payment_frequency")
+        interest = facility.get("interest_terms") or facility.get("interest_rate_payout")
+        if interest and isinstance(interest, dict):
+            floating = interest.get("rate_option") or interest.get("floating_rate_option")
+            if floating and isinstance(floating, dict):
+                flat[f"{prefix}benchmark_rate"] = floating.get("benchmark") or floating.get("benchmark_rate")
+                flat[f"{prefix}spread_bps"] = floating.get("spread_bps") or floating.get("spread")
+            pf = interest.get("payment_frequency")
+            if pf and isinstance(pf, dict):
+                flat[f"{prefix}payment_frequency"] = f"{pf.get('period_multiplier')} {pf.get('period')}"
+            else:
+                flat[f"{prefix}payment_frequency"] = pf
     
     flat["total_commitment"] = float(total_commitment) if total_commitment > 0 else None
     flat["currency"] = currency
@@ -1750,24 +1762,30 @@ def facilities_to_dataframe(agreement_data: dict) -> pd.DataFrame:
     
     rows = []
     for facility in facilities:
+        if not isinstance(facility, dict):
+            continue
         row = {
             "facility_type": facility.get("facility_type"),
             "facility_name": facility.get("facility_name"),
             "maturity_date": facility.get("maturity_date"),
         }
         
-        commitment = facility.get("commitment", {})
-        if commitment:
+        commitment = facility.get("commitment_amount") or facility.get("commitment")
+        if commitment and isinstance(commitment, dict):
             row["commitment_amount"] = commitment.get("amount")
             row["currency"] = commitment.get("currency")
         
-        interest = facility.get("interest_rate_payout", {})
-        if interest:
-            floating = interest.get("floating_rate_option", {})
-            if floating:
-                row["benchmark_rate"] = floating.get("benchmark_rate")
-                row["spread_bps"] = floating.get("spread")
-            row["payment_frequency"] = interest.get("payment_frequency")
+        interest = facility.get("interest_terms") or facility.get("interest_rate_payout")
+        if interest and isinstance(interest, dict):
+            floating = interest.get("rate_option") or interest.get("floating_rate_option")
+            if floating and isinstance(floating, dict):
+                row["benchmark_rate"] = floating.get("benchmark") or floating.get("benchmark_rate")
+                row["spread_bps"] = floating.get("spread_bps") or floating.get("spread")
+            pf = interest.get("payment_frequency")
+            if pf and isinstance(pf, dict):
+                row["payment_frequency"] = f"{pf.get('period_multiplier')} {pf.get('period')}"
+            else:
+                row["payment_frequency"] = pf
         
         rows.append(row)
     
@@ -1790,7 +1808,7 @@ def parties_to_dataframe(agreement_data: dict) -> pd.DataFrame:
     rows = []
     for party in parties:
         rows.append({
-            "legal_name": party.get("legal_name"),
+            "name": party.get("name") or party.get("legal_name"),
             "role": party.get("role"),
             "lei": party.get("lei"),
             "jurisdiction": party.get("jurisdiction"),

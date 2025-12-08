@@ -5,14 +5,14 @@ import { GreenLens } from '@/apps/green-lens/GreenLens';
 import { DocumentHistory } from '@/components/DocumentHistory';
 import { Dashboard } from '@/components/Dashboard';
 import { LoginForm } from '@/components/LoginForm';
-import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard } from 'lucide-react';
+import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, IntentName, DocumentContext, AgreementContext } from '@/context/FDC3Context';
 
 type AppView = 'dashboard' | 'docu-digitizer' | 'trade-blotter' | 'green-lens' | 'library';
 
-const apps: { id: AppView; name: string; icon: React.ReactNode; description: string }[] = [
+const mainApps: { id: AppView; name: string; icon: React.ReactNode; description: string }[] = [
   {
     id: 'dashboard',
     name: 'Dashboard',
@@ -31,6 +31,9 @@ const apps: { id: AppView; name: string; icon: React.ReactNode; description: str
     icon: <BookOpen className="h-5 w-5" />,
     description: 'Saved documents & history',
   },
+];
+
+const sidebarApps: { id: AppView; name: string; icon: React.ReactNode; description: string }[] = [
   {
     id: 'trade-blotter',
     name: 'Trade Blotter',
@@ -51,6 +54,7 @@ function App() {
   const [viewData, setViewData] = useState<CreditAgreementData | null>(null);
   const [extractionContent, setExtractionContent] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { isAvailable, pendingIntent, clearPendingIntent, onIntentReceived } = useFDC3();
 
@@ -149,7 +153,7 @@ function App() {
           </div>
 
           <nav className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
-            {apps.map((app) => (
+            {mainApps.map((app) => (
               <button
                 key={app.id}
                 onClick={() => setActiveApp(app.id)}
@@ -230,21 +234,67 @@ function App() {
       
       <LoginForm isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {activeApp === 'dashboard' && <Dashboard />}
-        {activeApp === 'docu-digitizer' && (
-          <DocuDigitizer 
-            onBroadcast={handleBroadcast} 
-            onSaveToLibrary={handleSaveToLibrary}
-            initialData={viewData}
-          />
-        )}
-        {activeApp === 'library' && (
-          <DocumentHistory onViewData={handleViewData} />
-        )}
-        {activeApp === 'trade-blotter' && <TradeBlotter />}
-        {activeApp === 'green-lens' && <GreenLens />}
-      </main>
+      <div className="flex flex-1">
+        <aside className={`${sidebarOpen ? 'w-56' : 'w-14'} bg-slate-800/50 border-r border-slate-700 transition-all duration-200 flex-shrink-0`}>
+          <div className="p-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="w-full flex items-center justify-center p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+            </button>
+          </div>
+          <nav className="px-3 space-y-1">
+            <p className={`text-xs text-slate-500 uppercase tracking-wider px-2 py-2 ${!sidebarOpen && 'sr-only'}`}>
+              Tools
+            </p>
+            {sidebarApps.map((app) => (
+              <button
+                key={app.id}
+                onClick={() => setActiveApp(app.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeApp === app.id
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+                title={app.description}
+              >
+                {app.icon}
+                {sidebarOpen && <span>{app.name}</span>}
+                {hasBroadcast && (
+                  <span className="relative flex h-2 w-2 ml-auto">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
+              </button>
+            ))}
+            <div className={`mt-4 pt-4 border-t border-slate-700 ${!sidebarOpen && 'hidden'}`}>
+              <div className="flex items-center gap-2 px-2 py-2 text-sm text-slate-400" title={isAvailable ? 'FDC3 Desktop Agent Connected' : 'FDC3 Mock Mode'}>
+                <Radio className={`h-4 w-4 ${isAvailable ? 'text-emerald-500' : 'text-slate-500'}`} />
+                {sidebarOpen && <span>FDC3 {isAvailable ? 'Connected' : 'Mock'}</span>}
+              </div>
+            </div>
+          </nav>
+        </aside>
+        
+        <main className="flex-1 max-w-6xl mx-auto px-6 py-8">
+          {activeApp === 'dashboard' && <Dashboard />}
+          {activeApp === 'docu-digitizer' && (
+            <DocuDigitizer 
+              onBroadcast={handleBroadcast} 
+              onSaveToLibrary={handleSaveToLibrary}
+              initialData={viewData}
+            />
+          )}
+          {activeApp === 'library' && (
+            <DocumentHistory onViewData={handleViewData} />
+          )}
+          {activeApp === 'trade-blotter' && <TradeBlotter />}
+          {activeApp === 'green-lens' && <GreenLens />}
+        </main>
+      </div>
 
       <footer className="border-t border-slate-700 mt-auto">
         <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">

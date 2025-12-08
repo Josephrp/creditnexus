@@ -13,6 +13,7 @@ import {
   Calendar,
   Building2
 } from 'lucide-react';
+import { fetchWithAuth } from '@/context/AuthContext';
 
 interface PortfolioAnalytics {
   summary: {
@@ -92,7 +93,7 @@ export function Dashboard() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/analytics/portfolio');
+      const response = await fetchWithAuth('/api/analytics/portfolio');
       const data = await response.json();
       
       if (!response.ok) {
