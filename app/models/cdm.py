@@ -20,6 +20,38 @@ class Currency(str, Enum):
     JPY = "JPY"
 
 
+class GoverningLaw(str, Enum):
+    """Jurisdiction governing the agreement."""
+    NY = "NY"
+    ENGLISH = "English"
+    DELAWARE = "Delaware"
+    CALIFORNIA = "California"
+    OTHER = "Other"
+
+
+class ESGKPIType(str, Enum):
+    """Types of ESG key performance indicators."""
+    CO2_EMISSIONS = "CO2 Emissions"
+    RENEWABLE_ENERGY = "Renewable Energy Percentage"
+    WATER_USAGE = "Water Usage"
+    WASTE_REDUCTION = "Waste Reduction"
+    DIVERSITY_SCORE = "Diversity Score"
+    SAFETY_INCIDENTS = "Safety Incidents"
+    OTHER = "Other"
+
+
+class ESGKPITarget(BaseModel):
+    """ESG key performance indicator target for sustainability-linked loans."""
+    kpi_type: ESGKPIType = Field(..., description="Type of ESG metric being tracked")
+    target_value: float = Field(..., description="Target value for the KPI")
+    current_value: Optional[float] = Field(None, description="Current reported value for the KPI")
+    unit: str = Field(..., description="Unit of measurement (e.g., 'tons CO2', '%', 'incidents')")
+    margin_adjustment_bps: float = Field(
+        default=0.0,
+        description="Margin adjustment in basis points if target is met (negative = discount)"
+    )
+
+
 class PeriodEnum(str, Enum):
     """Time period units for frequency calculations."""
     Day = "Day"
@@ -57,6 +89,22 @@ class Party(BaseModel):
     id: str = Field(..., description="A unique identifier for the party in the document")
     name: str = Field(..., description="The legal name of the party")
     role: str = Field(..., description="The role of the party (e.g., 'Borrower', 'Lender', 'Administrative Agent')")
+    lei: Optional[str] = Field(
+        None,
+        description="Legal Entity Identifier (LEI) - 20-character alphanumeric code"
+    )
+    
+    @field_validator('lei')
+    @classmethod
+    def validate_lei(cls, v: Optional[str]) -> Optional[str]:
+        """Validate LEI format if provided."""
+        if v is not None:
+            v = v.strip().upper()
+            if len(v) != 20:
+                raise ValueError("LEI must be exactly 20 characters")
+            if not v.isalnum():
+                raise ValueError("LEI must be alphanumeric")
+        return v
 
 
 class FloatingRateOption(BaseModel):
@@ -121,7 +169,23 @@ class CreditAgreement(BaseModel):
     )
     governing_law: Optional[str] = Field(
         None,
-        description="The jurisdiction governing the agreement (e.g., 'State of New York', 'English Law')"
+        description="The jurisdiction governing the agreement (e.g., 'NY', 'English', 'Delaware')"
+    )
+    sustainability_linked: bool = Field(
+        default=False,
+        description="Whether this is a sustainability-linked loan with ESG KPI targets"
+    )
+    esg_kpi_targets: Optional[List[ESGKPITarget]] = Field(
+        None,
+        description="List of ESG key performance indicator targets for sustainability-linked loans"
+    )
+    deal_id: Optional[str] = Field(
+        None,
+        description="Unique deal identifier for the credit agreement"
+    )
+    loan_identification_number: Optional[str] = Field(
+        None,
+        description="Loan Identification Number (LIN) for syndicated loan tracking"
     )
 
     @model_validator(mode='after')

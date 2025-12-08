@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { Context, Listener } from '@finos/fdc3';
 
 export interface ESGKPITarget {
@@ -47,36 +47,28 @@ export interface CreditNexusLoanContext extends Context {
   loan: CreditAgreementData;
 }
 
-type ContextHandler = (context: CreditNexusLoanContext) => void;
+interface FDC3ContextValue {
+  isAvailable: boolean;
+  context: CreditNexusLoanContext | null;
+  broadcast: (ctx: CreditNexusLoanContext) => void;
+  clearContext: () => void;
+}
 
-const contextListeners = new Set<ContextHandler>();
-let lastBroadcastedContext: CreditNexusLoanContext | null = null;
+const FDC3Context = createContext<FDC3ContextValue | null>(null);
 
-export function useFDC3() {
+export function FDC3Provider({ children }: { children: ReactNode }) {
   const [isAvailable, setIsAvailable] = useState(false);
   const [context, setContext] = useState<CreditNexusLoanContext | null>(null);
-  const handlerRef = useRef<ContextHandler | null>(null);
 
   useEffect(() => {
     const available = typeof window !== 'undefined' && !!window.fdc3;
     setIsAvailable(available);
 
-    const handler: ContextHandler = (ctx) => {
-      setContext(ctx);
-    };
-    handlerRef.current = handler;
-    contextListeners.add(handler);
-
-    if (lastBroadcastedContext) {
-      setContext(lastBroadcastedContext);
-    }
-
     if (available && window.fdc3) {
       let subscription: Listener | null = null;
 
       window.fdc3.addContextListener('fdc3.creditnexus.loan', (ctx: Context) => {
-        const loanContext = ctx as CreditNexusLoanContext;
-        contextListeners.forEach(h => h(loanContext));
+        setContext(ctx as CreditNexusLoanContext);
       }).then((listener: Listener) => {
         subscription = listener;
       }).catch(() => {});
@@ -85,22 +77,14 @@ export function useFDC3() {
         if (subscription) {
           subscription.unsubscribe();
         }
-        if (handlerRef.current) {
-          contextListeners.delete(handlerRef.current);
-        }
       };
     } else {
       console.log('[FDC3 Mock] FDC3 not available, using mock mode for inter-app communication');
-      return () => {
-        if (handlerRef.current) {
-          contextListeners.delete(handlerRef.current);
-        }
-      };
     }
   }, []);
 
   const broadcast = useCallback((loanContext: CreditNexusLoanContext) => {
-    lastBroadcastedContext = loanContext;
+    setContext(loanContext);
     
     if (isAvailable && window.fdc3) {
       window.fdc3.broadcast(loanContext as Context)
@@ -111,8 +95,7 @@ export function useFDC3() {
           console.error('[FDC3] Broadcast failed:', error);
         });
     } else {
-      console.log('[FDC3 Mock] Broadcasting to all listeners:', loanContext);
-      contextListeners.forEach(handler => handler(loanContext));
+      console.log('[FDC3 Mock] Broadcasting context:', loanContext);
     }
   }, [isAvailable]);
 
@@ -120,11 +103,17 @@ export function useFDC3() {
     setContext(null);
   }, []);
 
-  return {
-    isAvailable,
-    context,
-    broadcast,
-    clearContext,
-  };
+  return (
+    <FDC3Context.Provider value={{ isAvailable, context, broadcast, clearContext }}>
+      {children}
+    </FDC3Context.Provider>
+  );
 }
 
+export function useFDC3() {
+  const ctx = useContext(FDC3Context);
+  if (!ctx) {
+    throw new Error('useFDC3 must be used within an FDC3Provider');
+  }
+  return ctx;
+}
