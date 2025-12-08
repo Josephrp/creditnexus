@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useFDC3 } from '@/context/FDC3Context';
-import type { CreditAgreementData } from '@/context/FDC3Context';
+import type { CreditAgreementData, Facility, CreditNexusLoanContext } from '@/context/FDC3Context';
 import { FileText, Calendar, DollarSign, Building2, CheckCircle2, Clock } from 'lucide-react';
 
 function addBusinessDays(date: Date, days: number): Date {
@@ -40,7 +40,7 @@ export function TradeBlotter() {
       setSettlementDate(formatDate(settlement));
       
       const totalCommitment = context.loan.facilities?.reduce(
-        (sum, f) => sum + (f.commitment_amount?.amount || 0), 0
+        (sum: number, f: Facility) => sum + (f.commitment_amount?.amount || 0), 0
       ) || 0;
       setTradeAmount(totalCommitment.toString());
     }
@@ -135,7 +135,7 @@ export function TradeBlotter() {
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">Deal ID</label>
-                      <p className="font-mono">{loanData.deal_id || context?.id?.DealID || 'AUTO-' + Date.now().toString(36).toUpperCase()}</p>
+                      <p className="font-mono">{loanData.deal_id || (context?.type === 'fdc3.creditnexus.loan' ? (context as CreditNexusLoanContext).id?.DealID : undefined) || 'AUTO-' + Date.now().toString(36).toUpperCase()}</p>
                     </div>
                   </div>
 

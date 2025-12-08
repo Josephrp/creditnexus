@@ -16,7 +16,7 @@ from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult
 from app.db import get_db
 from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction
-from app.auth.dependencies import get_current_user, get_optional_user
+from app.auth.jwt_auth import get_current_user, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -503,7 +503,7 @@ async def create_document(
     doc_request: CreateDocumentRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Create a new document with its first version.
     
@@ -595,7 +595,7 @@ async def list_documents(
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List documents with optional filtering.
     
@@ -652,7 +652,7 @@ async def list_documents(
 async def get_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get a document with all its versions.
     
@@ -700,7 +700,7 @@ async def get_document(
 async def list_document_versions(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List all versions of a document.
     
@@ -746,7 +746,7 @@ async def get_document_version(
     document_id: int,
     version_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get a specific version of a document.
     
@@ -791,7 +791,7 @@ async def create_document_version(
     version_request: CreateVersionRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Create a new version of a document.
     
@@ -880,7 +880,7 @@ async def delete_document(
     document_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Delete a document and all its versions.
     
@@ -945,7 +945,7 @@ async def delete_document(
 @router.get("/analytics/portfolio")
 async def get_portfolio_analytics(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get portfolio-level analytics aggregating all documents.
     
@@ -1104,7 +1104,7 @@ async def submit_for_review(
     request: Request,
     transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Submit a document for review.
     
@@ -1181,7 +1181,7 @@ async def approve_document(
     request: Request,
     transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Approve a document under review.
     
@@ -1245,7 +1245,7 @@ async def reject_document(
     reject_request: WorkflowRejectRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Reject a document under review.
     
@@ -1312,7 +1312,7 @@ async def publish_document(
     request: Request,
     transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Publish an approved document.
     
@@ -1375,7 +1375,7 @@ async def archive_document(
     request: Request,
     transition_request: WorkflowTransitionRequest = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """Archive a document.
     
@@ -1435,7 +1435,7 @@ async def archive_document(
 async def get_document_workflow(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get the current workflow state for a document.
     
@@ -1492,7 +1492,7 @@ async def list_audit_logs(
     limit: int = Query(50, ge=1, le=500, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """List audit logs with optional filtering.
     
@@ -1578,7 +1578,7 @@ async def list_document_audit_logs(
     limit: int = Query(50, ge=1, le=200, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List audit logs for a specific document.
     
@@ -1824,7 +1824,7 @@ async def export_document(
     version_id: Optional[int] = Query(None, description="Specific version ID to export (defaults to current version)"),
     request: Request = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Export document data in various formats.
     
