@@ -178,7 +178,10 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.detail?.message || 'Failed to save document');
+        const errorMessage = typeof data.detail === 'string' 
+          ? data.detail 
+          : data.detail?.message || 'Failed to save document';
+        throw new Error(errorMessage);
       }
 
       setSaveSuccess(true);
@@ -321,7 +324,7 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
               {isEditing ? <Save className="h-4 w-4 mr-2" /> : <Edit2 className="h-4 w-4 mr-2" />}
               {isEditing ? 'Done Editing' : 'Edit Data'}
             </Button>
-            {isAuthenticated && (
+            {isAuthenticated ? (
               <Button
                 onClick={handleSaveToLibrary}
                 disabled={isSaving || saveSuccess}
@@ -343,6 +346,16 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
                     Save to Library
                   </>
                 )}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                disabled
+                className="cursor-not-allowed opacity-60"
+                title="Log in to save documents"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Log in to Save
               </Button>
             )}
             <Button
