@@ -19,6 +19,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { WorkflowActions } from './WorkflowActions';
 
 interface DocumentSummary {
   id: number;
@@ -47,14 +48,27 @@ interface DocumentVersion {
   created_at: string;
 }
 
+interface WorkflowData {
+  id: number;
+  document_id: number;
+  state: string;
+  priority: string;
+  assigned_to: number | null;
+  assigned_to_name?: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  approved_by: number | null;
+  approved_by_name?: string | null;
+  published_at: string | null;
+  rejection_reason: string | null;
+  due_date: string | null;
+  available_actions?: string[];
+}
+
 interface DocumentDetail extends DocumentSummary {
   current_version_id: number | null;
   versions: DocumentVersion[];
-  workflow: {
-    id: number;
-    state: string;
-    priority: string;
-  } | null;
+  workflow: WorkflowData | null;
 }
 
 interface DocumentHistoryProps {
@@ -143,6 +157,23 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
   const handleBack = () => {
     setSelectedDocument(null);
     setSelectedVersion(null);
+  };
+
+  const handleWorkflowUpdate = (updatedWorkflow: WorkflowData) => {
+    if (selectedDocument) {
+      setSelectedDocument({
+        ...selectedDocument,
+        workflow: updatedWorkflow,
+        workflow_state: updatedWorkflow.state,
+      });
+      setDocuments(docs => 
+        docs.map(doc => 
+          doc.id === selectedDocument.id 
+            ? { ...doc, workflow_state: updatedWorkflow.state }
+            : doc
+        )
+      );
+    }
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -327,14 +358,11 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
             </Card>
 
             {selectedDocument.workflow && (
-              <Card className="border-slate-700 bg-slate-800/50">
-                <CardContent className="p-4">
-                  <h3 className="text-sm font-semibold mb-3">Workflow Status</h3>
-                  <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm ${getWorkflowStateColor(selectedDocument.workflow.state)}`}>
-                    {selectedDocument.workflow.state?.replace('_', ' ')}
-                  </div>
-                </CardContent>
-              </Card>
+              <WorkflowActions
+                documentId={selectedDocument.id}
+                workflow={selectedDocument.workflow}
+                onWorkflowUpdate={handleWorkflowUpdate}
+              />
             )}
           </div>
         </div>

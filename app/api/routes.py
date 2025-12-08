@@ -972,3 +972,356 @@ async def get_portfolio_analytics(
             status_code=500,
             detail={"status": "error", "message": f"Failed to fetch analytics: {str(e)}"}
         )
+
+
+class WorkflowTransitionRequest(BaseModel):
+    """Request model for workflow transitions."""
+    comment: Optional[str] = Field(None, description="Optional comment for the transition")
+    assigned_to: Optional[int] = Field(None, description="User ID to assign the review to")
+    priority: Optional[str] = Field(None, description="Priority level: low, normal, high, urgent")
+    due_date: Optional[str] = Field(None, description="Due date for review in ISO format")
+
+
+class WorkflowRejectRequest(BaseModel):
+    """Request model for rejecting a document."""
+    reason: str = Field(..., description="Reason for rejection")
+    comment: Optional[str] = Field(None, description="Additional comment")
+
+
+def check_workflow_permission(user: User, required_roles: List[str]) -> bool:
+    """Check if user has one of the required roles."""
+    return user.role in required_roles
+
+
+def get_workflow_or_404(db: Session, document_id: int) -> Workflow:
+    """Get workflow for a document or raise 404."""
+    workflow = db.query(Workflow).filter(Workflow.document_id == document_id).first()
+    if not workflow:
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "message": "Workflow not found for this document"}
+        )
+    return workflow
+
+
+@router.post("/documents/{document_id}/workflow/submit")
+async def submit_for_review(
+    document_id: int,
+    request: WorkflowTransitionRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Submit a document for review.
+    
+    Transitions the workflow from Draft to Under Review.
+    Required roles: analyst, reviewer, admin
+    """
+    try:
+        if not check_workflow_permission(current_user, ["analyst", "reviewer", "admin"]):
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to submit documents for review"}
+            )
+        
+        workflow = get_workflow_or_404(db, document_id)
+        
+        if workflow.state != WorkflowState.DRAFT.value:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Cannot submit for review: document is in '{workflow.state}' state, must be 'draft'"}
+            )
+        
+        workflow.state = WorkflowState.UNDER_REVIEW.value
+        workflow.submitted_at = datetime.utcnow()
+        workflow.rejection_reason = None
+        
+        if request:
+            if request.assigned_to:
+                assignee = db.query(User).filter(User.id == request.assigned_to).first()
+                if assignee and assignee.role in ["reviewer", "admin"]:
+                    workflow.assigned_to = request.assigned_to
+            if request.priority:
+                workflow.priority = request.priority
+            if request.due_date:
+                try:
+                    workflow.due_date = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+        
+        db.commit()
+        db.refresh(workflow)
+        
+        logger.info(f"Document {document_id} submitted for review by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document submitted for review",
+            "workflow": workflow.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error submitting document {document_id} for review: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to submit for review: {str(e)}"}
+        )
+
+
+@router.post("/documents/{document_id}/workflow/approve")
+async def approve_document(
+    document_id: int,
+    request: WorkflowTransitionRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Approve a document under review.
+    
+    Transitions the workflow from Under Review to Approved.
+    Required roles: reviewer, admin
+    """
+    try:
+        if not check_workflow_permission(current_user, ["reviewer", "admin"]):
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to approve documents"}
+            )
+        
+        workflow = get_workflow_or_404(db, document_id)
+        
+        if workflow.state != WorkflowState.UNDER_REVIEW.value:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Cannot approve: document is in '{workflow.state}' state, must be 'under_review'"}
+            )
+        
+        workflow.state = WorkflowState.APPROVED.value
+        workflow.approved_at = datetime.utcnow()
+        workflow.approved_by = current_user.id
+        
+        db.commit()
+        db.refresh(workflow)
+        
+        logger.info(f"Document {document_id} approved by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document approved",
+            "workflow": workflow.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error approving document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to approve document: {str(e)}"}
+        )
+
+
+@router.post("/documents/{document_id}/workflow/reject")
+async def reject_document(
+    document_id: int,
+    request: WorkflowRejectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reject a document under review.
+    
+    Transitions the workflow from Under Review back to Draft.
+    Required roles: reviewer, admin
+    """
+    try:
+        if not check_workflow_permission(current_user, ["reviewer", "admin"]):
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to reject documents"}
+            )
+        
+        workflow = get_workflow_or_404(db, document_id)
+        
+        if workflow.state != WorkflowState.UNDER_REVIEW.value:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Cannot reject: document is in '{workflow.state}' state, must be 'under_review'"}
+            )
+        
+        workflow.state = WorkflowState.DRAFT.value
+        workflow.rejection_reason = request.reason
+        workflow.approved_at = None
+        workflow.approved_by = None
+        workflow.assigned_to = None
+        workflow.due_date = None
+        
+        db.commit()
+        db.refresh(workflow)
+        
+        logger.info(f"Document {document_id} rejected by user {current_user.id}: {request.reason}")
+        
+        return {
+            "status": "success",
+            "message": "Document rejected and returned to draft",
+            "workflow": workflow.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error rejecting document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to reject document: {str(e)}"}
+        )
+
+
+@router.post("/documents/{document_id}/workflow/publish")
+async def publish_document(
+    document_id: int,
+    request: WorkflowTransitionRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Publish an approved document.
+    
+    Transitions the workflow from Approved to Published.
+    Required roles: reviewer, admin
+    """
+    try:
+        if not check_workflow_permission(current_user, ["reviewer", "admin"]):
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to publish documents"}
+            )
+        
+        workflow = get_workflow_or_404(db, document_id)
+        
+        if workflow.state != WorkflowState.APPROVED.value:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Cannot publish: document is in '{workflow.state}' state, must be 'approved'"}
+            )
+        
+        workflow.state = WorkflowState.PUBLISHED.value
+        workflow.published_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(workflow)
+        
+        logger.info(f"Document {document_id} published by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document published",
+            "workflow": workflow.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error publishing document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to publish document: {str(e)}"}
+        )
+
+
+@router.post("/documents/{document_id}/workflow/archive")
+async def archive_document(
+    document_id: int,
+    request: WorkflowTransitionRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Archive a document.
+    
+    Transitions the workflow from any state to Archived.
+    Required roles: reviewer, admin
+    """
+    try:
+        if not check_workflow_permission(current_user, ["reviewer", "admin"]):
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to archive documents"}
+            )
+        
+        workflow = get_workflow_or_404(db, document_id)
+        
+        if workflow.state == WorkflowState.ARCHIVED.value:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Document is already archived"}
+            )
+        
+        workflow.state = WorkflowState.ARCHIVED.value
+        
+        db.commit()
+        db.refresh(workflow)
+        
+        logger.info(f"Document {document_id} archived by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Document archived",
+            "workflow": workflow.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error archiving document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to archive document: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/workflow")
+async def get_document_workflow(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_user)
+):
+    """Get the current workflow state for a document.
+    
+    Returns workflow details including available actions based on current state.
+    """
+    try:
+        workflow = get_workflow_or_404(db, document_id)
+        
+        available_actions = []
+        state = workflow.state
+        
+        if state == WorkflowState.DRAFT.value:
+            available_actions = ["submit"]
+        elif state == WorkflowState.UNDER_REVIEW.value:
+            available_actions = ["approve", "reject"]
+        elif state == WorkflowState.APPROVED.value:
+            available_actions = ["publish", "archive"]
+        elif state == WorkflowState.PUBLISHED.value:
+            available_actions = ["archive"]
+        
+        result = workflow.to_dict()
+        result["available_actions"] = available_actions
+        
+        if workflow.approved_by:
+            approver = db.query(User).filter(User.id == workflow.approved_by).first()
+            result["approved_by_name"] = approver.display_name if approver else None
+        
+        if workflow.assigned_to:
+            assignee = db.query(User).filter(User.id == workflow.assigned_to).first()
+            result["assigned_to_name"] = assignee.display_name if assignee else None
+        
+        return {
+            "status": "success",
+            "workflow": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting workflow for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get workflow: {str(e)}"}
+        )
