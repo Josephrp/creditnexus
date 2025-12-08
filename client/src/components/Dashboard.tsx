@@ -9,11 +9,11 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
-  Loader2,
   Calendar,
   Building2
 } from 'lucide-react';
 import { fetchWithAuth } from '@/context/AuthContext';
+import { SkeletonDashboard, EmptyState } from '@/components/ui/skeleton';
 
 interface PortfolioAnalytics {
   summary: {
@@ -113,14 +113,7 @@ export function Dashboard() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mx-auto mb-4" />
-          <p className="text-slate-400">Loading portfolio analytics...</p>
-        </div>
-      </div>
-    );
+    return <SkeletonDashboard />;
   }
 
   if (error) {

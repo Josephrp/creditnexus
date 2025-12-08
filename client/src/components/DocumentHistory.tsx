@@ -17,13 +17,14 @@ import {
   Leaf,
   Trash2,
   ExternalLink,
-  Download,
   FileJson,
   FileSpreadsheet,
-  Table
+  Table,
+  Plus
 } from 'lucide-react';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import { WorkflowActions } from './WorkflowActions';
+import { SkeletonDocumentList, EmptyState } from '@/components/ui/skeleton';
 
 interface DocumentSummary {
   id: number;
@@ -474,23 +475,25 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-        </div>
+        <SkeletonDocumentList count={5} />
       ) : documents.length === 0 ? (
-        <Card className="border-slate-700 bg-slate-800/50">
-          <CardContent className="p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No Documents Yet</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              {searchTerm
-                ? 'No documents match your search. Try a different term.'
-                : 'Extract and save credit agreements to build your document library.'}
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<FileText className="h-8 w-8 text-slate-400" />}
+          title={searchTerm ? "No Matching Documents" : "No Documents Yet"}
+          description={
+            searchTerm
+              ? 'No documents match your search. Try a different term.'
+              : 'Extract and save credit agreements to build your document library.'
+          }
+          action={
+            !searchTerm && (
+              <Button variant="outline" size="sm" className="mt-2">
+                <Plus className="h-4 w-4 mr-2" />
+                Start Extraction
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="space-y-3">
           {documents.map((doc) => (

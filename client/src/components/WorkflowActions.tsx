@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/components/ui/toast';
 import { 
   Send, 
   CheckCircle, 
@@ -40,6 +41,7 @@ interface WorkflowActionsProps {
 
 export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: WorkflowActionsProps) {
   const { user, isAuthenticated } = useAuth();
+  const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -47,6 +49,14 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
 
   const canSubmit = user?.role === 'analyst' || user?.role === 'reviewer' || user?.role === 'admin';
   const canReview = user?.role === 'reviewer' || user?.role === 'admin';
+
+  const actionMessages: Record<string, string> = {
+    submit: 'Document submitted for review',
+    approve: 'Document approved successfully',
+    reject: 'Document rejected',
+    publish: 'Document published successfully',
+    archive: 'Document archived',
+  };
 
   const executeWorkflowAction = async (action: string, body?: Record<string, unknown>) => {
     setIsLoading(true);
@@ -67,9 +77,12 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
 
       const data = await response.json();
       onWorkflowUpdate(data.workflow);
+      addToast(actionMessages[action] || `${action} completed`, 'success');
     } catch (err) {
       console.error(`Error executing ${action}:`, err);
-      setError(err instanceof Error ? err.message : `Failed to ${action} document`);
+      const errorMessage = err instanceof Error ? err.message : `Failed to ${action} document`;
+      setError(errorMessage);
+      addToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }

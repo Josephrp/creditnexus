@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/toast';
 import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen } from 'lucide-react';
 import { useFDC3 } from '@/context/FDC3Context';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
@@ -16,6 +17,7 @@ interface DocuDigitizerProps {
 export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: DocuDigitizerProps) {
   const { broadcast } = useFDC3();
   const { isAuthenticated } = useAuth();
+  const { addToast } = useToast();
   const [documentText, setDocumentText] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<CreditAgreementData | null>(initialData || null);
@@ -113,13 +115,18 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
         setEditableData(data);
         if (result.status === 'partial_data_missing' && result.message) {
           setWarningMessage(result.message);
+          addToast('Document extracted with some missing data', 'warning');
+        } else {
+          addToast('Document extracted successfully', 'success');
         }
       } else {
         setError('No data could be extracted from this document.');
+        addToast('No data could be extracted', 'error');
       }
     } catch (err) {
       console.error('Extraction error:', err);
       setError('Failed to connect to extraction service. Please try again.');
+      addToast('Failed to extract document', 'error');
     } finally {
       setIsExtracting(false);
     }
@@ -139,6 +146,7 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
 
     broadcast(context);
     setBroadcastSuccess(true);
+    addToast('Data broadcast to connected apps', 'success');
     
     if (onBroadcast) {
       onBroadcast();
@@ -185,13 +193,16 @@ export function DocuDigitizer({ onBroadcast, onSaveToLibrary, initialData }: Doc
       }
 
       setSaveSuccess(true);
+      addToast('Document saved to library', 'success');
       if (onSaveToLibrary) {
         onSaveToLibrary();
       }
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error('Error saving document:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save document');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save document';
+      setError(errorMessage);
+      addToast(errorMessage, 'error');
     } finally {
       setIsSaving(false);
     }
