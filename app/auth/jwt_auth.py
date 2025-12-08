@@ -22,7 +22,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 
 from app.db import get_db
-from app.db.models import User, AuditLog, AuditAction, UserRole
+from app.db.models import User, AuditLog, AuditAction, UserRole, RefreshToken
 
 jwt_router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer(auto_error=False)
@@ -39,8 +39,6 @@ MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 30
 
 MIN_PASSWORD_LENGTH = 12
-
-_revoked_tokens: Set[str] = set()
 
 
 class PasswordStrengthError(Exception):
@@ -154,24 +152,33 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT refresh token."""
+def create_refresh_token(data: dict, db: Session, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT refresh token and store it in the database."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    jti = secrets.token_urlsafe(16)
     to_encode.update({
         "exp": expire,
         "iat": datetime.utcnow(),
         "type": "refresh",
-        "jti": secrets.token_urlsafe(16)
+        "jti": jti
     })
+    
+    token_record = RefreshToken(
+        jti=jti,
+        user_id=int(data.get("sub")),
+        expires_at=expire,
+        is_revoked=False
+    )
+    db.add(token_record)
+    db.commit()
+    
     return jwt.encode(to_encode, JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     """Decode and validate an access token."""
     try:
-        if token in _revoked_tokens:
-            return None
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "access":
             return None
@@ -180,22 +187,51 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def decode_refresh_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode and validate a refresh token."""
+def decode_refresh_token(token: str, db: Session) -> Optional[Dict[str, Any]]:
+    """Decode and validate a refresh token, checking database for revocation."""
     try:
-        if token in _revoked_tokens:
-            return None
         payload = jwt.decode(token, JWT_REFRESH_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "refresh":
             return None
+        
+        jti = payload.get("jti")
+        if not jti:
+            return None
+        
+        token_record = db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+        if not token_record:
+            return None
+        
+        if token_record.is_revoked:
+            return None
+        
+        if token_record.expires_at < datetime.utcnow():
+            return None
+        
         return payload
     except JWTError:
         return None
 
 
-def revoke_token(token: str) -> None:
-    """Add a token to the revocation list."""
-    _revoked_tokens.add(token)
+def revoke_refresh_token(jti: str, db: Session) -> None:
+    """Revoke a refresh token by its JTI in the database."""
+    token_record = db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+    if token_record:
+        token_record.is_revoked = True
+        token_record.revoked_at = datetime.utcnow()
+        db.commit()
+
+
+def revoke_all_user_tokens(user_id: int, db: Session) -> None:
+    """Revoke all refresh tokens for a user."""
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.is_revoked == False
+    ).update({
+        "is_revoked": True,
+        "revoked_at": datetime.utcnow()
+    })
+    db.commit()
 
 
 async def get_current_user(
@@ -342,7 +378,7 @@ async def register(
     db.commit()
     
     access_token = create_access_token({"sub": str(user.id), "email": user.email})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)}, db)
     
     return TokenResponse(
         access_token=access_token,
@@ -410,7 +446,7 @@ async def login(
     db.commit()
     
     access_token = create_access_token({"sub": str(user.id), "email": user.email})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)}, db)
     
     return TokenResponse(
         access_token=access_token,
@@ -422,7 +458,7 @@ async def login(
 @jwt_router.post("/refresh", response_model=TokenResponse)
 async def refresh_tokens(token_request: RefreshTokenRequest, db: Session = Depends(get_db)):
     """Refresh access token using a valid refresh token."""
-    payload = decode_refresh_token(token_request.refresh_token)
+    payload = decode_refresh_token(token_request.refresh_token, db)
     
     if not payload:
         raise HTTPException(
@@ -439,10 +475,12 @@ async def refresh_tokens(token_request: RefreshTokenRequest, db: Session = Depen
             detail="User not found or inactive"
         )
     
-    revoke_token(token_request.refresh_token)
+    old_jti = payload.get("jti")
+    if old_jti:
+        revoke_refresh_token(old_jti, db)
     
     access_token = create_access_token({"sub": str(user.id), "email": user.email})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)}, db)
     
     return TokenResponse(
         access_token=access_token,
@@ -457,14 +495,14 @@ async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """Logout and revoke the current access token."""
+    """Logout and revoke all refresh tokens for the user."""
     if credentials:
-        revoke_token(credentials.credentials)
-        
         payload = decode_access_token(credentials.credentials)
         if payload:
             user_id = payload.get("sub")
             if user_id:
+                revoke_all_user_tokens(int(user_id), db)
+                
                 audit_log = AuditLog(
                     user_id=int(user_id),
                     action=AuditAction.LOGOUT.value,

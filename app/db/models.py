@@ -325,6 +325,39 @@ class OAuth(Base):
         }
 
 
+class RefreshToken(Base):
+    """Model for tracking JWT refresh tokens for secure revocation."""
+    
+    __tablename__ = "refresh_tokens"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    jti = Column(String(255), unique=True, nullable=False, index=True)
+    
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    
+    is_revoked = Column(Boolean, default=False, nullable=False)
+    
+    expires_at = Column(DateTime, nullable=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    revoked_at = Column(DateTime, nullable=True)
+    
+    user = relationship("User", backref="refresh_tokens")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "jti": self.jti,
+            "user_id": self.user_id,
+            "is_revoked": self.is_revoked,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class StagedExtraction(Base):
     """Model for storing staged credit agreement extractions (legacy support)."""
     
