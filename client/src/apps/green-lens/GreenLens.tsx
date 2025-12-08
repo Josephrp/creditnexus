@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, ESGKPITarget } from '@/context/FDC3Context';
 import { Leaf, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, Target, Droplets, Zap, Recycle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 
 const MOCK_ESG_DATA: ESGKPITarget[] = [
   {
@@ -94,12 +93,6 @@ export function GreenLens() {
   const targetsMetCount = esgTargets.filter(isTargetMet).length;
   const isSustainabilityLinked = loanData?.sustainability_linked || esgTargets.length > 0;
 
-  const chartData = esgTargets.map(kpi => ({
-    name: kpi.kpi_type.split(' ').slice(0, 2).join(' '),
-    target: kpi.target_value,
-    current: kpi.current_value || 0,
-    met: isTargetMet(kpi),
-  }));
 
   return (
     <div className="space-y-6">
@@ -211,31 +204,52 @@ export function GreenLens() {
                 <CardTitle>ESG Performance vs Targets</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis type="number" stroke="#64748b" />
-                      <YAxis dataKey="name" type="category" stroke="#64748b" width={80} tick={{ fontSize: 12 }} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1e293b', 
-                          border: '1px solid #334155',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="target" name="Target" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="current" name="Current" radius={[0, 4, 4, 0]}>
-                        {chartData.map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={entry.met ? '#10b981' : '#f59e0b'} 
+                <div className="space-y-4">
+                  {esgTargets.map((kpi, idx) => {
+                    const met = isTargetMet(kpi);
+                    const maxValue = Math.max(kpi.target_value, kpi.current_value || 0);
+                    const normalizedTarget = (kpi.target_value / maxValue) * 100;
+                    const normalizedCurrent = ((kpi.current_value || 0) / maxValue) * 100;
+                    
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-300">{kpi.kpi_type.split(' ').slice(0, 2).join(' ')}</span>
+                          <span className={met ? 'text-emerald-400' : 'text-yellow-400'}>
+                            {met ? 'Met' : 'In Progress'}
+                          </span>
+                        </div>
+                        <div className="relative h-8 bg-slate-900 rounded overflow-hidden">
+                          <div 
+                            className="absolute h-full bg-blue-600/40 rounded-r"
+                            style={{ width: `${normalizedTarget}%` }}
                           />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                          <div 
+                            className={`absolute h-full rounded-r ${met ? 'bg-emerald-500' : 'bg-yellow-500'}`}
+                            style={{ width: `${normalizedCurrent}%`, opacity: 0.8 }}
+                          />
+                          <div className="absolute inset-0 flex items-center px-2 justify-between text-xs font-mono">
+                            <span className="text-white/80">Current: {(kpi.current_value || 0).toLocaleString()}</span>
+                            <span className="text-blue-300">Target: {kpi.target_value.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex gap-4 mt-4 text-xs text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-blue-600/40 rounded" />
+                      <span>Target</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-emerald-500 rounded" />
+                      <span>Met</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-yellow-500 rounded" />
+                      <span>In Progress</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
