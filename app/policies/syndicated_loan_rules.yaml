@@ -1,0 +1,210 @@
+# ==========================================
+# REGULATORY COMPLIANCE RULES
+# ==========================================
+# These rules enforce MiCA, Basel III, and FATF requirements
+
+# Block facilities with sanctioned parties
+- name: block_sanctioned_parties
+  when:
+    any:
+      - field: originator.lei
+        op: in
+        value: ["SANCTIONED_LEI_LIST"]  # External data source
+      - field: beneficiary.lei
+        op: in
+        value: ["SANCTIONED_LEI_LIST"]
+  action: block
+  priority: 100
+  description: "Block any transaction involving sanctioned entities"
+
+# Flag high-risk jurisdictions
+- name: flag_high_risk_jurisdiction
+  when:
+    any:
+      - field: originator.jurisdiction
+        op: in
+        value: ["HighRiskCountryList"]  # FATF blacklist, etc.
+      - field: beneficiary.jurisdiction
+        op: in
+        value: ["HighRiskCountryList"]
+  action: flag
+  priority: 50
+  description: "Flag transactions involving high-risk jurisdictions"
+
+# Block invalid ESG claims
+- name: block_invalid_esg_claims
+  when:
+    all:
+      - field: sustainability_linked
+        op: eq
+        value: true
+      - field: esg_kpi_targets
+        op: eq
+        value: []  # Empty list
+  action: block
+  priority: 80
+  description: "Block sustainability-linked loans without KPI targets"
+
+# Flag excessive commitment amounts
+- name: flag_excessive_commitment
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "facility_creation"
+      - field: amount
+        op: gt
+        value: 1000000000  # $1B threshold
+  action: flag
+  priority: 30
+  description: "Flag facilities exceeding $1B commitment"
+
+# ==========================================
+# TRADE EXECUTION RULES
+# ==========================================
+
+# Block unhosted wallet transfers
+- name: block_unhosted_wallets
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "trade_execution"
+      - field: originator.kyc_status
+        op: eq
+        value: false
+  action: block
+  priority: 90
+  description: "Block trades from unhosted (non-KYC) wallets"
+
+# Flag high-value transfers
+- name: flag_high_value_transfer
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "trade_execution"
+      - field: amount
+        op: gt
+        value: 100000
+      - field: currency
+        op: eq
+        value: "EUR"
+  action: flag
+  priority: 40
+  description: "Flag high-value EUR transfers for review"
+
+# Block virtual asset transfers without proper context
+- name: block_virtual_asset_transfer
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "trade_execution"
+      - field: context
+        op: eq
+        value: "Virtual_Asset_Transfer"
+      - field: originator.kyc_status
+        op: eq
+        value: false
+  action: block
+  priority: 85
+  description: "Block virtual asset transfers from non-KYC entities"
+
+# ==========================================
+# LOAN ASSET SECURITIZATION RULES
+# ==========================================
+
+# Block securitization of non-compliant assets
+- name: block_breach_securitization
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "loan_asset_securitization"
+      - field: risk_status
+        op: eq
+        value: "BREACH"
+  action: block
+  priority: 95
+  description: "Block securitization of assets in breach status"
+
+# Flag assets in restricted geographic areas
+- name: flag_geographic_restriction
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "loan_asset_securitization"
+      - field: geo_lat
+        op: ne
+        value: null
+      - field: geo_lon
+        op: ne
+        value: null
+      # Check if coordinates fall in restricted zone
+      # (Would need custom operator or external service)
+  action: flag
+  priority: 35
+  description: "Flag assets in geographically restricted areas"
+
+# Block assets without verification
+- name: block_missing_collateral_verification
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "loan_asset_securitization"
+      - field: ndvi_score
+        op: eq
+        value: null
+  action: block
+  priority: 75
+  description: "Block securitization without satellite verification"
+
+# ==========================================
+# TERMS CHANGE RULES
+# ==========================================
+
+# Block excessive rate increases
+- name: block_excessive_rate_increase
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "terms_change"
+      - field: rate_delta
+        op: gt
+        value: 2.0  # 200 bps max increase
+  action: block
+  priority: 70
+  description: "Block interest rate increases exceeding 200 bps"
+
+# Flag rapid rate changes
+- name: flag_rapid_rate_changes
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "terms_change"
+      - field: rate_delta
+        op: gt
+        value: 0.5  # 50 bps threshold
+  action: flag
+  priority: 25
+  description: "Flag significant rate changes for review"
+
+# ==========================================
+# DEFAULT RULE
+# ==========================================
+
+# Default allow (lowest priority)
+- name: default_allow
+  when: {}
+  action: allow
+  priority: 0
+  description: "Default allow for all transactions not caught by other rules"
+
+
+
+

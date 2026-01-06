@@ -9,11 +9,12 @@ This agent uses OpenAI function calling to extract:
 import logging
 from typing import Optional
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.language_models import BaseChatModel
+from langchain_core.embeddings import Embeddings
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
 
-from app.core.config import settings
+from app.core.llm_client import get_chat_model, get_embeddings_model as get_llm_embeddings_model
 from app.models.spt_schema import (
     SustainabilityPerformanceTarget,
     CollateralAddress,
@@ -29,42 +30,43 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def create_spt_extraction_chain() -> ChatOpenAI:
+def create_spt_extraction_chain() -> BaseChatModel:
     """
     Create LLM configured for SPT extraction with structured output.
     
+    Uses the LLM client abstraction to support multiple providers.
+    
     Returns:
-        ChatOpenAI instance bound to SustainabilityPerformanceTarget schema
+        BaseChatModel instance bound to SustainabilityPerformanceTarget schema
     """
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value()
-    )
+    llm = get_chat_model(temperature=0)
     return llm.with_structured_output(SustainabilityPerformanceTarget)
 
 
-def create_address_extraction_chain() -> ChatOpenAI:
+def create_address_extraction_chain() -> BaseChatModel:
     """
     Create LLM configured for collateral address extraction.
     
+    Uses the LLM client abstraction to support multiple providers.
+    
     Returns:
-        ChatOpenAI instance bound to CollateralAddress schema
+        BaseChatModel instance bound to CollateralAddress schema
     """
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value()
-    )
+    llm = get_chat_model(temperature=0)
     return llm.with_structured_output(CollateralAddress)
 
 
-def get_embeddings_model() -> OpenAIEmbeddings:
-    """Get OpenAI embeddings model for vector generation."""
-    return OpenAIEmbeddings(
-        api_key=settings.OPENAI_API_KEY.get_secret_value(),
-        model="text-embedding-3-small"
-    )
+def get_embeddings_model() -> Embeddings:
+    """
+    Get embeddings model for vector generation.
+    
+    Uses the LLM client abstraction to support multiple providers.
+    The provider and model are configured via environment variables.
+    
+    Returns:
+        Embeddings instance ready for use
+    """
+    return get_llm_embeddings_model()
 
 
 SPT_EXTRACTION_PROMPT = ChatPromptTemplate.from_messages([

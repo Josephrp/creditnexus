@@ -12,6 +12,7 @@ from app.agents.analyzer import analyze_legal_document, generate_legal_vector
 from app.agents.verifier import geocode_address, verify_asset_location
 from app.models.loan_asset import LoanAsset, RiskStatus
 from app.models.spt_schema import SustainabilityPerformanceTarget
+from app.services.policy_service import PolicyService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,7 +41,9 @@ class AuditResult:
 async def run_full_audit(
     loan_id: str,
     document_text: str,
-    db_session=None  # Optional SQLAlchemy session for persistence
+    db_session=None,  # Optional SQLAlchemy session for persistence
+    policy_service: Optional[PolicyService] = None,  # Optional policy service for compliance evaluation
+    credit_agreement=None  # Optional CreditAgreement for policy context
 ) -> AuditResult:
     """
     Execute the complete "Securitize & Verify" workflow.
@@ -156,6 +159,150 @@ async def run_full_audit(
                 ndvi_score = verification["ndvi_score"]
                 loan_asset.update_verification(ndvi_score)
                 result.stages_completed.append("satellite_verification")
+                
+                # Policy evaluation after satellite verification (if enabled)
+                if policy_service:
+                    try:
+                        from app.models.cdm_events import generate_cdm_observation, generate_cdm_policy_evaluation
+                        from app.db.models import PolicyDecision as PolicyDecisionModel
+                        
+                        # Create CDM Observation event for satellite verification
+                        satellite_hash = verification.get("hash", "")
+                        observation_event = generate_cdm_observation(
+                            trade_id=loan_id,
+                            satellite_hash=satellite_hash,
+                            ndvi_score=ndvi_score,
+                            status=loan_asset.risk_status.value
+                        )
+                        
+                        # Evaluate loan asset securitization for compliance
+                        policy_result = policy_service.evaluate_loan_asset(
+                            loan_asset=loan_asset,
+                            credit_agreement=credit_agreement
+                        )
+                        
+                        # Create CDM PolicyEvaluation event
+                        policy_evaluation_event = generate_cdm_policy_evaluation(
+                            transaction_id=loan_id,
+                            transaction_type="loan_asset_securitization",
+                            decision=policy_result.decision,
+                            rule_applied=policy_result.rule_applied,
+                            related_event_identifiers=[{
+                                "eventIdentifier": {
+                                    "issuer": "CreditNexus",
+                                    "assignedIdentifier": [{
+                                        "identifier": {"value": observation_event.get("meta", {}).get("globalKey", "")}
+                                    }]
+                                }
+                            }],
+                            evaluation_trace=policy_result.trace,
+                            matched_rules=policy_result.matched_rules
+                        )
+                        
+                        # Handle BLOCK decision - prevent securitization
+                        if policy_result.decision == "BLOCK":
+                            logger.warning(
+                                f"Policy evaluation BLOCKED loan asset securitization: "
+                                f"loan_id={loan_id}, rule={policy_result.rule_applied}, "
+                                f"trace_id={policy_result.trace_id}"
+                            )
+                            
+                            loan_asset.risk_status = RiskStatus.ERROR
+                            loan_asset.verification_error = (
+                                f"Policy violation: {policy_result.rule_applied}. "
+                                f"Securitization blocked by compliance policy."
+                            )
+                            result.stages_failed.append("policy_evaluation")
+                            
+                            # Log policy decision to database if session available
+                            if db_session:
+                                try:
+                                    policy_decision_db = PolicyDecisionModel(
+                                        transaction_id=loan_id,
+                                        transaction_type="loan_asset_securitization",
+                                        decision=policy_result.decision,
+                                        rule_applied=policy_result.rule_applied,
+                                        trace_id=policy_result.trace_id,
+                                        trace=policy_result.trace,
+                                        matched_rules=policy_result.matched_rules,
+                                        metadata={"loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None},
+                                        cdm_events=[policy_evaluation_event]
+                                    )
+                                    db_session.add(policy_decision_db)
+                                    db_session.commit()
+                                except Exception as e:
+                                    logger.error(f"Failed to log policy decision to database: {e}")
+                        
+                        # Handle FLAG decision - allow but mark for review
+                        elif policy_result.decision == "FLAG":
+                            logger.info(
+                                f"Policy evaluation FLAGGED loan asset securitization: "
+                                f"loan_id={loan_id}, rule={policy_result.rule_applied}, "
+                                f"trace_id={policy_result.trace_id}"
+                            )
+                            
+                            loan_asset.risk_status = RiskStatus.WARNING
+                            # Add policy metadata to loan asset
+                            if not hasattr(loan_asset, 'metadata') or loan_asset.metadata is None:
+                                loan_asset.metadata = {}
+                            loan_asset.metadata["policy_flag"] = {
+                                "rule_applied": policy_result.rule_applied,
+                                "trace_id": policy_result.trace_id,
+                                "requires_review": True
+                            }
+                            
+                            # Log policy decision to database if session available
+                            if db_session:
+                                try:
+                                    policy_decision_db = PolicyDecisionModel(
+                                        transaction_id=loan_id,
+                                        transaction_type="loan_asset_securitization",
+                                        decision=policy_result.decision,
+                                        rule_applied=policy_result.rule_applied,
+                                        trace_id=policy_result.trace_id,
+                                        trace=policy_result.trace,
+                                        matched_rules=policy_result.matched_rules,
+                                        metadata={
+                                            "loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None,
+                                            "requires_review": True
+                                        },
+                                        cdm_events=[policy_evaluation_event]
+                                    )
+                                    db_session.add(policy_decision_db)
+                                    db_session.commit()
+                                except Exception as e:
+                                    logger.error(f"Failed to log policy decision to database: {e}")
+                        
+                        # Handle ALLOW decision - log for audit
+                        else:
+                            logger.debug(
+                                f"Policy evaluation ALLOWED loan asset securitization: "
+                                f"loan_id={loan_id}, trace_id={policy_result.trace_id}"
+                            )
+                            
+                            # Log policy decision to database if session available
+                            if db_session:
+                                try:
+                                    policy_decision_db = PolicyDecisionModel(
+                                        transaction_id=loan_id,
+                                        transaction_type="loan_asset_securitization",
+                                        decision=policy_result.decision,
+                                        rule_applied=policy_result.rule_applied,
+                                        trace_id=policy_result.trace_id,
+                                        trace=policy_result.trace,
+                                        matched_rules=policy_result.matched_rules,
+                                        metadata={"loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None},
+                                        cdm_events=[policy_evaluation_event]
+                                    )
+                                    db_session.add(policy_decision_db)
+                                    db_session.commit()
+                                except Exception as e:
+                                    logger.error(f"Failed to log policy decision to database: {e}")
+                    
+                    except Exception as e:
+                        # Log policy evaluation errors but don't block audit
+                        logger.error(f"Policy evaluation failed for loan {loan_id}: {e}", exc_info=True)
+                        # Continue with audit even if policy evaluation fails
             else:
                 loan_asset.risk_status = RiskStatus.ERROR
                 loan_asset.verification_error = verification.get("error", "Unknown error")

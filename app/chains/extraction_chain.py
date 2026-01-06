@@ -9,10 +9,10 @@ import logging
 from typing import Optional
 from pydantic import ValidationError
 
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.core.config import settings
+from app.core.llm_client import get_chat_model
 from app.models.cdm import CreditAgreement, ExtractionResult
 from app.chains.map_reduce_chain import extract_data_map_reduce
 
@@ -24,19 +24,19 @@ logger = logging.getLogger(__name__)
 MAP_REDUCE_THRESHOLD = 50000
 
 
-def create_extraction_chain() -> ChatOpenAI:
+def create_extraction_chain() -> BaseChatModel:
     """Create and configure the LangChain extraction chain.
     
+    Uses the LLM client abstraction to support multiple providers (OpenAI, vLLM, HuggingFace).
+    The provider and model are configured via environment variables (LLM_PROVIDER, LLM_MODEL).
+    
     Returns:
-        A ChatOpenAI instance configured with structured output
+        A BaseChatModel instance configured with structured output
         bound to the CreditAgreement Pydantic model.
     """
-    # Initialize the LLM with temperature=0 for deterministic extraction
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value()
-    )
+    # Use global LLM configuration (set at startup)
+    # Temperature defaults to 0 for deterministic extraction
+    llm = get_chat_model(temperature=0)
     
     # Bind the Pydantic model as a structured output tool
     # This ensures the LLM always returns data conforming to ExtractionResult schema
@@ -74,6 +74,78 @@ CRITICAL RULES:
 """
 
     user_prompt = "Contract Text: {text}"
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", user_prompt)
+    ])
+    
+    return prompt
+
+
+def create_comprehensive_extraction_prompt() -> ChatPromptTemplate:
+    """Create a comprehensive prompt template that works for any financial/legal document.
+    
+    This prompt is designed to extract CDM data from various sources including:
+    - Scanned documents (PDFs, images)
+    - Webcam photos of documents
+    - Regular photos of contracts
+    - Schemas and diagrams
+    - Accounting documents
+    - Credit agreements in any format
+    
+    Returns:
+        A ChatPromptTemplate with system and user message templates.
+    """
+    system_prompt = """You are an expert Financial Data Analyst specializing in extracting structured information from financial and legal documents. Your task is to extract structured CDM (Common Domain Model) compliant data from any provided text, regardless of its source.
+
+DOCUMENT SOURCES YOU MAY ENCOUNTER:
+- Scanned credit agreements, loan documents, or term sheets
+- Photos taken with webcam or mobile device of contracts
+- Handwritten or printed financial documents
+- Accounting records, invoices, or financial statements
+- Legal schemas, diagrams, or structured layouts
+- OCR-extracted text from images of any quality
+
+YOUR RESPONSIBILITIES:
+1. Extract the exact legal names of parties and their roles (Borrower, Lender, Administrative Agent, Guarantor, etc.)
+2. Normalize all financial amounts to the Money structure (amount as Decimal, currency as code)
+3. Convert percentage spreads to basis points (e.g., 3.5% -> 350.0, 2.75% -> 275.0)
+4. Extract dates in ISO 8601 format (YYYY-MM-DD) - handle various date formats intelligently
+5. Identify all loan facilities, credit lines, or financial instruments and their terms
+6. Extract the governing law/jurisdiction
+7. Identify sustainability-linked provisions, ESG KPIs, or environmental targets if present
+8. Extract interest rates, spreads, benchmarks (SOFR, LIBOR, etc.), and payment frequencies
+9. Set extraction_status appropriately:
+   - success: valid credit/financial agreement extracted with sufficient data
+   - partial_data_missing: some fields missing/uncertain but document is relevant
+   - irrelevant_document: not a credit/financial agreement or insufficient information
+
+HANDLING VARIOUS DOCUMENT TYPES:
+- For credit agreements: Extract parties, facilities, terms, dates, governing law
+- For term sheets: Extract key terms, amounts, parties, dates
+- For accounting documents: Extract financial amounts, dates, parties, transaction details
+- For schemas/diagrams: Extract structured relationships, parties, financial flows
+- For partial documents: Extract what is available, mark as partial_data_missing
+
+TEXT QUALITY CONSIDERATIONS:
+- OCR errors: Intelligently correct common OCR mistakes (e.g., "0" vs "O", "1" vs "I")
+- Handwritten text: Extract what is legible, mark uncertain fields appropriately
+- Poor quality scans: Extract what is readable, use partial_data_missing status
+- Multiple languages: Extract data regardless of language, preserve original text structure
+
+CRITICAL RULES:
+- If a field is not explicitly stated in the text, return None/Null. Do not guess or infer values.
+- Do not use market standards or assumptions unless explicitly mentioned in the document.
+- Convert written numbers (e.g., "five million", "3.5 million") to numeric values.
+- Ensure all dates are valid and in ISO 8601 format (YYYY-MM-DD).
+- For interest rates, always extract the spread in basis points (multiply percentages by 100).
+- Handle currency symbols and codes intelligently (USD, $, EUR, €, GBP, £, etc.).
+- Preserve original text structure when possible for audit purposes.
+- If text appears corrupted or unreadable, mark appropriate fields as missing rather than guessing.
+"""
+
+    user_prompt = "Extracted Text (from image, scan, photo, or document): {text}"
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),

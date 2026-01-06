@@ -20,7 +20,11 @@ import {
   FileJson,
   FileSpreadsheet,
   Table,
-  Plus
+  Plus,
+  Sparkles,
+  Filter,
+  GitCompare,
+  X
 } from 'lucide-react';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import { WorkflowActions } from './WorkflowActions';
@@ -40,6 +44,10 @@ interface DocumentSummary {
   uploaded_by_name: string | null;
   created_at: string;
   updated_at: string;
+  is_generated?: boolean;
+  template_id?: number | null;
+  template_category?: string | null;
+  template_name?: string | null;
 }
 
 interface DocumentVersion {
@@ -74,13 +82,23 @@ interface DocumentDetail extends DocumentSummary {
   current_version_id: number | null;
   versions: DocumentVersion[];
   workflow: WorkflowData | null;
+  source_cdm_data?: Record<string, unknown> | null;
+}
+
+interface TemplateData {
+  id: number;
+  name: string;
+  category: string;
+  template_code: string;
+  version: string;
 }
 
 interface DocumentHistoryProps {
   onViewData?: (data: Record<string, unknown>) => void;
+  onGenerateFromTemplate?: (cdmData: Record<string, unknown>) => void;
 }
 
-export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
+export function DocumentHistory({ onViewData, onGenerateFromTemplate }: DocumentHistoryProps) {
   const { isAuthenticated } = useAuth();
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null);
@@ -88,12 +106,16 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [showComparison, setShowComparison] = useState(false);
+  const [templateData, setTemplateData] = useState<TemplateData | null>(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
-  }, [searchTerm]);
+  }, [searchTerm, templateCategoryFilter]);
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -101,6 +123,13 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
     try {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
+      if (templateCategoryFilter !== 'all') {
+        if (templateCategoryFilter === 'generated') {
+          params.append('is_generated', 'true');
+        } else {
+          params.append('template_category', templateCategoryFilter);
+        }
+      }
       params.append('limit', '50');
       
       const response = await fetch(`/api/documents?${params.toString()}`);
@@ -200,6 +229,46 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
     }
   };
 
+  const handleGenerateLMA = () => {
+    if (!selectedDocument || !selectedVersion) {
+      alert('Please select a document version to generate from');
+      return;
+    }
+    
+    // Extract CDM data from the selected version
+    const cdmData = selectedVersion.extracted_data;
+    
+    if (onGenerateFromTemplate) {
+      onGenerateFromTemplate(cdmData);
+    } else if (onViewData) {
+      // Fallback: use onViewData to navigate
+      onViewData(cdmData);
+    }
+  };
+
+  const handleCompareWithTemplate = async () => {
+    if (!selectedDocument || !selectedDocument.template_id) {
+      alert('This document was not generated from a template');
+      return;
+    }
+
+    setLoadingTemplate(true);
+    try {
+      const response = await fetchWithAuth(`/api/templates/${selectedDocument.template_id}`);
+      if (response.ok) {
+        const template = await response.json();
+        setTemplateData(template);
+        setShowComparison(true);
+      } else {
+        throw new Error('Failed to load template');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load template');
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
   const handleWorkflowUpdate = (updatedWorkflow: WorkflowData) => {
     if (selectedDocument) {
       setSelectedDocument({
@@ -241,6 +310,72 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
     }
   };
 
+  if (showComparison && selectedDocument && templateData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => setShowComparison(false)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Document
+            </Button>
+            <h2 className="text-2xl font-bold">Template Comparison</h2>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setShowComparison(false)}>
+            <X className="h-4 w-4 mr-2" />
+            Close
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6">
+          {/* Template Side */}
+          <Card className="border-slate-700 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="h-5 w-5 text-blue-400" />
+                <h3 className="text-lg font-semibold">Template: {templateData.name}</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div><span className="font-medium text-muted-foreground">Category:</span> {templateData.category}</div>
+                <div><span className="font-medium text-muted-foreground">Code:</span> <code className="text-xs bg-slate-900 px-2 py-0.5 rounded">{templateData.template_code}</code></div>
+                <div><span className="font-medium text-muted-foreground">Version:</span> {templateData.version}</div>
+              </div>
+              <div className="mt-4 p-4 bg-slate-900 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Template Structure</p>
+                <p className="text-sm text-slate-300">
+                  This is the original LMA template that was used to generate the document.
+                  The template contains placeholders and structure that were populated with CDM data.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Generated Document Side */}
+          <Card className="border-slate-700 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="h-5 w-5 text-purple-400" />
+                <h3 className="text-lg font-semibold">Generated Document</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div><span className="font-medium text-muted-foreground">Title:</span> {selectedDocument.title}</div>
+                <div><span className="font-medium text-muted-foreground">Document ID:</span> #{selectedDocument.id}</div>
+                {selectedDocument.source_cdm_data && (
+                  <div className="mt-4">
+                    <p className="text-xs text-muted-foreground mb-2">Source CDM Data</p>
+                    <pre className="text-xs font-mono bg-slate-900 p-3 rounded-lg overflow-auto max-h-64 text-slate-300">
+                      {JSON.stringify(selectedDocument.source_cdm_data, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   if (selectedDocument) {
     return (
       <div className="space-y-6">
@@ -259,38 +394,69 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 border border-slate-700 rounded-lg p-1 bg-slate-800/50">
-              <span className="text-xs text-muted-foreground px-2">Export:</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 px-2 hover:bg-emerald-500/10 hover:text-emerald-400"
-                onClick={() => handleExport('json')}
-                title="Export as JSON"
-              >
-                <FileJson className="h-4 w-4 mr-1" />
-                <span className="text-xs">JSON</span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 px-2 hover:bg-blue-500/10 hover:text-blue-400"
-                onClick={() => handleExport('csv')}
-                title="Export as CSV"
-              >
-                <Table className="h-4 w-4 mr-1" />
-                <span className="text-xs">CSV</span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 px-2 hover:bg-green-500/10 hover:text-green-400"
-                onClick={() => handleExport('excel')}
-                title="Export as Excel"
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-1" />
-                <span className="text-xs">Excel</span>
-              </Button>
+            <div className="flex items-center gap-2">
+              {selectedDocument.is_generated && selectedDocument.template_id && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border-indigo-600/30"
+                  onClick={handleCompareWithTemplate}
+                  disabled={loadingTemplate}
+                  title="Compare with original template"
+                >
+                  {loadingTemplate ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <GitCompare className="h-4 w-4 mr-2" />
+                  )}
+                  Compare with Template
+                </Button>
+              )}
+              {selectedVersion && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border-purple-600/30"
+                  onClick={handleGenerateLMA}
+                  title="Generate LMA Document from this version"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate LMA Document
+                </Button>
+              )}
+              <div className="flex items-center gap-1 border border-slate-700 rounded-lg p-1 bg-slate-800/50">
+                <span className="text-xs text-muted-foreground px-2">Export:</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 hover:bg-emerald-500/10 hover:text-emerald-400"
+                  onClick={() => handleExport('json')}
+                  title="Export as JSON"
+                >
+                  <FileJson className="h-4 w-4 mr-1" />
+                  <span className="text-xs">JSON</span>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 hover:bg-blue-500/10 hover:text-blue-400"
+                  onClick={() => handleExport('csv')}
+                  title="Export as CSV"
+                >
+                  <Table className="h-4 w-4 mr-1" />
+                  <span className="text-xs">CSV</span>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 hover:bg-green-500/10 hover:text-green-400"
+                  onClick={() => handleExport('excel')}
+                  title="Export as Excel"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-1" />
+                  <span className="text-xs">Excel</span>
+                </Button>
+              </div>
             </div>
             {isAuthenticated && (
               <Button 
@@ -374,16 +540,29 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
                     <h3 className="text-lg font-semibold">
                       Version {selectedVersion.version_number} Data
                     </h3>
-                    {onViewData && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => onViewData(selectedVersion.extracted_data)}
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Open in Digitizer
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {onGenerateFromTemplate && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border-purple-600/30"
+                          onClick={handleGenerateLMA}
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate LMA Document
+                        </Button>
+                      )}
+                      {onViewData && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => onViewData(selectedVersion.extracted_data)}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Open in Digitizer
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <pre className="text-xs font-mono bg-slate-900 p-4 rounded-lg overflow-auto max-h-96 text-slate-300">
                     {JSON.stringify(selectedVersion.extracted_data, null, 2)}
@@ -457,15 +636,33 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Search by title or borrower name..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by title or borrower name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          />
+        </div>
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <select
+            value={templateCategoryFilter}
+            onChange={(e) => setTemplateCategoryFilter(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none"
+          >
+            <option value="all">All Documents</option>
+            <option value="generated">Generated Documents</option>
+            <option value="Facility Agreement">Facility Agreement</option>
+            <option value="Term Sheet">Term Sheet</option>
+            <option value="Confidentiality Agreement">Confidentiality Agreement</option>
+            <option value="REF">REF</option>
+            <option value="SLL">SLL</option>
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -505,12 +702,31 @@ export function DocumentHistory({ onViewData }: DocumentHistoryProps) {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-5 w-5 text-emerald-400" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      doc.is_generated 
+                        ? 'bg-purple-500/20' 
+                        : 'bg-emerald-500/20'
+                    }`}>
+                      {doc.is_generated ? (
+                        <Sparkles className="h-5 w-5 text-purple-400" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-emerald-400" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="font-semibold truncate">{doc.title}</h3>
+                        {doc.is_generated && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" />
+                            Generated
+                          </span>
+                        )}
+                        {doc.template_category && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            {doc.template_category}
+                          </span>
+                        )}
                         {doc.workflow_state && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${getWorkflowStateColor(doc.workflow_state)}`}>
                             {doc.workflow_state.replace('_', ' ')}

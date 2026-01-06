@@ -41,3 +41,13 @@ geopy>=2.4.1
 # Map visualization & numerical
 folium>=0.15.1
 numpy>=1.24.0
+
+# Policy Engine & Configuration
+pyyaml>=6.0
+watchdog>=3.0  # Optional, for policy hot-reload
+
+# LMA Template Generation
+python-docx>=1.1.0  # For Word document generation
+
+# Document Retrieval
+chromadb>=0.4.0  # Vector database for document similarity search

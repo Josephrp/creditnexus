@@ -3,7 +3,7 @@ FINOS CDM Event Generator for 'Kill Shot' Demo (Deep Tech Implementation)
 Generates machine-executable JSON structures for Sustainbility-Linked Loans (SLL).
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import datetime
 import uuid
 
@@ -89,11 +89,31 @@ def generate_cdm_observation(trade_id: str, satellite_hash: str, ndvi_score: flo
         }
     }
 
-def generate_cdm_terms_change(trade_id: str, current_rate: float, status: str) -> Dict[str, Any]:
+def generate_cdm_terms_change(
+    trade_id: str,
+    current_rate: float,
+    status: str,
+    policy_service=None  # Optional policy service for compliance evaluation
+) -> Optional[Dict[str, Any]]:
     """
     Generates the TermsChange event (TradeState v2).
     Mathematically updates the spread based on the Observation.
+    
+    If policy_service is provided, evaluates the rate change against compliance
+    policies before generating the event. Returns None if policy evaluation BLOCKS
+    the rate change.
+    
+    Args:
+        trade_id: Trade identifier
+        current_rate: Current interest rate
+        status: Compliance status (BREACH, COMPLIANT, etc.)
+        policy_service: Optional policy service for compliance evaluation
+        
+    Returns:
+        CDM TermsChange event dictionary, or None if blocked by policy
     """
+    import logging
+    logger = logging.getLogger(__name__)
     
     # Financial Logic: "The Contract is Code"
     # Base = 5.00%
@@ -101,6 +121,50 @@ def generate_cdm_terms_change(trade_id: str, current_rate: float, status: str) -
     base_spread = 5.00
     penalty = 1.50 if status == "BREACH" else 0.00
     new_spread = base_spread + penalty
+    proposed_rate = new_spread
+    
+    # Policy evaluation before rate change (if enabled)
+    if policy_service:
+        try:
+            # Evaluate terms change for compliance
+            policy_result = policy_service.evaluate_terms_change(
+                trade_id=trade_id,
+                current_rate=current_rate,
+                proposed_rate=proposed_rate,
+                reason="SustainabilityPerformanceTarget_Breach" if status == "BREACH" else "SustainabilityPerformanceTarget_Maintenance"
+            )
+            
+            # Handle BLOCK decision - prevent rate change
+            if policy_result.decision == "BLOCK":
+                logger.warning(
+                    f"Policy evaluation BLOCKED terms change: "
+                    f"trade_id={trade_id}, current_rate={current_rate}, "
+                    f"proposed_rate={proposed_rate}, rule={policy_result.rule_applied}, "
+                    f"trace_id={policy_result.trace_id}"
+                )
+                # Return None to indicate rate change was blocked
+                return None
+            
+            # Handle FLAG decision - allow but log for review
+            elif policy_result.decision == "FLAG":
+                logger.info(
+                    f"Policy evaluation FLAGGED terms change: "
+                    f"trade_id={trade_id}, rule={policy_result.rule_applied}, "
+                    f"trace_id={policy_result.trace_id}"
+                )
+                # Continue with rate change but it's flagged
+            
+            # ALLOW decision - proceed normally
+            else:
+                logger.debug(
+                    f"Policy evaluation ALLOWED terms change: "
+                    f"trade_id={trade_id}, trace_id={policy_result.trace_id}"
+                )
+        
+        except Exception as e:
+            # Log policy evaluation errors but don't block rate change
+            logger.error(f"Policy evaluation failed for terms change: {e}", exc_info=True)
+            # Continue with rate change even if policy evaluation fails
     
     return {
         "eventType": "TermsChange",
@@ -132,5 +196,76 @@ def generate_cdm_terms_change(trade_id: str, current_rate: float, status: str) -
             "sourceSystem": "CreditNexus_SmartContract_Engine",
             "previousEventReference": "OBSERVATION-001",
             "version": 2
+        }
+    }
+
+def generate_cdm_policy_evaluation(
+    transaction_id: str,
+    transaction_type: str,
+    decision: str,  # "ALLOW", "BLOCK", "FLAG"
+    rule_applied: str = None,
+    related_event_identifiers: List[Dict[str, Any]] = None,
+    evaluation_trace: List[Dict[str, Any]] = None,
+    matched_rules: List[str] = None
+) -> Dict[str, Any]:
+    """
+    Generates CDM-compliant PolicyEvaluation event.
+    
+    This event represents a policy engine decision following CDM event model:
+    - eventType: "PolicyEvaluation"
+    - eventDate: Timestamp
+    - policyEvaluation: Policy evaluation details
+    - relatedEventIdentifier: Links to TradeExecution, Observation, TermsChange, etc.
+    
+    Follows CDM principles:
+    - Machine-readable and machine-executable format
+    - Event relationships via relatedEventIdentifier
+    - Full audit trail in evaluationTrace
+    - Metadata for source system tracking
+    
+    Args:
+        transaction_id: Unique identifier for the transaction being evaluated
+        transaction_type: Type of transaction ("facility_creation", "trade_execution", etc.)
+        decision: Policy decision ("ALLOW", "BLOCK", "FLAG")
+        rule_applied: Name of the rule that triggered the decision
+        related_event_identifiers: List of related CDM event identifiers
+        evaluation_trace: Full evaluation trace for auditability
+        matched_rules: List of all rules that matched during evaluation
+        
+    Returns:
+        CDM-compliant PolicyEvaluation event dictionary
+    """
+    if related_event_identifiers is None:
+        related_event_identifiers = []
+    if evaluation_trace is None:
+        evaluation_trace = []
+    if matched_rules is None:
+        matched_rules = []
+    
+    return {
+        "eventType": "PolicyEvaluation",
+        "eventDate": datetime.datetime.now().isoformat(),
+        "policyEvaluation": {
+            "transactionIdentifier": {
+                "issuer": "CreditNexus_PolicyEngine",
+                "assignedIdentifier": [{"identifier": {"value": transaction_id}}]
+            },
+            "transactionType": transaction_type,
+            "decision": {
+                "value": decision,
+                "unit": "POLICY_DECISION",
+                "enumeration": ["ALLOW", "BLOCK", "FLAG"]
+            },
+            "ruleApplied": rule_applied,
+            "matchedRules": matched_rules,
+            "evaluationTrace": evaluation_trace,
+            "evaluationDate": {"date": datetime.date.today().isoformat()},
+            "evaluationTimestamp": datetime.datetime.now().isoformat()
+        },
+        "relatedEventIdentifier": related_event_identifiers,
+        "meta": {
+            "globalKey": str(uuid.uuid4()),
+            "sourceSystem": "CreditNexus_PolicyEngine_v1",
+            "version": 1
         }
     }

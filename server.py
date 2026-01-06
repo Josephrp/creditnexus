@@ -21,6 +21,122 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events."""
+    from app.core.config import settings
+    
+    # Initialize LLM client configuration
+    try:
+        from app.core.llm_client import init_llm_config
+        init_llm_config(settings)
+        logger.info(
+            f"LLM client configured: provider={settings.LLM_PROVIDER.value}, "
+            f"model={settings.LLM_MODEL}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize LLM client configuration: {e}")
+        raise
+    
+    # Initialize Policy Engine with YAML rule loading
+    if settings.POLICY_ENABLED:
+        try:
+            from app.core.policy_config import PolicyConfigLoader
+            from app.services.policy_engine_factory import create_policy_engine
+            from app.services.policy_service import PolicyService
+            
+            # Create policy config loader
+            policy_config_loader = PolicyConfigLoader(settings)
+            
+            # Load all rules from YAML files
+            rules_yaml = policy_config_loader.load_all_rules()
+            
+            if not rules_yaml:
+                logger.warning("No policy rules loaded - policy engine will use default allow behavior")
+                rules_yaml = """
+- name: default_allow
+  when: {}
+  action: allow
+  priority: 0
+  description: "Default allow for all transactions not caught by other rules"
+"""
+            
+            # Validate rules
+            policy_config_loader.validate_rules(rules_yaml)
+            
+            # Initialize policy engine (vendor-agnostic interface)
+            policy_engine = create_policy_engine(
+                vendor=settings.POLICY_ENGINE_VENDOR or "default"
+            )
+            
+            # Load rules into engine
+            policy_engine.load_rules(rules_yaml)
+            
+            # Create policy service instance
+            policy_service = PolicyService(policy_engine)
+            
+            # Store in app state for dependency injection
+            app.state.policy_service = policy_service
+            app.state.policy_config_loader = policy_config_loader
+            
+            # Get metadata for logging
+            metadata = policy_config_loader.get_rules_metadata()
+            logger.info(
+                f"Policy engine initialized: {metadata.get('rules_count', 0)} rule(s) "
+                f"from {metadata.get('files_count', 0)} file(s)"
+            )
+            
+            # Start file watcher if auto-reload enabled
+            if settings.POLICY_AUTO_RELOAD:
+                def reload_policy_rules():
+                    """Reload policy rules from YAML files (called by file watcher)."""
+                    try:
+                        logger.info("Reloading policy rules...")
+                        rules_yaml = policy_config_loader.load_all_rules()
+                        policy_config_loader.validate_rules(rules_yaml)
+                        policy_engine.load_rules(rules_yaml)
+                        logger.info("Policy rules reloaded successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to reload policy rules: {e}")
+                
+                policy_config_loader.start_file_watcher(reload_policy_rules)
+                logger.info("Policy auto-reload enabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize policy engine: {e}")
+            if settings.POLICY_ENABLED:
+                raise  # Fail fast if policy is required
+    else:
+        logger.info("Policy engine is disabled (POLICY_ENABLED=false)")
+        app.state.policy_service = None
+        app.state.policy_config_loader = None
+    
+    # Initialize x402 Payment Service
+    if settings.X402_ENABLED:
+        try:
+            from app.services.x402_payment_service import X402PaymentService
+            
+            # Create x402 payment service instance
+            payment_service = X402PaymentService(
+                facilitator_url=settings.X402_FACILITATOR_URL,
+                network=settings.X402_NETWORK,
+                token=settings.X402_TOKEN
+            )
+            
+            # Store in app state for dependency injection
+            app.state.x402_payment_service = payment_service
+            
+            logger.info(
+                f"x402 Payment service initialized: "
+                f"facilitator={settings.X402_FACILITATOR_URL}, "
+                f"network={settings.X402_NETWORK}, "
+                f"token={settings.X402_TOKEN}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize x402 payment service: {e}")
+            if settings.X402_ENABLED:
+                raise  # Fail fast if x402 is required
+    else:
+        logger.info("x402 Payment service is disabled (X402_ENABLED=false)")
+        app.state.x402_payment_service = None
+    
+    # Initialize database
     if os.environ.get("DATABASE_URL"):
         try:
             from app.db import init_db
@@ -30,7 +146,26 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize database: {e}")
     else:
         logger.warning("DATABASE_URL not set, skipping database initialization")
+    
     yield
+    
+    # Cleanup
+    if settings.POLICY_ENABLED and hasattr(app.state, 'policy_config_loader'):
+        policy_config_loader = app.state.policy_config_loader
+        if policy_config_loader:
+            policy_config_loader.stop_file_watcher()
+    
+    # Cleanup x402 payment service
+    if settings.X402_ENABLED and hasattr(app.state, 'x402_payment_service'):
+        payment_service = app.state.x402_payment_service
+        if payment_service:
+            try:
+                await payment_service.close()
+                logger.info("x402 Payment service closed")
+            except Exception as e:
+                logger.error(f"Error closing x402 payment service: {e}")
+    
+    logger.info("Shutting down application...")
 
 
 app = FastAPI(

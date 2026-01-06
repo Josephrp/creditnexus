@@ -5,7 +5,7 @@ import io
 import json
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -13,10 +13,13 @@ from sqlalchemy.orm import Session, joinedload
 import pandas as pd
 
 from app.chains.extraction_chain import extract_data, extract_data_smart
-from app.models.cdm import ExtractionResult
+from app.models.cdm import ExtractionResult, CreditAgreement
 from app.db import get_db
-from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction
+from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction, PolicyDecision as PolicyDecisionModel
 from app.auth.jwt_auth import get_current_user, require_auth
+from app.services.policy_service import PolicyService
+from app.services.x402_payment_service import X402PaymentService
+from fastapi import Request
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +81,44 @@ def log_audit_action(
     return audit_log
 
 
+def get_policy_service(request: Request) -> Optional[PolicyService]:
+    """
+    Get policy service instance from application state.
+    
+    This dependency function provides access to the PolicyService instance
+    that was initialized at application startup. Returns None if policy
+    engine is disabled.
+    
+    Args:
+        request: FastAPI request object (to access app.state)
+        
+    Returns:
+        PolicyService instance or None if disabled
+    """
+    if hasattr(request.app.state, 'policy_service'):
+        return request.app.state.policy_service
+    return None
+
+
+def get_x402_payment_service(request: Request) -> Optional[X402PaymentService]:
+    """
+    Get x402 payment service instance from application state.
+    
+    This dependency function provides access to the X402PaymentService instance
+    that was initialized at application startup. Returns None if x402
+    payment service is disabled.
+    
+    Args:
+        request: FastAPI request object (to access app.state)
+        
+    Returns:
+        X402PaymentService instance or None if disabled
+    """
+    if hasattr(request.app.state, 'x402_payment_service'):
+        return request.app.state.x402_payment_service
+    return None
+
+
 MAX_FILE_SIZE_MB = 20
 
 def extract_text_from_pdf(file_content: bytes) -> str:
@@ -120,16 +161,26 @@ class ExtractionRequest(BaseModel):
 
 
 @router.post("/extract")
-async def extract_credit_agreement(request: ExtractionRequest):
+async def extract_credit_agreement(
+    request: ExtractionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
     """Extract structured data from a credit agreement document.
     
     Args:
         request: ExtractionRequest containing the document text and options.
+        db: Database session for audit logging.
+        current_user: Current authenticated user.
+        policy_service: Policy service for compliance evaluation (optional).
         
     Returns:
-        Extraction result with status, agreement data, and optional message.
+        Extraction result with status, agreement data, policy decision, and optional message.
     """
     from app.models.cdm import ExtractionStatus
+    from app.db.models import PolicyDecision as PolicyDecisionModel
+    from app.models.cdm_events import generate_cdm_policy_evaluation
     
     try:
         logger.info(f"Received extraction request for {len(request.text)} characters")
@@ -151,6 +202,129 @@ async def extract_credit_agreement(request: ExtractionRequest):
                 detail={"status": "irrelevant_document", "message": result.message or "This document does not appear to be a credit agreement."}
             )
         
+        # Policy evaluation (if enabled and agreement extracted)
+        policy_decision = None
+        policy_evaluation_event = None
+        
+        if policy_service and result.agreement:
+            try:
+                # Evaluate facility creation for compliance
+                policy_result = policy_service.evaluate_facility_creation(
+                    credit_agreement=result.agreement,
+                    document_id=None  # No document ID yet at extraction stage
+                )
+                
+                # Create CDM PolicyEvaluation event
+                policy_evaluation_event = generate_cdm_policy_evaluation(
+                    transaction_id=result.agreement.deal_id or result.agreement.loan_identification_number or "unknown",
+                    transaction_type="facility_creation",
+                    decision=policy_result.decision,
+                    rule_applied=policy_result.rule_applied,
+                    related_event_identifiers=[],
+                    evaluation_trace=policy_result.trace,
+                    matched_rules=policy_result.matched_rules
+                )
+                
+                # Handle BLOCK decision - prevent workflow progression
+                if policy_result.decision == "BLOCK":
+                    logger.warning(
+                        f"Policy evaluation BLOCKED facility creation: "
+                        f"rule={policy_result.rule_applied}, trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=result.agreement.deal_id or result.agreement.loan_identification_number or "unknown",
+                        transaction_type="facility_creation",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"document_extraction": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    raise HTTPException(
+                        status_code=403,
+                        detail={
+                            "status": "blocked",
+                            "reason": policy_result.rule_applied,
+                            "trace_id": policy_result.trace_id,
+                            "message": f"Facility creation blocked by compliance policy: {policy_result.rule_applied}",
+                            "cdm_event": policy_evaluation_event
+                        }
+                    )
+                
+                # Handle FLAG decision - allow but mark for review
+                elif policy_result.decision == "FLAG":
+                    logger.info(
+                        f"Policy evaluation FLAGGED facility creation: "
+                        f"rule={policy_result.rule_applied}, trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=result.agreement.deal_id or result.agreement.loan_identification_number or "unknown",
+                        transaction_type="facility_creation",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"document_extraction": True, "requires_review": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id,
+                        "requires_review": True
+                    }
+                
+                # Handle ALLOW decision - log for audit
+                else:
+                    logger.debug(
+                        f"Policy evaluation ALLOWED facility creation: trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=result.agreement.deal_id or result.agreement.loan_identification_number or "unknown",
+                        transaction_type="facility_creation",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"document_extraction": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id
+                    }
+                    
+            except HTTPException:
+                # Re-raise HTTP exceptions (e.g., BLOCK decision)
+                raise
+            except Exception as e:
+                # Log policy evaluation errors but don't block extraction
+                logger.error(f"Policy evaluation failed: {e}", exc_info=True)
+                # Continue with extraction even if policy evaluation fails
+        
         message = result.message
         if result.status == ExtractionStatus.PARTIAL and not message:
             missing_fields = []
@@ -171,7 +345,9 @@ async def extract_credit_agreement(request: ExtractionRequest):
         return {
             "status": result.status.value,
             "agreement": result.agreement.model_dump() if result.agreement else None,
-            "message": message
+            "message": message,
+            "policy_decision": policy_decision,
+            "cdm_events": [policy_evaluation_event] if policy_evaluation_event else []
         }
         
     except ValueError as e:
@@ -284,6 +460,305 @@ async def upload_and_extract(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to process file: {str(e)}"}
+        )
+
+
+@router.post("/audio/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    source_lang: Optional[str] = Query(None, description="Source language code (e.g., 'en', 'es')"),
+    target_lang: Optional[str] = Query(None, description="Target language code (e.g., 'en', 'es')"),
+    extract_cdm: bool = Query(True, description="Whether to extract CDM data from transcription"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Transcribe audio file and optionally extract CDM data.
+    
+    This endpoint:
+    1. Transcribes the uploaded audio file using nvidia/canary-1b-v2
+    2. Optionally extracts CDM data from the transcription using existing extraction chain
+    3. Stores transcription separately for audit purposes
+    
+    Args:
+        file: The uploaded audio file (WAV, MP3, M4A, OGG, FLAC, etc.)
+        source_lang: Source language code (default: from config or 'en')
+        target_lang: Target language code (default: from config or 'en')
+        extract_cdm: Whether to extract CDM data from transcription (default: True)
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Transcription result with transcribed text, optional CDM data, and audit info
+    """
+    from app.chains.audio_transcription_chain import process_audio_file
+    from app.models.cdm import ExtractionStatus
+    
+    # Validate file type
+    filename = file.filename or "audio.wav"
+    extension = filename.lower().split(".")[-1] if "." in filename else ""
+    supported_extensions = ["wav", "mp3", "m4a", "ogg", "flac", "webm"]
+    
+    if extension not in supported_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "message": f"Unsupported audio format: {extension}. Supported: {', '.join(supported_extensions)}"
+            }
+        )
+    
+    try:
+        # Read audio file
+        audio_bytes = await file.read()
+        
+        if len(audio_bytes) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Uploaded file is empty"}
+            )
+        
+        logger.info(f"Transcribing audio file: {filename} ({len(audio_bytes)} bytes)")
+        
+        # Transcribe audio
+        try:
+            transcribed_text = process_audio_file(
+                audio_bytes=audio_bytes,
+                filename=filename,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+        except ValueError as e:
+            logger.error(f"Audio transcription failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={"status": "error", "message": f"Audio transcription failed: {str(e)}"}
+            )
+        
+        if not transcribed_text or not transcribed_text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "error", "message": "Transcription returned empty text"}
+            )
+        
+        logger.info(f"Transcription complete: {len(transcribed_text)} characters")
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "transcription": transcribed_text,
+            "transcription_length": len(transcribed_text),
+            "source_filename": filename,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+        }
+        
+        # Optionally extract CDM data from transcription
+        if extract_cdm:
+            try:
+                logger.info("Extracting CDM data from transcription...")
+                result = extract_data_smart(text=transcribed_text, force_map_reduce=False)
+                
+                if result and result.agreement:
+                    response_data["agreement"] = result.agreement.model_dump()
+                    response_data["extraction_status"] = result.status.value
+                    response_data["extraction_message"] = result.message
+                else:
+                    response_data["agreement"] = None
+                    response_data["extraction_status"] = "failure"
+                    response_data["extraction_message"] = "CDM extraction returned no data"
+                    
+            except Exception as e:
+                logger.warning(f"CDM extraction from transcription failed: {e}")
+                response_data["agreement"] = None
+                response_data["extraction_status"] = "error"
+                response_data["extraction_message"] = f"CDM extraction failed: {str(e)}"
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="audio_transcription",
+                    user_id=current_user.id,
+                    metadata={
+                        "filename": filename,
+                        "transcription_length": len(transcribed_text),
+                        "extract_cdm": extract_cdm,
+                        "source_lang": source_lang,
+                        "target_lang": target_lang,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log audio transcription audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during audio transcription: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to process audio file: {str(e)}"}
+        )
+
+
+@router.post("/image/extract")
+async def extract_from_images(
+    files: List[UploadFile] = File(...),
+    extract_cdm: bool = Query(True, description="Whether to extract CDM data from OCR text"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Extract text from images and optionally extract CDM data.
+    
+    This endpoint:
+    1. Extracts text from uploaded image files using OCR (Multimodal-OCR3)
+    2. Combines OCR text from all images
+    3. Optionally extracts CDM data from the combined text using comprehensive extraction chain
+    4. Stores OCR text separately for audit purposes
+    
+    Supports multiple image uploads for processing documents across multiple pages/images.
+    
+    Args:
+        files: List of uploaded image files (PNG, JPEG, WEBP, etc.)
+        extract_cdm: Whether to extract CDM data from OCR text (default: True)
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Extraction result with OCR text, optional CDM data, and audit info
+    """
+    from app.chains.image_extraction_chain import process_multiple_image_files
+    from app.chains.extraction_chain import extract_data_smart
+    from app.models.cdm import ExtractionStatus
+    
+    # Validate file types
+    supported_extensions = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif"]
+    image_files = []
+    filenames = []
+    
+    for file in files:
+        filename = file.filename or "image.png"
+        extension = filename.lower().split(".")[-1] if "." in filename else ""
+        
+        if extension not in supported_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": f"Unsupported image format: {extension}. Supported: {', '.join(supported_extensions)}"
+                }
+            )
+        
+        filenames.append(filename)
+    
+    if len(files) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "error", "message": "No image files provided"}
+        )
+    
+    try:
+        # Read all image files
+        for file in files:
+            image_bytes = await file.read()
+            if len(image_bytes) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Uploaded file {file.filename} is empty"}
+                )
+            image_files.append((image_bytes, file.filename or "image.png"))
+        
+        logger.info(f"Processing {len(image_files)} image(s) for OCR extraction")
+        
+        # Extract text from all images using OCR
+        try:
+            ocr_texts = process_multiple_image_files(image_files)
+        except ValueError as e:
+            logger.error(f"Image OCR failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={"status": "error", "message": f"Image OCR failed: {str(e)}"}
+            )
+        
+        # Combine OCR text from all images
+        combined_text = "\n\n--- Image Separator ---\n\n".join(
+            [text if text else f"[No text extracted from {filename}]" 
+             for text, filename in zip(ocr_texts, filenames)]
+        )
+        
+        if not combined_text.strip() or combined_text.strip() == "":
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "error", "message": "OCR returned no text from any image"}
+            )
+        
+        logger.info(f"OCR complete: {len(combined_text)} characters extracted from {len(image_files)} image(s)")
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "ocr_text": combined_text,
+            "ocr_text_length": len(combined_text),
+            "source_filenames": filenames,
+            "images_processed": len(image_files),
+            "ocr_texts_per_image": [
+                {"filename": filename, "text": text, "length": len(text)}
+                for filename, text in zip(filenames, ocr_texts)
+            ],
+        }
+        
+        # Optionally extract CDM data from OCR text
+        if extract_cdm:
+            try:
+                logger.info("Extracting CDM data from OCR text...")
+                # Use comprehensive extraction prompt for better handling of various document types
+                result = extract_data_smart(text=combined_text, force_map_reduce=False)
+                
+                if result and result.agreement:
+                    response_data["agreement"] = result.agreement.model_dump()
+                    response_data["extraction_status"] = result.status.value
+                    response_data["extraction_message"] = result.message
+                else:
+                    response_data["agreement"] = None
+                    response_data["extraction_status"] = "failure"
+                    response_data["extraction_message"] = "CDM extraction returned no data"
+                    
+            except Exception as e:
+                logger.warning(f"CDM extraction from OCR text failed: {e}")
+                response_data["agreement"] = None
+                response_data["extraction_status"] = "error"
+                response_data["extraction_message"] = f"CDM extraction failed: {str(e)}"
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="image_extraction",
+                    user_id=current_user.id,
+                    metadata={
+                        "filenames": filenames,
+                        "images_count": len(image_files),
+                        "ocr_text_length": len(combined_text),
+                        "extract_cdm": extract_cdm,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log image extraction audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during image extraction: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to process image files: {str(e)}"}
         )
 
 
@@ -446,6 +921,10 @@ class CreateDocumentRequest(BaseModel):
     original_text: Optional[str] = Field(None, description="The original document text")
     source_filename: Optional[str] = Field(None, description="The source file name")
     extraction_method: str = Field("simple", description="The extraction method used")
+    # LMA Template Generation fields
+    is_generated: Optional[bool] = Field(False, description="Whether this document was generated from a template")
+    template_id: Optional[int] = Field(None, description="LMA template ID if generated from template")
+    source_cdm_data: Optional[dict] = Field(None, description="Source CDM data used for generation")
 
 
 class CreateVersionRequest(BaseModel):
@@ -454,6 +933,15 @@ class CreateVersionRequest(BaseModel):
     original_text: Optional[str] = Field(None, description="The original document text")
     source_filename: Optional[str] = Field(None, description="The source file name")
     extraction_method: str = Field("simple", description="The extraction method used")
+
+
+class TradeExecutionRequest(BaseModel):
+    """Request model for trade execution with policy evaluation."""
+    trade_id: str = Field(..., description="Unique trade identifier")
+    borrower: str = Field(..., description="Borrower name or identifier")
+    amount: float = Field(..., gt=0, description="Trade amount (must be positive)")
+    rate: float = Field(..., ge=0, description="Interest rate (percentage or basis points)")
+    credit_agreement_id: Optional[int] = Field(None, description="Optional credit agreement ID for context")
 
 
 def extract_document_metadata(agreement_data: dict) -> dict:
@@ -505,6 +993,12 @@ def extract_document_metadata(agreement_data: dict) -> dict:
     elif agreement_data.get("sustainability_linked"):
         metadata["sustainability_linked"] = agreement_data.get("sustainability_linked", False)
     
+    # Extract transaction identifiers for policy decision lookup
+    if agreement_data.get("deal_id"):
+        metadata["deal_id"] = agreement_data.get("deal_id")
+    if agreement_data.get("loan_identification_number"):
+        metadata["loan_identification_number"] = agreement_data.get("loan_identification_number")
+    
     return metadata
 
 
@@ -540,6 +1034,10 @@ async def create_document(
             sustainability_linked=metadata.get("sustainability_linked", False),
             esg_metadata=metadata.get("esg_metadata"),
             uploaded_by=current_user.id,
+            # LMA Template Generation fields
+            is_generated=doc_request.is_generated or False,
+            template_id=doc_request.template_id,
+            source_cdm_data=doc_request.source_cdm_data,
         )
         db.add(doc)
         db.flush()
@@ -558,10 +1056,44 @@ async def create_document(
         
         doc.current_version_id = version.id
         
+        # Check for policy decisions that might affect workflow priority
+        # Look for recent policy decisions for this transaction (deal_id or loan_identification_number)
+        priority = "normal"
+        # Set initial state based on whether document is generated
+        if doc_request.is_generated:
+            initial_state = WorkflowState.GENERATED.value
+        else:
+            initial_state = WorkflowState.DRAFT.value
+        
+        if metadata.get("deal_id") or metadata.get("loan_identification_number"):
+            transaction_id = metadata.get("deal_id") or metadata.get("loan_identification_number")
+            
+            # Query for recent policy decision for this transaction
+            recent_policy_decision = db.query(PolicyDecisionModel).filter(
+                PolicyDecisionModel.transaction_id == transaction_id,
+                PolicyDecisionModel.transaction_type == "facility_creation"
+            ).order_by(PolicyDecisionModel.created_at.desc()).first()
+            
+            if recent_policy_decision:
+                if recent_policy_decision.decision == "FLAG":
+                    # FLAG decision: set high priority and mark for review
+                    priority = "high"
+                    logger.info(
+                        f"Workflow for document {doc.id} set to high priority due to FLAG policy decision: "
+                        f"{recent_policy_decision.rule_applied}"
+                    )
+                elif recent_policy_decision.decision == "BLOCK":
+                    # BLOCK decision: This should have been caught earlier, but log it
+                    logger.warning(
+                        f"Document {doc.id} created despite BLOCK policy decision: "
+                        f"{recent_policy_decision.rule_applied}"
+                    )
+                    priority = "high"  # Still set high priority for visibility
+        
         workflow = Workflow(
             document_id=doc.id,
-            state=WorkflowState.DRAFT.value,
-            priority="normal",
+            state=initial_state,
+            priority=priority,
         )
         db.add(workflow)
         
@@ -703,6 +1235,684 @@ async def get_document(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to get document: {str(e)}"}
+        )
+
+
+class DocumentRetrieveRequest(BaseModel):
+    """Request model for document retrieval."""
+    query: str = Field(..., description="Query text or CDM data (JSON string) to search for similar documents")
+    top_k: int = Field(5, ge=1, le=20, description="Number of similar documents to retrieve (default: 5, max: 20)")
+    filter_metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata filters (e.g., {'borrower_name': 'ACME Corp'})")
+    extract_cdm: bool = Field(True, description="Whether to extract CDM data from retrieved documents")
+
+
+@router.post("/documents/retrieve")
+async def retrieve_similar_documents(
+    request: DocumentRetrieveRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Retrieve similar documents based on query text or CDM data.
+    
+    This endpoint:
+    1. Searches for similar documents using ChromaDB vector similarity
+    2. Fetches full document data from the database
+    3. Returns similar documents with their CDM data
+    
+    Args:
+        request: DocumentRetrieveRequest with query, top_k, and optional filters
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        List of similar documents with CDM data, similarity scores, and metadata
+    """
+    from app.chains.document_retrieval_chain import retrieve_similar_documents as retrieve_docs
+    from app.models.cdm import CreditAgreement
+    
+    try:
+        # Parse query - check if it's JSON (CDM data) or plain text
+        query = request.query.strip()
+        query_data = None
+        
+        # Try to parse as JSON (CDM data)
+        try:
+            query_data = json.loads(query)
+            if isinstance(query_data, dict):
+                query = query_data  # Use dict for CDM-based search
+        except (json.JSONDecodeError, ValueError):
+            # Not JSON, use as plain text query
+            pass
+        
+        logger.info(f"Retrieving similar documents for query: {query[:100] if isinstance(query, str) else 'CDM data'}...")
+        
+        # Retrieve similar documents from ChromaDB
+        try:
+            similar_docs = retrieve_docs(
+                query=query,
+                top_k=request.top_k,
+                filter_metadata=request.filter_metadata,
+            )
+        except ImportError as e:
+            logger.error(f"ChromaDB not available: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "error",
+                    "message": "Document retrieval service is not available. ChromaDB is not installed."
+                }
+            )
+        except Exception as e:
+            logger.error(f"Document retrieval failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": f"Document retrieval failed: {str(e)}"
+                }
+            )
+        
+        if not similar_docs:
+            return {
+                "status": "success",
+                "query": query if isinstance(query, str) else "CDM data",
+                "results_count": 0,
+                "documents": []
+            }
+        
+        # Fetch full document data from database
+        results = []
+        for doc_result in similar_docs:
+            document_id = doc_result["document_id"]
+            
+            try:
+                # Fetch document from database
+                doc = db.query(Document).options(
+                    joinedload(Document.versions),
+                    joinedload(Document.workflow),
+                    joinedload(Document.uploaded_by_user)
+                ).filter(Document.id == document_id).first()
+                
+                if not doc:
+                    logger.warning(f"Document {document_id} not found in database (may have been deleted)")
+                    continue
+                
+                # Get CDM data from document
+                cdm_data = None
+                if request.extract_cdm:
+                    # Try to get CDM data from source_cdm_data or latest version
+                    if doc.source_cdm_data:
+                        cdm_data = doc.source_cdm_data
+                    elif doc.current_version_id:
+                        version = db.query(DocumentVersion).filter(
+                            DocumentVersion.id == doc.current_version_id
+                        ).first()
+                        if version and version.extracted_data:
+                            cdm_data = version.extracted_data
+                
+                # Build result
+                result_item = {
+                    "document_id": document_id,
+                    "similarity_score": doc_result["similarity_score"],
+                    "distance": doc_result["distance"],
+                    "document": doc.to_dict(),
+                    "cdm_data": cdm_data,
+                }
+                
+                # Add workflow info if available
+                if doc.workflow:
+                    result_item["workflow"] = doc.workflow.to_dict()
+                
+                # Add version info
+                if doc.versions:
+                    result_item["latest_version"] = doc.versions[0].to_dict() if doc.versions else None
+                
+                results.append(result_item)
+                
+            except Exception as e:
+                logger.error(f"Error fetching document {document_id}: {e}")
+                # Continue with other documents even if one fails
+                continue
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="document_retrieval",
+                    user_id=current_user.id,
+                    metadata={
+                        "query": query[:200] if isinstance(query, str) else "CDM data",
+                        "results_count": len(results),
+                        "top_k": request.top_k,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log document retrieval audit: {e}")
+        
+        return {
+            "status": "success",
+            "query": query if isinstance(query, str) else "CDM data",
+            "results_count": len(results),
+            "documents": results
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during document retrieval: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to retrieve documents: {str(e)}"}
+        )
+
+
+class MultimodalFusionRequest(BaseModel):
+    """Request model for multimodal CDM fusion."""
+    audio_cdm: Optional[Dict[str, Any]] = Field(None, description="Optional CDM data from audio transcription")
+    image_cdm: Optional[Dict[str, Any]] = Field(None, description="Optional CDM data from image OCR")
+    document_cdm: Optional[Dict[str, Any]] = Field(None, description="Optional CDM data from document retrieval")
+    text_cdm: Optional[Dict[str, Any]] = Field(None, description="Optional CDM data from text extraction")
+    audio_text: Optional[str] = Field(None, description="Optional raw transcription text from audio")
+    image_text: Optional[str] = Field(None, description="Optional raw OCR text from images")
+    document_text: Optional[str] = Field(None, description="Optional raw text from retrieved document")
+    text_input: Optional[str] = Field(None, description="Required text input (if no text_cdm provided)")
+    use_llm_fusion: bool = Field(True, description="Whether to use LLM for complex merging (default: True)")
+
+
+@router.post("/multimodal/fuse")
+async def fuse_multimodal_cdm(
+    request: MultimodalFusionRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Fuse CDM data from multiple sources into a unified CDM structure.
+    
+    This endpoint:
+    1. Accepts CDM data from multiple sources (audio, image, document, text)
+    2. Prepends optional inputs (audio, image) to required inputs (document, text)
+    3. Tracks source for each field
+    4. Detects conflicts between sources
+    5. Uses deterministic fallbacks for simple cases
+    6. Uses LLM for complex merging when conflicts exist
+    
+    Args:
+        request: MultimodalFusionRequest with CDM data and/or text from various sources
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Fused CDM data with source tracking, conflicts, and fusion method
+    """
+    from app.chains.multimodal_fusion_chain import fuse_multimodal_inputs
+    
+    try:
+        # Validate that at least one source is provided
+        has_cdm = any([
+            request.audio_cdm,
+            request.image_cdm,
+            request.document_cdm,
+            request.text_cdm,
+        ])
+        has_text = any([
+            request.audio_text,
+            request.image_text,
+            request.document_text,
+            request.text_input,
+        ])
+        
+        if not has_cdm and not has_text:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": "At least one CDM data source or text input must be provided"
+                }
+            )
+        
+        logger.info(
+            f"Fusing multimodal inputs: "
+            f"audio_cdm={request.audio_cdm is not None}, "
+            f"image_cdm={request.image_cdm is not None}, "
+            f"document_cdm={request.document_cdm is not None}, "
+            f"text_cdm={request.text_cdm is not None}, "
+            f"text_input={request.text_input is not None}"
+        )
+        
+        # Perform fusion
+        try:
+            fusion_result = fuse_multimodal_inputs(
+                audio_cdm=request.audio_cdm,
+                image_cdm=request.image_cdm,
+                document_cdm=request.document_cdm,
+                text_cdm=request.text_cdm,
+                audio_text=request.audio_text,
+                image_text=request.image_text,
+                document_text=request.document_text,
+                text_input=request.text_input,
+                use_llm_fusion=request.use_llm_fusion,
+            )
+        except ValueError as e:
+            logger.error(f"Fusion failed: {e}")
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "status": "error",
+                    "message": f"Fusion failed: {str(e)}"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during fusion: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": f"Fusion failed with unexpected error: {str(e)}"
+                }
+            )
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "agreement": fusion_result.agreement.model_dump(),
+            "source_tracking": {
+                field: src.to_dict()
+                for field, src in fusion_result.source_tracking.items()
+            },
+            "conflicts": [c.to_dict() for c in fusion_result.conflicts],
+            "fusion_method": fusion_result.fusion_method,
+            "conflicts_count": len(fusion_result.conflicts),
+        }
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="multimodal_fusion",
+                    user_id=current_user.id,
+                    metadata={
+                        "sources_count": sum([
+                            1 if request.audio_cdm else 0,
+                            1 if request.image_cdm else 0,
+                            1 if request.document_cdm else 0,
+                            1 if request.text_cdm else 0,
+                        ]),
+                        "fusion_method": fusion_result.fusion_method,
+                        "conflicts_count": len(fusion_result.conflicts),
+                        "use_llm_fusion": request.use_llm_fusion,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log multimodal fusion audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during multimodal fusion: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to fuse multimodal inputs: {str(e)}"}
+        )
+
+
+class ChatbotChatRequest(BaseModel):
+    """Request model for chatbot chat."""
+    message: str = Field(..., description="User message")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Previous conversation messages [{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}]"
+    )
+    cdm_context: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Current CDM data context"
+    )
+    use_kb: bool = Field(True, description="Whether to use knowledge base retrieval (default: True)")
+
+
+@router.post("/chatbot/chat")
+async def chatbot_chat(
+    request: ChatbotChatRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Chat with the decision support chatbot.
+    
+    This endpoint provides an AI chatbot interface for:
+    - Answering questions about LMA templates and CDM schema
+    - Providing guidance on template selection
+    - Helping with field filling
+    - General document generation assistance
+    
+    Uses RAG (Retrieval Augmented Generation) with ChromaDB knowledge base.
+    
+    Args:
+        request: ChatbotChatRequest with message, conversation history, and CDM context
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Chatbot response with answer, sources, and metadata
+    """
+    from app.chains.decision_support_chain import DecisionSupportChatbot
+    
+    try:
+        # Initialize chatbot (could be cached/singleton in production)
+        chatbot = DecisionSupportChatbot()
+        
+        logger.info(f"Chatbot chat request: message length={len(request.message)}, has_cdm_context={request.cdm_context is not None}")
+        
+        # Call chatbot
+        try:
+            result = chatbot.chat(
+                message=request.message,
+                conversation_history=request.conversation_history,
+                cdm_context=request.cdm_context,
+                use_kb=request.use_kb,
+            )
+        except ImportError as e:
+            logger.error(f"ChromaDB not available: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "error",
+                    "message": "Chatbot service is not available. ChromaDB is not installed."
+                }
+            )
+        except Exception as e:
+            logger.error(f"Chatbot chat failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": f"Chatbot failed: {str(e)}"
+                }
+            )
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "response": result.get("response", ""),
+            "sources": result.get("sources", []),
+            "context_used": result.get("context_used", False),
+        }
+        
+        if "error" in result:
+            response_data["error"] = result["error"]
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="chatbot_chat",
+                    user_id=current_user.id,
+                    metadata={
+                        "message_length": len(request.message),
+                        "has_cdm_context": request.cdm_context is not None,
+                        "has_conversation_history": request.conversation_history is not None,
+                        "use_kb": request.use_kb,
+                        "context_used": result.get("context_used", False),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log chatbot chat audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during chatbot chat: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to process chat message: {str(e)}"}
+        )
+
+
+class ChatbotSuggestTemplatesRequest(BaseModel):
+    """Request model for template suggestions."""
+    cdm_data: Dict[str, Any] = Field(..., description="CDM data to analyze for template suggestions")
+    category_filter: Optional[str] = Field(None, description="Optional category filter for templates")
+
+
+@router.post("/chatbot/suggest-templates")
+async def chatbot_suggest_templates(
+    request: ChatbotSuggestTemplatesRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Get template suggestions based on CDM data.
+    
+    This endpoint uses AI to analyze CDM data and suggest appropriate LMA templates.
+    It considers:
+    - Agreement type and structure
+    - Governing law requirements
+    - Sustainability-linked loan indicators
+    - Complexity and specific clauses needed
+    
+    Args:
+        request: ChatbotSuggestTemplatesRequest with CDM data and optional category filter
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Template suggestions with reasoning and CDM analysis
+    """
+    from app.chains.decision_support_chain import DecisionSupportChatbot
+    from app.templates.registry import TemplateRegistry
+    
+    try:
+        # Get available templates from database
+        available_templates = []
+        try:
+            templates = TemplateRegistry.list_templates(
+                db=db,
+                category=request.category_filter
+            )
+            available_templates = [t.to_dict() for t in templates]
+        except Exception as e:
+            logger.warning(f"Failed to load templates from database: {e}")
+            # Continue without template list - chatbot can still provide suggestions
+        
+        # Initialize chatbot
+        chatbot = DecisionSupportChatbot()
+        
+        logger.info(f"Template suggestion request: has_cdm_data={bool(request.cdm_data)}, templates_count={len(available_templates)}")
+        
+        # Get suggestions
+        try:
+            result = chatbot.suggest_template(
+                cdm_data=request.cdm_data,
+                available_templates=available_templates if available_templates else None,
+            )
+        except ImportError as e:
+            logger.error(f"ChromaDB not available: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "error",
+                    "message": "Template suggestion service is not available. ChromaDB is not installed."
+                }
+            )
+        except Exception as e:
+            logger.error(f"Template suggestion failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": f"Template suggestion failed: {str(e)}"
+                }
+            )
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "suggestions": result.get("suggestions", []),
+            "reasoning": result.get("reasoning", ""),
+            "cdm_analysis": result.get("cdm_analysis", {}),
+        }
+        
+        if "error" in result:
+            response_data["error"] = result["error"]
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="chatbot_template_suggestion",
+                    user_id=current_user.id,
+                    metadata={
+                        "suggestions_count": len(result.get("suggestions", [])),
+                        "has_parties": result.get("cdm_analysis", {}).get("has_parties", False),
+                        "has_facilities": result.get("cdm_analysis", {}).get("has_facilities", False),
+                        "is_sustainability_linked": result.get("cdm_analysis", {}).get("is_sustainability_linked", False),
+                        "category_filter": request.category_filter,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log template suggestion audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during template suggestion: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to suggest templates: {str(e)}"}
+        )
+
+
+class ChatbotFillFieldsRequest(BaseModel):
+    """Request model for filling missing CDM fields."""
+    cdm_data: Dict[str, Any] = Field(..., description="Current CDM data (may be incomplete)")
+    required_fields: List[str] = Field(..., description="List of required field paths (e.g., [\"parties\", \"facilities[0].facility_name\"])")
+    conversation_context: Optional[str] = Field(None, description="Optional conversation context about what user is trying to do")
+
+
+@router.post("/chatbot/fill-fields")
+async def chatbot_fill_fields(
+    request: ChatbotFillFieldsRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Help fill missing CDM fields interactively.
+    
+    This endpoint uses AI to:
+    - Identify missing required fields in CDM data
+    - Provide guidance on what each field represents
+    - Ask clarifying questions
+    - Suggest values based on existing data
+    - Provide example values for reference
+    
+    Args:
+        request: ChatbotFillFieldsRequest with CDM data, required fields, and optional context
+        db: Database session
+        current_user: Authenticated user (optional)
+        
+    Returns:
+        Field filling assistance with suggestions, questions, and guidance
+    """
+    from app.chains.decision_support_chain import DecisionSupportChatbot
+    
+    try:
+        # Validate required fields
+        if not request.required_fields:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": "required_fields cannot be empty"
+                }
+            )
+        
+        # Initialize chatbot
+        chatbot = DecisionSupportChatbot()
+        
+        logger.info(
+            f"Field filling request: required_fields_count={len(request.required_fields)}, "
+            f"has_cdm_data={bool(request.cdm_data)}, has_context={bool(request.conversation_context)}"
+        )
+        
+        # Get field filling assistance
+        try:
+            result = chatbot.fill_missing_fields(
+                cdm_data=request.cdm_data,
+                required_fields=request.required_fields,
+                conversation_context=request.conversation_context,
+            )
+        except ImportError as e:
+            logger.error(f"ChromaDB not available: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "status": "error",
+                    "message": "Field filling service is not available. ChromaDB is not installed."
+                }
+            )
+        except Exception as e:
+            logger.error(f"Field filling failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "status": "error",
+                    "message": f"Field filling failed: {str(e)}"
+                }
+            )
+        
+        # Prepare response
+        response_data = {
+            "status": "success",
+            "all_fields_present": result.get("all_fields_present", False),
+            "missing_fields": result.get("missing_fields", []),
+            "suggestions": result.get("suggestions", {}),
+            "guidance": result.get("guidance", ""),
+            "questions": result.get("questions", []),
+        }
+        
+        if "error" in result:
+            response_data["error"] = result["error"]
+        
+        # If all fields are present, include the filled data
+        if result.get("all_fields_present"):
+            response_data["filled_data"] = result.get("filled_data", request.cdm_data)
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="chatbot_fill_fields",
+                    user_id=current_user.id,
+                    metadata={
+                        "required_fields_count": len(request.required_fields),
+                        "missing_fields_count": len(result.get("missing_fields", [])),
+                        "all_fields_present": result.get("all_fields_present", False),
+                        "has_conversation_context": bool(request.conversation_context),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log field filling audit: {e}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during field filling: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to fill fields: {str(e)}"}
         )
 
 
@@ -1209,6 +2419,79 @@ async def get_dashboard_analytics(
         )
 
 
+@router.get("/analytics/template-metrics")
+async def get_template_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get template usage metrics for dashboard.
+    
+    Returns:
+        Template metrics including:
+        - Total generations
+        - Success rate
+        - Average generation time
+        - Most used templates
+    """
+    from sqlalchemy import func
+    from app.db.models import GeneratedDocument, GeneratedDocumentStatus
+    
+    try:
+        # Total generations
+        total_generations = db.query(GeneratedDocument).count()
+        
+        # Success rate (completed / total)
+        successful_generations = db.query(GeneratedDocument).filter(
+            GeneratedDocument.status == GeneratedDocumentStatus.COMPLETED.value
+        ).count()
+        success_rate = (successful_generations / total_generations * 100) if total_generations > 0 else 0
+        
+        # Average generation time (if available in metadata)
+        # For now, we'll use a placeholder - this would need to be tracked during generation
+        avg_generation_time = 0.0
+        if total_generations > 0:
+            # Calculate from created_at timestamps if we track start/end times
+            # For now, return a default estimate
+            avg_generation_time = 45.0  # seconds
+        
+        # Most used templates
+        template_usage = db.query(
+            GeneratedDocument.template_id,
+            func.count(GeneratedDocument.id).label('usage_count')
+        ).filter(
+            GeneratedDocument.template_id.isnot(None)
+        ).group_by(GeneratedDocument.template_id).order_by(
+            func.count(GeneratedDocument.id).desc()
+        ).limit(5).all()
+        
+        most_used = []
+        for template_id, usage_count in template_usage:
+            template = db.query(LMATemplate).filter(LMATemplate.id == template_id).first()
+            if template:
+                most_used.append({
+                    "template_id": template.id,
+                    "template_name": template.name,
+                    "template_category": template.category,
+                    "usage_count": usage_count
+                })
+        
+        return {
+            "status": "success",
+            "template_metrics": {
+                "total_generations": total_generations,
+                "success_rate": round(success_rate, 1),
+                "average_generation_time_seconds": round(avg_generation_time, 1),
+                "most_used_templates": most_used
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching template metrics: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to fetch template metrics: {str(e)}"}
+        )
+
+
 @router.get("/analytics/charts")
 async def get_chart_analytics(
     range: str = Query("7d", description="Date range: 7d, 30d, 90d, or all"),
@@ -1427,6 +2710,32 @@ async def submit_for_review(
         workflow.state = WorkflowState.UNDER_REVIEW.value
         workflow.submitted_at = datetime.utcnow()
         workflow.rejection_reason = None
+        
+        # Check for policy decisions that might affect workflow priority
+        # Query for recent policy decision for this document's transaction
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        if doc:
+            # Try to get transaction ID from document metadata
+            transaction_id = None
+            if doc.deal_id:
+                transaction_id = doc.deal_id
+            elif doc.loan_identification_number:
+                transaction_id = doc.loan_identification_number
+            
+            if transaction_id:
+                recent_policy_decision = db.query(PolicyDecisionModel).filter(
+                    PolicyDecisionModel.transaction_id == transaction_id,
+                    PolicyDecisionModel.transaction_type == "facility_creation"
+                ).order_by(PolicyDecisionModel.created_at.desc()).first()
+                
+                if recent_policy_decision and recent_policy_decision.decision == "FLAG":
+                    # FLAG decision: ensure high priority
+                    if not transition_request or not transition_request.priority:
+                        workflow.priority = "high"
+                        logger.info(
+                            f"Workflow for document {document_id} set to high priority due to FLAG policy decision: "
+                            f"{recent_policy_decision.rule_applied}"
+                        )
         
         if transition_request:
             if transition_request.assigned_to:
@@ -2304,7 +3613,8 @@ async def create_loan_asset(
     request_data: CreateLoanAssetRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
 ):
     """
     Create a new loan asset and run the full Ground Truth audit.
@@ -2314,24 +3624,44 @@ async def create_loan_asset(
     2. Geocodes the address
     3. Fetches satellite imagery
     4. Calculates NDVI and determines compliance status
+    5. Evaluates policy compliance for securitization
     
     Args:
         request_data: Loan ID and document text
         request: HTTP request for audit logging
         db: Database session
         current_user: Authenticated user
+        policy_service: Policy service for compliance evaluation (optional)
         
     Returns:
         Created loan asset with verification results
     """
+    from app.models.cdm import CreditAgreement
+    
     try:
         logger.info(f"Creating loan asset {request_data.loan_id}")
         
-        # Run the full audit workflow
+        # Try to get credit agreement from document if document_id provided
+        credit_agreement = None
+        if hasattr(request_data, 'document_id') and request_data.document_id:
+            doc = db.query(Document).filter(Document.id == request_data.document_id).first()
+            if doc and doc.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    try:
+                        credit_agreement = CreditAgreement(**version.extracted_data)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse credit agreement from document: {e}")
+        
+        # Run the full audit workflow with policy service
         audit_result = await run_full_audit(
             loan_id=request_data.loan_id,
             document_text=request_data.document_text,
-            db_session=db
+            db_session=db,
+            policy_service=policy_service,
+            credit_agreement=credit_agreement
         )
         
         if not audit_result.loan_asset:
@@ -2721,4 +4051,1905 @@ async def classify_land_use(lat: float, lon: float):
         
     result = GLOBAL_CLASSIFIER.classify_lat_lon(lat, lon)
     return result
+
+
+class TermsChangeRequest(BaseModel):
+    """Request model for terms change with policy evaluation."""
+    trade_id: str = Field(..., description="Trade identifier")
+    current_rate: float = Field(..., ge=0, description="Current interest rate")
+    proposed_rate: float = Field(..., ge=0, description="Proposed new interest rate")
+    reason: str = Field(..., description="Reason for terms change")
+
+
+@router.post("/trades/{trade_id}/terms-change")
+async def change_trade_terms(
+    trade_id: str,
+    terms_request: TermsChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Change trade terms (interest rate) with policy evaluation.
+    
+    This endpoint:
+    1. Evaluates the proposed rate change against compliance policies
+    2. Blocks, flags, or allows the rate change based on policy decision
+    3. Generates CDM TermsChange event if allowed
+    4. Returns the terms change result with policy decision
+    
+    Args:
+        trade_id: Trade identifier (from path)
+        terms_request: Terms change request with current/proposed rates
+        db: Database session
+        current_user: Current authenticated user
+        policy_service: Policy service for compliance evaluation (optional)
+        
+    Returns:
+        Terms change result with policy decision and CDM events
+    """
+    from app.models.cdm_events import generate_cdm_terms_change
+    from app.db.models import PolicyDecision as PolicyDecisionModel
+    
+    try:
+        # Validate trade_id matches request
+        if terms_request.trade_id != trade_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Trade ID in path must match trade_id in request body"}
+            )
+        
+        logger.info(
+            f"Terms change request: trade_id={trade_id}, "
+            f"current_rate={terms_request.current_rate}, "
+            f"proposed_rate={terms_request.proposed_rate}, "
+            f"reason={terms_request.reason}"
+        )
+        
+        # Calculate rate delta
+        rate_delta = terms_request.proposed_rate - terms_request.current_rate
+        
+        # Policy evaluation (if enabled)
+        policy_decision = None
+        policy_evaluation_event = None
+        
+        if policy_service:
+            try:
+                # Evaluate terms change for compliance
+                policy_result = policy_service.evaluate_terms_change(
+                    trade_id=trade_id,
+                    current_rate=terms_request.current_rate,
+                    proposed_rate=terms_request.proposed_rate,
+                    reason=terms_request.reason
+                )
+                
+                # Create CDM PolicyEvaluation event
+                from app.models.cdm_events import generate_cdm_policy_evaluation
+                policy_evaluation_event = generate_cdm_policy_evaluation(
+                    transaction_id=trade_id,
+                    transaction_type="terms_change",
+                    decision=policy_result.decision,
+                    rule_applied=policy_result.rule_applied,
+                    related_event_identifiers=[],
+                    evaluation_trace=policy_result.trace,
+                    matched_rules=policy_result.matched_rules
+                )
+                
+                # Handle BLOCK decision - prevent rate change
+                if policy_result.decision == "BLOCK":
+                    logger.warning(
+                        f"Policy evaluation BLOCKED terms change: "
+                        f"trade_id={trade_id}, current_rate={terms_request.current_rate}, "
+                        f"proposed_rate={terms_request.proposed_rate}, rule={policy_result.rule_applied}, "
+                        f"trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=f"terms_change_{trade_id}",
+                        transaction_type="terms_change",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={
+                            "trade_id": trade_id,
+                            "current_rate": terms_request.current_rate,
+                            "proposed_rate": terms_request.proposed_rate,
+                            "rate_delta": rate_delta,
+                            "reason": terms_request.reason
+                        },
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    return {
+                        "status": "blocked",
+                        "decision": "BLOCK",
+                        "rule": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id,
+                        "message": f"Terms change blocked by compliance policy: {policy_result.rule_applied}",
+                        "current_rate": terms_request.current_rate,
+                        "proposed_rate": terms_request.proposed_rate,
+                        "cdm_event": policy_evaluation_event
+                    }
+                
+                # Handle FLAG decision - allow but mark for review
+                elif policy_result.decision == "FLAG":
+                    logger.info(
+                        f"Policy evaluation FLAGGED terms change: "
+                        f"trade_id={trade_id}, rule={policy_result.rule_applied}, "
+                        f"trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=f"terms_change_{trade_id}",
+                        transaction_type="terms_change",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={
+                            "trade_id": trade_id,
+                            "current_rate": terms_request.current_rate,
+                            "proposed_rate": terms_request.proposed_rate,
+                            "rate_delta": rate_delta,
+                            "reason": terms_request.reason,
+                            "requires_review": True
+                        },
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id,
+                        "requires_review": True
+                    }
+                
+                # Handle ALLOW decision - log for audit
+                else:
+                    logger.debug(
+                        f"Policy evaluation ALLOWED terms change: "
+                        f"trade_id={trade_id}, trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=f"terms_change_{trade_id}",
+                        transaction_type="terms_change",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={
+                            "trade_id": trade_id,
+                            "current_rate": terms_request.current_rate,
+                            "proposed_rate": terms_request.proposed_rate,
+                            "rate_delta": rate_delta,
+                            "reason": terms_request.reason
+                        },
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id
+                    }
+                    
+            except Exception as e:
+                # Log policy evaluation errors but don't block terms change
+                logger.error(f"Policy evaluation failed for terms change: {e}", exc_info=True)
+                # Continue with terms change even if policy evaluation fails
+        
+        # Generate CDM TermsChange event (if not blocked)
+        # Determine status from reason or rate delta
+        status = "BREACH" if "breach" in terms_request.reason.lower() else "COMPLIANT"
+        
+        terms_change_event = generate_cdm_terms_change(
+            trade_id=trade_id,
+            current_rate=terms_request.current_rate,
+            status=status,
+            policy_service=policy_service
+        )
+        
+        # If policy blocked the change, terms_change_event will be None
+        if terms_change_event is None:
+            return {
+                "status": "blocked",
+                "message": "Terms change blocked by policy evaluation",
+                "current_rate": terms_request.current_rate,
+                "proposed_rate": terms_request.proposed_rate
+            }
+        
+        # Return terms change result
+        return {
+            "status": "changed",
+            "trade_id": trade_id,
+            "current_rate": terms_request.current_rate,
+            "new_rate": terms_request.proposed_rate,
+            "rate_delta": rate_delta,
+            "terms_change_event": terms_change_event,
+            "policy_decision": policy_decision,
+            "cdm_events": (
+                [terms_change_event, policy_evaluation_event]
+                if policy_evaluation_event
+                else [terms_change_event]
+            )
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during terms change: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Terms change failed: {str(e)}"}
+        )
+
+
+# ------------------------------------------------------------------------------
+# x402 Payment Integration - Helper Functions
+# ------------------------------------------------------------------------------
+
+def get_trade_execution(trade_id: str, db: Session) -> Optional[Dict[str, Any]]:
+    """
+    Get trade execution event by trade ID.
+    
+    This helper function retrieves trade execution events. In a production system,
+    trades would be stored in a database. For now, we'll check if the trade
+    was recently executed and stored in the vector store or generate it on-demand.
+    
+    Args:
+        trade_id: Trade identifier
+        db: Database session
+        
+    Returns:
+        Trade execution CDM event dictionary or None if not found
+    """
+    # Check vector store for trade events
+    try:
+        # Search vector store for trade events
+        results = GLOBAL_VECTOR_STORE.semantic_search(trade_id)
+        for result in results:
+            event = result.get("json", {})
+            if event.get("eventType") == "TradeExecution":
+                trade = event.get("trade", {})
+                trade_identifier = trade.get("tradeIdentifier", {})
+                assigned_ids = trade_identifier.get("assignedIdentifier", [])
+                if assigned_ids:
+                    event_trade_id = assigned_ids[0].get("identifier", {}).get("value", "")
+                    if event_trade_id == trade_id:
+                        return event
+    except Exception as e:
+        logger.warning(f"Error searching vector store for trade {trade_id}: {e}")
+    
+    # If not found, return None (caller should handle)
+    return None
+
+
+def get_party_by_id(party_id: str, db: Session, credit_agreement = None):
+    """
+    Get party by ID from credit agreement or database.
+    
+    Args:
+        party_id: Party identifier (LEI or internal ID)
+        db: Database session
+        credit_agreement: Optional credit agreement to search
+        
+    Returns:
+        CDM Party object or None if not found
+    """
+    from app.models.cdm import Party, CreditAgreement
+    
+    # First, try to find in provided credit agreement
+    if credit_agreement and credit_agreement.parties:
+        for party in credit_agreement.parties:
+            if party.id == party_id or party.lei == party_id:
+                return party
+    
+    # If not found, try to find in documents
+    try:
+        # Query documents for party information
+        from app.db.models import Document, DocumentVersion
+        
+        documents = db.query(Document).join(DocumentVersion).filter(
+            DocumentVersion.extracted_data.isnot(None)
+        ).limit(10).all()
+        
+        for doc in documents:
+            if doc.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    try:
+                        agreement = CreditAgreement(**version.extracted_data)
+                        if agreement.parties:
+                            for party in agreement.parties:
+                                if party.id == party_id or party.lei == party_id:
+                                    return party
+                    except Exception:
+                        continue
+    except Exception as e:
+        logger.warning(f"Error querying database for party {party_id}: {e}")
+    
+    # If not found, create a minimal party object
+    # This is a fallback for demo purposes
+    return Party(
+        id=party_id,
+        name=party_id,  # Use ID as name if not found
+        role="Unknown",
+        lei=None
+    )
+
+
+def update_trade_status(trade_id: str, status: str, db: Session) -> None:
+    """
+    Update trade status in database or tracking system.
+    
+    In a production system, this would update a trades table.
+    For now, we'll log the status change to the audit trail.
+    
+    Args:
+        trade_id: Trade identifier
+        status: New status (pending, confirmed, settled, etc.)
+        db: Database session
+    """
+    try:
+        # Log status change to audit trail
+        from app.db.models import AuditLog, AuditAction
+        from datetime import datetime
+        
+        audit_log = AuditLog(
+            user_id=None,  # System action
+            action=AuditAction.UPDATE,
+            target_type="trade",
+            target_id=None,  # No numeric ID for trades yet
+            metadata={
+                "trade_id": trade_id,
+                "status": status,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        )
+        db.add(audit_log)
+        db.commit()
+        
+        logger.info(f"Trade {trade_id} status updated to {status}")
+    except Exception as e:
+        logger.error(f"Error updating trade status: {e}")
+        db.rollback()
+
+
+def get_credit_agreement_for_loan(loan_id: str, db: Session):
+    """
+    Get credit agreement for a loan by loan_id.
+    
+    This helper function retrieves the credit agreement associated with a loan.
+    It searches through documents to find the agreement that matches the loan_id.
+    
+    Args:
+        loan_id: Loan identifier
+        db: Database session
+        
+    Returns:
+        CreditAgreement object or None if not found
+    """
+    from app.models.cdm import CreditAgreement
+    from app.db.models import Document, DocumentVersion
+    
+    try:
+        # First, try to find loan asset and get associated document
+        loan_asset = db.query(LoanAsset).filter(LoanAsset.loan_id == loan_id).first()
+        
+        # If loan asset exists and has document reference, use it
+        # (Note: LoanAsset model may not have document_id field yet)
+        
+        # Search documents for credit agreement matching loan_id
+        # Check if loan_id matches deal_id or loan_identification_number in extracted_data
+        documents = db.query(Document).join(DocumentVersion).filter(
+            DocumentVersion.extracted_data.isnot(None)
+        ).all()
+        
+        for doc in documents:
+            if doc.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    try:
+                        agreement = CreditAgreement(**version.extracted_data)
+                        # Check if loan_id matches deal_id or loan_identification_number
+                        if (agreement.deal_id == loan_id or 
+                            agreement.loan_identification_number == loan_id or
+                            (loan_asset and hasattr(loan_asset, 'original_text') and 
+                             loan_id in (loan_asset.original_text or ""))):
+                            return agreement
+                    except Exception as e:
+                        logger.debug(f"Error parsing credit agreement from document {doc.id}: {e}")
+                        continue
+        
+        # If not found in documents, try to extract from loan asset's original_text
+        if loan_asset and hasattr(loan_asset, 'original_text') and loan_asset.original_text:
+            try:
+                # Try to extract credit agreement from loan asset's document text
+                from app.chains.extraction_chain import extract_data_smart
+                result = extract_data_smart(text=loan_asset.original_text)
+                if result and result.agreement:
+                    return result.agreement
+            except Exception as e:
+                logger.warning(f"Error extracting credit agreement from loan asset text: {e}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error getting credit agreement for loan {loan_id}: {e}")
+        return None
+
+
+class PaymentPayloadRequest(BaseModel):
+    """Request model for x402 payment payload."""
+    payment_payload: Dict[str, Any] = Field(..., description="x402 payment payload from client wallet")
+
+
+@router.post("/trades/{trade_id}/settle")
+async def settle_trade_with_payment(
+    trade_id: str,
+    payment_request: Optional[PaymentPayloadRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    payment_service: Optional[X402PaymentService] = Depends(get_x402_payment_service)
+):
+    """
+    Settle trade with x402 payment.
+    
+    This endpoint:
+    1. Retrieves the trade execution event
+    2. Extracts parties and amount from CDM trade event
+    3. Processes payment via x402 (request → verify → settle)
+    4. Creates CDM PaymentEvent
+    5. Updates trade status to settled
+    
+    Args:
+        trade_id: Trade identifier
+        payment_request: Optional x402 payment payload (if None, returns 402 Payment Required)
+        db: Database session
+        current_user: Current authenticated user
+        payment_service: x402 payment service (optional)
+        
+    Returns:
+        Settlement result with payment confirmation or 402 Payment Required
+    """
+    from app.models.cdm import Party, Money, Currency
+    from app.models.cdm_payment import PaymentEvent, PaymentType, PaymentMethod, PaymentStatus
+    from app.db.models import PaymentEvent as PaymentEventModel
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # Step 1: Get trade execution event
+        trade_event = get_trade_execution(trade_id, db)
+        
+        if not trade_event:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Trade {trade_id} not found"}
+            )
+        
+        # Step 2: Extract parties and amount from CDM trade event
+        try:
+            trade = trade_event.get("trade", {})
+            tradable_product = trade.get("tradableProduct", {})
+            counterparties = tradable_product.get("counterparty", [])
+            
+            if len(counterparties) < 2:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": "Trade event missing counterparty information"}
+                )
+            
+            # Extract payer and receiver from counterparties
+            payer_ref = counterparties[0].get("partyReference", {}).get("globalReference", "")
+            receiver_ref = counterparties[1].get("partyReference", {}).get("globalReference", "")
+            
+            # Extract amount and currency
+            economic_terms = tradable_product.get("economicTerms", {})
+            notional = economic_terms.get("notional", {})
+            amount_value = notional.get("amount", {}).get("value", 0)
+            currency_value = notional.get("currency", {}).get("value", "USD")
+            
+            amount = Decimal(str(amount_value))
+            currency = Currency(currency_value)
+            
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Error parsing trade event: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Invalid trade event structure: {str(e)}"}
+            )
+        
+        # Step 3: Get parties from CDM
+        payer = get_party_by_id(payer_ref, db)
+        receiver = get_party_by_id(receiver_ref, db)
+        
+        if not payer or not receiver:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Party information not found"}
+            )
+        
+        # Step 4: Process payment via x402
+        if not payment_service:
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": "x402 payment service is not available"}
+            )
+        
+        payment_payload = payment_request.payment_payload if payment_request else None
+        
+        payment_result = await payment_service.process_payment_flow(
+            amount=amount,
+            currency=currency,
+            payer=payer,
+            receiver=receiver,
+            payment_type="trade_settlement",
+            payment_payload=payment_payload,
+            cdm_reference={
+                "trade_id": trade_id,
+                "event_type": "TradeExecution"
+            }
+        )
+        
+        # Step 5: Handle payment required (402 response)
+        if payment_payload is None or payment_result.get("status") != "settled":
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "status": "Payment Required",
+                    "payment_request": payment_result.get("payment_request"),
+                    "amount": str(amount),
+                    "currency": currency.value,
+                    "payer": {
+                        "id": payer.id,
+                        "name": payer.name,
+                        "lei": payer.lei
+                    },
+                    "receiver": {
+                        "id": receiver.id,
+                        "name": receiver.name,
+                        "lei": receiver.lei
+                    },
+                    "facilitator_url": payment_service.facilitator_url
+                }
+            )
+        
+        # Step 6: Create CDM PaymentEvent using CDM-compliant factory method
+        payment_event = PaymentEvent.from_cdm_party(
+            payer=payer,
+            receiver=receiver,
+            amount=Money(amount=amount, currency=currency),
+            payment_type=PaymentType.TRADE_SETTLEMENT,
+            payment_method=PaymentMethod.X402,
+            trade_id=trade_id
+        )
+        
+        # Step 7: Update with x402 payment details
+        payment_event = payment_event.model_copy(update={
+            "x402PaymentDetails": {
+                "payment_payload": payment_payload,
+                "verification": payment_result.get("verification"),
+                "settlement": payment_result.get("settlement")
+            },
+            "transactionHash": payment_result.get("transaction_hash")
+        })
+        
+        # Step 8: Transition through state machine: PENDING -> VERIFIED -> SETTLED
+        payment_event = payment_event.transition_to_verified()
+        payment_event = payment_event.transition_to_settled(payment_result.get("transaction_hash", ""))
+        
+        # Step 9: Save payment event to database
+        payment_event_db = PaymentEventModel(
+            payment_id=payment_event.paymentIdentifier.assignedIdentifier[0]["identifier"]["value"],
+            payment_method=payment_event.paymentMethod.value,
+            payment_type=payment_event.paymentType.value,
+            payer_id=payment_event.payerPartyReference.globalReference,
+            payer_name=payer.name,
+            receiver_id=payment_event.receiverPartyReference.globalReference,
+            receiver_name=receiver.name,
+            amount=payment_event.paymentAmount.amount,
+            currency=payment_event.paymentAmount.currency.value,
+            status=payment_event.paymentStatus.value,
+            x402_payment_payload=payment_payload,
+            x402_verification=payment_result.get("verification"),
+            x402_settlement=payment_result.get("settlement"),
+            transaction_hash=payment_result.get("transaction_hash"),
+            related_trade_id=trade_id,
+            cdm_event=payment_event.to_cdm_json(),
+            settled_at=datetime.utcnow()
+        )
+        db.add(payment_event_db)
+        db.commit()
+        
+        # Step 10: Update trade status
+        update_trade_status(trade_id, "settled", db)
+        
+        # Step 11: Log audit action
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="trade",
+            target_id=None,
+            user_id=current_user.id if current_user else None,
+            metadata={
+                "trade_id": trade_id,
+                "status": "settled",
+                "payment_id": payment_event_db.payment_id,
+                "transaction_hash": payment_result.get("transaction_hash")
+            },
+            request=None
+        )
+        
+        logger.info(f"Trade {trade_id} settled with payment {payment_event_db.payment_id}")
+        
+        return {
+            "status": "success",
+            "trade_id": trade_id,
+            "payment": payment_event.to_cdm_json(),
+            "settlement": payment_result,
+            "payment_id": payment_event_db.payment_id,
+            "transaction_hash": payment_result.get("transaction_hash")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected error during trade settlement: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Trade settlement failed: {str(e)}"}
+        )
+
+
+@router.post("/loans/{loan_id}/disburse")
+async def disburse_loan_with_payment(
+    loan_id: str,
+    payment_request: Optional[PaymentPayloadRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    payment_service: Optional[X402PaymentService] = Depends(get_x402_payment_service)
+):
+    """
+    Disburse loan with x402 payment verification.
+    
+    Requires payment before disbursing loan funds. Returns 402 Payment Required
+    if payment payload is not provided.
+    
+    This endpoint:
+    1. Gets loan asset and credit agreement
+    2. Extracts borrower and lender parties
+    3. Calculates disbursement amount from facilities
+    4. Processes payment via x402 (lender pays borrower)
+    5. Creates CDM PaymentEvent
+    6. Updates loan asset disbursement status
+    
+    Args:
+        loan_id: Loan identifier
+        payment_request: Optional x402 payment payload
+        db: Database session
+        current_user: Current authenticated user
+        payment_service: x402 payment service (optional)
+        
+    Returns:
+        Disbursement result or 402 Payment Required response
+    """
+    from app.models.cdm import Party, Money, Currency
+    from app.models.cdm_payment import PaymentEvent, PaymentType, PaymentMethod
+    from app.db.models import PaymentEvent as PaymentEventModel
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # Step 1: Get loan asset
+        loan_asset = db.query(LoanAsset).filter(LoanAsset.loan_id == loan_id).first()
+        
+        if not loan_asset:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Loan {loan_id} not found"}
+            )
+        
+        # Step 2: Get credit agreement
+        credit_agreement = get_credit_agreement_for_loan(loan_id, db)
+        
+        if not credit_agreement:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Credit agreement not found for loan {loan_id}"}
+            )
+        
+        # Step 3: Extract borrower and lender from CDM
+        borrower = None
+        lender = None
+        
+        if credit_agreement.parties:
+            for party in credit_agreement.parties:
+                role_lower = party.role.lower()
+                if "borrower" in role_lower:
+                    borrower = party
+                elif "lender" in role_lower or "creditor" in role_lower:
+                    lender = party
+        
+        if not borrower or not lender:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Missing borrower or lender in credit agreement"}
+            )
+        
+        # Step 4: Calculate disbursement amount
+        total_commitment = Decimal("0")
+        currency = Currency.USD
+        
+        if credit_agreement.facilities:
+            for facility in credit_agreement.facilities:
+                if facility.commitment_amount:
+                    total_commitment += facility.commitment_amount.amount
+                    if not currency:
+                        currency = facility.commitment_amount.currency
+        
+        if total_commitment <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "No commitment amount found in facilities"}
+            )
+        
+        # Step 5: Process payment via x402 (lender disburses to borrower)
+        if not payment_service:
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": "x402 payment service is not available"}
+            )
+        
+        payment_payload = payment_request.payment_payload if payment_request else None
+        
+        payment_result = await payment_service.process_payment_flow(
+            amount=total_commitment,
+            currency=currency,
+            payer=lender,  # Lender disburses to borrower
+            receiver=borrower,
+            payment_type="loan_disbursement",
+            payment_payload=payment_payload,
+            cdm_reference={
+                "loan_id": loan_id,
+                "credit_agreement_id": credit_agreement.deal_id or credit_agreement.loan_identification_number
+            }
+        )
+        
+        # Step 6: Handle payment required (402 response)
+        if payment_payload is None or payment_result.get("status") != "settled":
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "status": "Payment Required",
+                    "payment_request": payment_result.get("payment_request"),
+                    "amount": str(total_commitment),
+                    "currency": currency.value,
+                    "payer": {
+                        "id": lender.id,
+                        "name": lender.name,
+                        "lei": lender.lei
+                    },
+                    "receiver": {
+                        "id": borrower.id,
+                        "name": borrower.name,
+                        "lei": borrower.lei
+                    },
+                    "facilitator_url": payment_service.facilitator_url,
+                    "loan_id": loan_id
+                }
+            )
+        
+        # Step 7: Create CDM PaymentEvent using CDM-compliant factory method
+        payment_event = PaymentEvent.from_cdm_party(
+            payer=lender,
+            receiver=borrower,
+            amount=Money(amount=total_commitment, currency=currency),
+            payment_type=PaymentType.LOAN_DISBURSEMENT,
+            payment_method=PaymentMethod.X402
+        )
+        
+        # Step 8: Update with loan and facility references
+        facility_id = None
+        if credit_agreement.facilities and len(credit_agreement.facilities) > 0:
+            facility_id = credit_agreement.facilities[0].facility_name or credit_agreement.facilities[0].facility_type
+        
+        payment_event = payment_event.model_copy(update={
+            "relatedLoanId": loan_id,
+            "relatedFacilityId": facility_id,
+            "x402PaymentDetails": {
+                "payment_payload": payment_payload,
+                "settlement": payment_result.get("settlement")
+            },
+            "transactionHash": payment_result.get("transaction_hash")
+        })
+        
+        # Step 9: Transition through state machine: PENDING -> VERIFIED -> SETTLED
+        payment_event = payment_event.transition_to_verified()
+        payment_event = payment_event.transition_to_settled(payment_result.get("transaction_hash", ""))
+        
+        # Step 10: Save payment event to database
+        payment_event_db = PaymentEventModel(
+            payment_id=payment_event.paymentIdentifier.assignedIdentifier[0]["identifier"]["value"],
+            payment_method=payment_event.paymentMethod.value,
+            payment_type=payment_event.paymentType.value,
+            payer_id=payment_event.payerPartyReference.globalReference,
+            payer_name=lender.name,
+            receiver_id=payment_event.receiverPartyReference.globalReference,
+            receiver_name=borrower.name,
+            amount=payment_event.paymentAmount.amount,
+            currency=payment_event.paymentAmount.currency.value,
+            status=payment_event.paymentStatus.value,
+            x402_payment_payload=payment_payload,
+            x402_verification=payment_result.get("verification"),
+            x402_settlement=payment_result.get("settlement"),
+            transaction_hash=payment_result.get("transaction_hash"),
+            related_loan_id=loan_id,
+            related_facility_id=facility_id,
+            cdm_event=payment_event.to_cdm_json(),
+            settled_at=datetime.utcnow()
+        )
+        db.add(payment_event_db)
+        
+        # Step 11: Update loan asset disbursement status
+        # Note: LoanAsset model may need disbursement_status and disbursement_date fields
+        # For now, we'll log it in metadata
+        if hasattr(loan_asset, 'metadata'):
+            if loan_asset.metadata is None:
+                loan_asset.metadata = {}
+            loan_asset.metadata["disbursement_status"] = "disbursed"
+            loan_asset.metadata["disbursement_date"] = datetime.utcnow().isoformat()
+            loan_asset.metadata["disbursement_amount"] = str(total_commitment)
+            loan_asset.metadata["disbursement_currency"] = currency.value
+            loan_asset.metadata["payment_id"] = payment_event_db.payment_id
+        
+        db.commit()
+        
+        # Step 12: Log audit action
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="loan_asset",
+            target_id=loan_asset.id,
+            user_id=current_user.id if current_user else None,
+            metadata={
+                "loan_id": loan_id,
+                "action": "disbursement",
+                "amount": str(total_commitment),
+                "currency": currency.value,
+                "payment_id": payment_event_db.payment_id,
+                "transaction_hash": payment_result.get("transaction_hash")
+            },
+            request=None
+        )
+        
+        logger.info(f"Loan {loan_id} disbursed with payment {payment_event_db.payment_id}")
+        
+        return {
+            "status": "success",
+            "loan_id": loan_id,
+            "disbursement_amount": str(total_commitment),
+            "currency": currency.value,
+            "payment": payment_event.to_cdm_json(),
+            "payment_id": payment_event_db.payment_id,
+            "transaction_hash": payment_result.get("transaction_hash")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected error during loan disbursement: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Loan disbursement failed: {str(e)}"}
+        )
+
+
+@router.post("/loans/{loan_id}/penalty-payment")
+async def penalty_payment(
+    loan_id: str,
+    payment_request: Optional[PaymentPayloadRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    payment_service: Optional[X402PaymentService] = Depends(get_x402_payment_service)
+):
+    """
+    Process penalty payment for loan breach.
+    
+    When a loan asset breaches its sustainability targets (NDVI below threshold),
+    a penalty payment is required. This endpoint processes the penalty payment via x402.
+    
+    Args:
+        loan_id: Loan identifier
+        payment_request: Optional x402 payment payload
+        db: Database session
+        current_user: Current authenticated user
+        payment_service: x402 payment service (optional)
+        
+    Returns:
+        Penalty payment result or 402 Payment Required response
+    """
+    from app.models.cdm import Party, Money, Currency
+    from app.models.cdm_payment import PaymentEvent, PaymentType, PaymentMethod
+    from app.db.models import PaymentEvent as PaymentEventModel
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # Step 1: Get loan asset
+        loan_asset = db.query(LoanAsset).filter(LoanAsset.loan_id == loan_id).first()
+        
+        if not loan_asset:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Loan {loan_id} not found"}
+            )
+        
+        # Step 2: Verify breach status
+        if loan_asset.risk_status != RiskStatus.BREACH:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": f"Loan {loan_id} is not in breach status. Current status: {loan_asset.risk_status}"
+                }
+            )
+        
+        # Step 3: Get credit agreement
+        credit_agreement = get_credit_agreement_for_loan(loan_id, db)
+        
+        if not credit_agreement:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Credit agreement not found for loan {loan_id}"}
+            )
+        
+        # Step 4: Extract borrower and lender
+        borrower = None
+        lender = None
+        
+        if credit_agreement.parties:
+            for party in credit_agreement.parties:
+                role_lower = party.role.lower()
+                if "borrower" in role_lower:
+                    borrower = party
+                elif "lender" in role_lower or "creditor" in role_lower:
+                    lender = party
+        
+        if not borrower or not lender:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Missing borrower or lender in credit agreement"}
+            )
+        
+        # Step 5: Calculate penalty amount
+        # Penalty is calculated based on penalty_bps and principal amount
+        if not credit_agreement.facilities or not credit_agreement.facilities[0].commitment_amount:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "No commitment amount found in facilities"}
+            )
+        
+        facility = credit_agreement.facilities[0]
+        principal = facility.commitment_amount.amount
+        currency = facility.commitment_amount.currency
+        
+        # Calculate penalty: principal * (penalty_bps / 10000)
+        penalty_bps = loan_asset.penalty_bps or 50.0  # Default 50 bps
+        penalty_amount = principal * (Decimal(str(penalty_bps)) / Decimal("10000"))
+        
+        # Step 6: Process payment via x402 (borrower pays lender penalty)
+        if not payment_service:
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": "x402 payment service is not available"}
+            )
+        
+        payment_payload = payment_request.payment_payload if payment_request else None
+        
+        payment_result = await payment_service.process_payment_flow(
+            amount=penalty_amount,
+            currency=currency,
+            payer=borrower,  # Borrower pays penalty to lender
+            receiver=lender,
+            payment_type="penalty_payment",
+            payment_payload=payment_payload,
+            cdm_reference={
+                "loan_id": loan_id,
+                "breach_ndvi_score": loan_asset.last_verified_score,
+                "penalty_bps": penalty_bps
+            }
+        )
+        
+        # Step 7: Handle payment required (402 response)
+        if payment_payload is None or payment_result.get("status") != "settled":
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "status": "Payment Required",
+                    "payment_request": payment_result.get("payment_request"),
+                    "amount": str(penalty_amount),
+                    "currency": currency.value,
+                    "penalty_bps": penalty_bps,
+                    "payer": {
+                        "id": borrower.id,
+                        "name": borrower.name,
+                        "lei": borrower.lei
+                    },
+                    "receiver": {
+                        "id": lender.id,
+                        "name": lender.name,
+                        "lei": lender.lei
+                    },
+                    "facilitator_url": payment_service.facilitator_url,
+                    "loan_id": loan_id,
+                    "breach_reason": f"NDVI score {loan_asset.last_verified_score} below threshold {loan_asset.spt_threshold}"
+                }
+            )
+        
+        # Step 8: Create CDM PaymentEvent
+        payment_event = PaymentEvent.from_cdm_party(
+            payer=borrower,
+            receiver=lender,
+            amount=Money(amount=penalty_amount, currency=currency),
+            payment_type=PaymentType.PENALTY_PAYMENT,
+            payment_method=PaymentMethod.X402
+        )
+        
+        # Update with loan and breach information
+        facility_id = None
+        if credit_agreement.facilities and len(credit_agreement.facilities) > 0:
+            facility_id = credit_agreement.facilities[0].facility_name or credit_agreement.facilities[0].facility_type
+        
+        payment_event = payment_event.model_copy(update={
+            "relatedLoanId": loan_id,
+            "relatedFacilityId": facility_id,
+            "x402PaymentDetails": {
+                "payment_payload": payment_payload,
+                "settlement": payment_result.get("settlement"),
+                "breach_ndvi_score": loan_asset.last_verified_score,
+                "penalty_bps": penalty_bps
+            },
+            "transactionHash": payment_result.get("transaction_hash")
+        })
+        
+        # Step 9: Transition through state machine
+        payment_event = payment_event.transition_to_verified()
+        payment_event = payment_event.transition_to_settled(payment_result.get("transaction_hash", ""))
+        
+        # Step 10: Save payment event to database
+        payment_event_db = PaymentEventModel(
+            payment_id=payment_event.paymentIdentifier.assignedIdentifier[0]["identifier"]["value"],
+            payment_method=payment_event.paymentMethod.value,
+            payment_type=payment_event.paymentType.value,
+            payer_id=payment_event.payerPartyReference.globalReference,
+            payer_name=borrower.name,
+            receiver_id=payment_event.receiverPartyReference.globalReference,
+            receiver_name=lender.name,
+            amount=payment_event.paymentAmount.amount,
+            currency=payment_event.paymentAmount.currency.value,
+            status=payment_event.paymentStatus.value,
+            x402_payment_payload=payment_payload,
+            x402_verification=payment_result.get("verification"),
+            x402_settlement=payment_result.get("settlement"),
+            transaction_hash=payment_result.get("transaction_hash"),
+            related_loan_id=loan_id,
+            related_facility_id=facility_id,
+            cdm_event=payment_event.to_cdm_json(),
+            settled_at=datetime.utcnow()
+        )
+        db.add(payment_event_db)
+        
+        # Step 11: Update loan asset metadata to mark penalty as paid
+        if loan_asset.metadata is None:
+            loan_asset.metadata = {}
+        loan_asset.metadata["penalty_payment_required"] = False
+        loan_asset.metadata["penalty_payment_paid"] = True
+        loan_asset.metadata["penalty_payment_id"] = payment_event_db.payment_id
+        loan_asset.metadata["penalty_payment_date"] = datetime.utcnow().isoformat()
+        loan_asset.metadata["penalty_amount"] = str(penalty_amount)
+        
+        db.commit()
+        
+        # Step 12: Log audit action
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="loan_asset",
+            target_id=loan_asset.id,
+            user_id=current_user.id if current_user else None,
+            metadata={
+                "loan_id": loan_id,
+                "action": "penalty_payment",
+                "amount": str(penalty_amount),
+                "currency": currency.value,
+                "penalty_bps": penalty_bps,
+                "payment_id": payment_event_db.payment_id,
+                "transaction_hash": payment_result.get("transaction_hash"),
+                "breach_ndvi_score": loan_asset.last_verified_score
+            },
+            request=None
+        )
+        
+        logger.info(
+            f"Penalty payment processed for loan {loan_id}: "
+            f"payment_id={payment_event_db.payment_id}, "
+            f"amount={penalty_amount}"
+        )
+        
+        return {
+            "status": "success",
+            "loan_id": loan_id,
+            "penalty_amount": str(penalty_amount),
+            "currency": currency.value,
+            "penalty_bps": penalty_bps,
+            "payment": payment_event.to_cdm_json(),
+            "payment_id": payment_event_db.payment_id,
+            "transaction_hash": payment_result.get("transaction_hash"),
+            "breach_ndvi_score": loan_asset.last_verified_score
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected error during penalty payment: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Penalty payment failed: {str(e)}"}
+        )
+
+
+@router.get("/policy/statistics")
+async def get_policy_statistics(
+    transaction_type: Optional[str] = Query(None, description="Filter by transaction type"),
+    decision: Optional[str] = Query(None, description="Filter by decision (ALLOW, BLOCK, FLAG)"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO 8601 format)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get aggregated policy decision statistics.
+    
+    Provides comprehensive statistics about policy evaluations including:
+    - Total decisions processed
+    - Counts by decision type (ALLOW, BLOCK, FLAG)
+    - Top rules applied
+    - Counts by transaction type
+    - Time series data for charting
+    
+    Args:
+        transaction_type: Optional filter by transaction type
+        decision: Optional filter by decision
+        start_date: Optional start date filter (ISO 8601)
+        end_date: Optional end date filter (ISO 8601)
+        db: Database session
+        current_user: Current authenticated user
+        
+    Returns:
+        Dictionary with policy statistics
+    """
+    from app.services.policy_audit import get_policy_statistics as get_stats
+    
+    try:
+        # Parse dates if provided
+        start_dt = None
+        end_dt = None
+        
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid start_date format: {start_date}. Use ISO 8601 format."}
+                )
+        
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid end_date format: {end_date}. Use ISO 8601 format."}
+                )
+        
+        # Get statistics
+        stats = get_stats(
+            db=db,
+            start_date=start_dt,
+            end_date=end_dt,
+            transaction_type=transaction_type
+        )
+        
+        # Apply decision filter if provided
+        if decision:
+            decision_upper = decision.upper()
+            if decision_upper not in ["ALLOW", "BLOCK", "FLAG"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid decision: {decision}. Must be ALLOW, BLOCK, or FLAG."}
+                )
+            # Filter time series and other data by decision
+            # Note: The statistics function already aggregates by decision,
+            # so we just return the filtered decision count
+            stats["decisions"] = {decision_upper: stats["decisions"].get(decision_upper, 0)}
+        
+        return {
+            "status": "success",
+            "statistics": stats
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get policy statistics: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get policy statistics: {str(e)}"}
+        )
+
+
+@router.get("/policy/decisions")
+async def list_policy_decisions(
+    transaction_id: Optional[str] = Query(None, description="Filter by transaction ID"),
+    transaction_type: Optional[str] = Query(None, description="Filter by transaction type"),
+    decision: Optional[str] = Query(None, description="Filter by decision (ALLOW, BLOCK, FLAG)"),
+    rule_applied: Optional[str] = Query(None, description="Filter by rule name"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO 8601 format)"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List policy decisions with filtering and pagination.
+    
+    Args:
+        transaction_id: Filter by transaction ID
+        transaction_type: Filter by transaction type
+        decision: Filter by decision (ALLOW, BLOCK, FLAG)
+        rule_applied: Filter by rule name
+        start_date: Filter by start date (ISO 8601)
+        end_date: Filter by end date (ISO 8601)
+        limit: Maximum results (default 50, max 100)
+        offset: Pagination offset
+        db: Database session
+        current_user: Current authenticated user
+        
+    Returns:
+        List of policy decisions
+    """
+    from app.services.policy_audit import get_policy_decisions
+    
+    try:
+        # Parse dates if provided
+        start_dt = None
+        end_dt = None
+        
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid start_date format: {start_date}"}
+                )
+        
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Invalid end_date format: {end_date}"}
+                )
+        
+        # Get decisions
+        decisions = get_policy_decisions(
+            db=db,
+            transaction_id=transaction_id,
+            transaction_type=transaction_type,
+            decision=decision,
+            rule_applied=rule_applied,
+            start_date=start_dt,
+            end_date=end_dt,
+            limit=limit,
+            offset=offset
+        )
+        
+        return {
+            "status": "success",
+            "total": len(decisions),
+            "limit": limit,
+            "offset": offset,
+            "decisions": [decision.to_dict() for decision in decisions]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list policy decisions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list policy decisions: {str(e)}"}
+        )
+
+
+@router.post("/trades/execute")
+async def execute_trade(
+    trade_request: TradeExecutionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Execute a trade with policy evaluation.
+    
+    This endpoint:
+    1. Generates a CDM TradeExecution event
+    2. Evaluates the trade against compliance policies
+    3. Blocks, flags, or allows the trade based on policy decision
+    4. Returns the trade execution result with policy decision
+    
+    Args:
+        trade_request: Trade execution request with trade details
+        db: Database session
+        current_user: Current authenticated user
+        policy_service: Policy service for compliance evaluation (optional)
+        
+    Returns:
+        Trade execution result with policy decision and CDM events
+    """
+    from app.models.cdm_events import generate_cdm_trade_execution
+    from app.db.models import PolicyDecision as PolicyDecisionModel
+    from app.models.cdm import CreditAgreement
+    
+    try:
+        logger.info(
+            f"Trade execution request: trade_id={trade_request.trade_id}, "
+            f"borrower={trade_request.borrower}, amount={trade_request.amount}"
+        )
+        
+        # Step 1: Generate CDM TradeExecution event
+        trade_event = generate_cdm_trade_execution(
+            trade_id=trade_request.trade_id,
+            borrower=trade_request.borrower,
+            amount=trade_request.amount,
+            rate=trade_request.rate
+        )
+        
+        # Step 2: Get credit agreement if provided
+        credit_agreement = None
+        if trade_request.credit_agreement_id:
+            doc = db.query(Document).filter(Document.id == trade_request.credit_agreement_id).first()
+            if doc and doc.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    try:
+                        credit_agreement = CreditAgreement(**version.extracted_data)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse credit agreement from document: {e}")
+        
+        # Step 3: Policy evaluation (if enabled)
+        policy_decision = None
+        policy_evaluation_event = None
+        
+        if policy_service:
+            try:
+                # Evaluate trade execution for compliance
+                policy_result = policy_service.evaluate_trade_execution(
+                    cdm_event=trade_event,
+                    credit_agreement=credit_agreement
+                )
+                
+                # Create CDM PolicyEvaluation event
+                from app.models.cdm_events import generate_cdm_policy_evaluation
+                policy_evaluation_event = generate_cdm_policy_evaluation(
+                    transaction_id=trade_request.trade_id,
+                    transaction_type="trade_execution",
+                    decision=policy_result.decision,
+                    rule_applied=policy_result.rule_applied,
+                    related_event_identifiers=[{
+                        "eventIdentifier": {
+                            "issuer": "CreditNexus",
+                            "assignedIdentifier": [{
+                                "identifier": {"value": trade_event["meta"]["globalKey"]}
+                            }]
+                        }
+                    }],
+                    evaluation_trace=policy_result.trace,
+                    matched_rules=policy_result.matched_rules
+                )
+                
+                # Handle BLOCK decision - prevent trade execution
+                if policy_result.decision == "BLOCK":
+                    logger.warning(
+                        f"Policy evaluation BLOCKED trade execution: "
+                        f"trade_id={trade_request.trade_id}, rule={policy_result.rule_applied}, "
+                        f"trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=trade_request.trade_id,
+                        transaction_type="trade_execution",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"trade_execution": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    return {
+                        "status": "blocked",
+                        "decision": "BLOCK",
+                        "rule": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id,
+                        "message": f"Trade execution blocked by compliance policy: {policy_result.rule_applied}",
+                        "cdm_event": policy_evaluation_event,
+                        "trade_event": trade_event
+                    }
+                
+                # Handle FLAG decision - allow but mark for review
+                elif policy_result.decision == "FLAG":
+                    logger.info(
+                        f"Policy evaluation FLAGGED trade execution: "
+                        f"trade_id={trade_request.trade_id}, rule={policy_result.rule_applied}, "
+                        f"trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=trade_request.trade_id,
+                        transaction_type="trade_execution",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"trade_execution": True, "requires_review": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id,
+                        "requires_review": True
+                    }
+                
+                # Handle ALLOW decision - log for audit
+                else:
+                    logger.debug(
+                        f"Policy evaluation ALLOWED trade execution: "
+                        f"trade_id={trade_request.trade_id}, trace_id={policy_result.trace_id}"
+                    )
+                    
+                    # Log policy decision to audit trail
+                    policy_decision_db = PolicyDecisionModel(
+                        transaction_id=trade_request.trade_id,
+                        transaction_type="trade_execution",
+                        decision=policy_result.decision,
+                        rule_applied=policy_result.rule_applied,
+                        trace_id=policy_result.trace_id,
+                        trace=policy_result.trace,
+                        matched_rules=policy_result.matched_rules,
+                        metadata={"trade_execution": True},
+                        cdm_events=[policy_evaluation_event],
+                        user_id=current_user.id if current_user else None
+                    )
+                    db.add(policy_decision_db)
+                    db.commit()
+                    
+                    policy_decision = {
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied,
+                        "trace_id": policy_result.trace_id
+                    }
+                    
+            except Exception as e:
+                # Log policy evaluation errors but don't block trade
+                logger.error(f"Policy evaluation failed for trade {trade_request.trade_id}: {e}", exc_info=True)
+                # Continue with trade execution even if policy evaluation fails
+        
+        # Step 4: Return trade execution result
+        return {
+            "status": "executed",
+            "trade_id": trade_request.trade_id,
+            "trade_event": trade_event,
+            "policy_decision": policy_decision,
+            "cdm_events": (
+                [trade_event, policy_evaluation_event]
+                if policy_evaluation_event
+                else [trade_event]
+            )
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during trade execution: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Trade execution failed: {str(e)}"}
+        )
+
+
+# ============================================================================
+# LMA Template Generation API Endpoints
+# ============================================================================
+
+from app.templates.registry import TemplateRegistry
+from app.generation.service import DocumentGenerationService
+from app.db.models import LMATemplate, GeneratedDocument, TemplateFieldMapping
+
+
+class GenerateDocumentRequest(BaseModel):
+    """Request model for document generation."""
+    template_id: int = Field(..., description="Template ID")
+    cdm_data: dict = Field(..., description="CDM CreditAgreement data")
+    source_document_id: Optional[int] = Field(None, description="Optional source document ID")
+
+
+class ExportRequest(BaseModel):
+    """Request model for document export."""
+    format: str = Field(..., description="Export format: 'word' or 'pdf'")
+
+
+@router.get("/templates")
+async def list_templates(
+    category: Optional[str] = Query(None, description="Filter by template category"),
+    subcategory: Optional[str] = Query(None, description="Filter by subcategory"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    List available LMA templates.
+    
+    Args:
+        category: Optional category filter
+        subcategory: Optional subcategory filter
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        List of template metadata
+    """
+    try:
+        templates = TemplateRegistry.list_templates(
+            db,
+            category,
+            subcategory
+        )
+        
+        return {
+            "templates": [template.to_dict() for template in templates],
+            "count": len(templates)
+        }
+    except Exception as e:
+        logger.error(f"Error listing templates: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list templates: {str(e)}")
+
+
+@router.get("/templates/{template_id}")
+async def get_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Get template metadata by ID.
+    
+    Args:
+        template_id: Template ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Template metadata
+    """
+    try:
+        template = TemplateRegistry.get_template(db, template_id)
+        return template.to_dict()
+    except Exception as e:
+        logger.error(f"Error getting template {template_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=404, detail=f"Template not found: {str(e)}")
+
+
+@router.get("/templates/{template_id}/requirements")
+async def get_template_requirements(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Get required CDM fields for a template.
+    
+    Args:
+        template_id: Template ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Dictionary with required and optional fields
+    """
+    try:
+        template = TemplateRegistry.get_template(db, template_id)
+        required_fields = TemplateRegistry.get_required_fields(template)
+        
+        return {
+            "template_id": template_id,
+            "template_code": template.template_code,
+            "required_fields": required_fields,
+            "optional_fields": template.optional_fields or [],
+            "ai_generated_sections": template.ai_generated_sections or [],
+        }
+    except Exception as e:
+        logger.error(f"Error getting template requirements {template_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=404, detail=f"Template not found: {str(e)}")
+
+
+@router.get("/templates/{template_id}/mappings")
+async def get_template_mappings(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Get CDM field mappings for a template.
+    
+    Args:
+        template_id: Template ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        List of field mappings
+    """
+    try:
+        template = TemplateRegistry.get_template(db, template_id)
+        mappings = TemplateRegistry.get_field_mappings(db, template_id)
+        
+        return {
+            "template_id": template_id,
+            "template_code": template.template_code,
+            "mappings": [mapping.to_dict() for mapping in mappings],
+            "count": len(mappings)
+        }
+    except Exception as e:
+        logger.error(f"Error getting template mappings {template_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=404, detail=f"Template not found: {str(e)}")
+
+
+@router.post("/templates/generate")
+async def generate_document(
+    request: GenerateDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Generate a document from a template using CDM data.
+    
+    Args:
+        request: GenerateDocumentRequest with template_id and cdm_data
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Generated document metadata
+    """
+    try:
+        # Parse CDM data
+        try:
+            cdm_agreement = CreditAgreement(**request.cdm_data)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid CDM data: {str(e)}"
+            )
+        
+        # Generate document
+        generation_service = DocumentGenerationService()
+        generated_doc = generation_service.generate_document(
+            db=db,
+            template_id=request.template_id,
+            cdm_data=cdm_agreement,
+            user_id=current_user.id,
+            source_document_id=request.source_document_id
+        )
+        
+        return {
+            "id": generated_doc.id,
+            "template_id": generated_doc.template_id,
+            "file_path": generated_doc.file_path,
+            "status": generated_doc.status,
+            "generation_summary": generated_doc.generation_summary,
+            "created_at": generated_doc.created_at.isoformat() if generated_doc.created_at else None,
+        }
+        
+    except ValueError as e:
+        logger.error(f"Validation error during document generation: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+    except IOError as e:
+        logger.error(f"I/O error during document generation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error during document generation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Document generation failed: {str(e)}")
+
+
+@router.get("/generated-documents")
+async def list_generated_documents(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    template_id: Optional[int] = Query(None, description="Filter by template ID"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    List generated documents with pagination.
+    
+    Args:
+        page: Page number (1-indexed)
+        limit: Items per page
+        template_id: Optional template ID filter
+        status: Optional status filter
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Paginated list of generated documents
+    """
+    try:
+        query = db.query(GeneratedDocument)
+        
+        # Apply filters
+        if template_id:
+            query = query.filter(GeneratedDocument.template_id == template_id)
+        if status:
+            query = query.filter(GeneratedDocument.status == status)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        offset = (page - 1) * limit
+        documents = query.order_by(GeneratedDocument.created_at.desc()).offset(offset).limit(limit).all()
+        
+        return {
+            "documents": [doc.to_dict() for doc in documents],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error listing generated documents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list documents: {str(e)}")
+
+
+@router.get("/generated-documents/{document_id}")
+async def get_generated_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Get generated document details by ID.
+    
+    Args:
+        document_id: Generated document ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Generated document details
+    """
+    try:
+        doc = db.query(GeneratedDocument).filter(GeneratedDocument.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"Generated document {document_id} not found")
+        
+        return doc.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting generated document {document_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get document: {str(e)}")
+
+
+@router.post("/generated-documents/{document_id}/export")
+async def export_generated_document(
+    document_id: int,
+    request: ExportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Export generated document as Word or PDF.
+    
+    Args:
+        document_id: Generated document ID
+        request: ExportRequest with format
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        File download response
+    """
+    try:
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+        
+        doc = db.query(GeneratedDocument).filter(GeneratedDocument.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"Generated document {document_id} not found")
+        
+        if not doc.file_path:
+            raise HTTPException(status_code=400, detail="Document file not found")
+        
+        file_path = Path(doc.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Document file not found on disk")
+        
+        # For Word format, return as-is
+        if request.format.lower() == "word":
+            return FileResponse(
+                path=str(file_path),
+                filename=file_path.name,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        
+        # For PDF, convert (if implemented)
+        elif request.format.lower() == "pdf":
+            # For now, raise NotImplementedError
+            # In production, implement PDF conversion
+            raise HTTPException(
+                status_code=501,
+                detail="PDF export not yet implemented. Use Word format for now."
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting document {document_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 

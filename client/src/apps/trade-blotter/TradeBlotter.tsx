@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, Facility, CreditNexusLoanContext } from '@/context/FDC3Context';
-import { FileText, Calendar, DollarSign, Building2, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, Calendar, DollarSign, Building2, CheckCircle2, Clock, AlertTriangle, Shield, XCircle, Wallet, Loader2 } from 'lucide-react';
 
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -22,12 +22,35 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+interface PolicyDecision {
+  decision: 'ALLOW' | 'BLOCK' | 'FLAG';
+  rule_applied?: string;
+  trace_id?: string;
+  requires_review?: boolean;
+}
+
+interface PaymentRequest {
+  amount: string;
+  currency: string;
+  payer: { id: string; name: string; lei?: string };
+  receiver: { id: string; name: string; lei?: string };
+  facilitator_url: string;
+}
+
 interface TradeBlotterState {
   loanData: CreditAgreementData | null;
   tradeStatus: 'pending' | 'confirmed' | 'settled';
   settlementDate: string;
   tradePrice: string;
   tradeAmount: string;
+  tradeId: string | null;
+  policyDecision: PolicyDecision | null;
+  policyLoading: boolean;
+  policyError: string | null;
+  paymentRequest: PaymentRequest | null;
+  paymentLoading: boolean;
+  paymentError: string | null;
+  paymentStatus: 'idle' | 'requested' | 'processing' | 'completed' | 'failed';
 }
 
 interface TradeBlotterProps {
@@ -37,7 +60,21 @@ interface TradeBlotterProps {
 
 export function TradeBlotter({ state, setState }: TradeBlotterProps) {
   const { context, clearContext } = useFDC3();
-  const { loanData, tradeStatus, settlementDate, tradePrice, tradeAmount } = state;
+  const { 
+    loanData, 
+    tradeStatus, 
+    settlementDate, 
+    tradePrice, 
+    tradeAmount, 
+    tradeId,
+    policyDecision, 
+    policyLoading, 
+    policyError,
+    paymentRequest,
+    paymentLoading,
+    paymentError,
+    paymentStatus
+  } = state;
 
   useEffect(() => {
     if (context?.loan) {
@@ -59,17 +96,220 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
           tradeStatus: 'pending',
           settlementDate: formatDate(settlement),
           tradeAmount: totalCommitment.toString(),
+          tradeId: null,
+          policyDecision: null,
+          policyLoading: false,
+          policyError: null,
+          paymentRequest: null,
+          paymentLoading: false,
+          paymentError: null,
+          paymentStatus: 'idle',
         }));
       }
     }
   }, [context, setState, loanData]);
 
-  const handleConfirmTrade = () => {
-    setState(prev => ({ ...prev, tradeStatus: 'confirmed' }));
+  const handleConfirmTrade = async () => {
+    if (!loanData) return;
+    
+    // Reset policy state
+    setState(prev => ({ ...prev, policyLoading: true, policyError: null, policyDecision: null }));
+    
+    try {
+      const borrower = loanData.parties?.find(p => p.role.toLowerCase().includes('borrower'));
+      const borrowerName = borrower?.name || borrower?.legal_name || 'Unknown Borrower';
+      const tradeAmountNum = parseFloat(tradeAmount) || 0;
+      const rate = spread / 100; // Convert bps to percentage
+      
+      // Generate trade ID
+      const tradeId = `TRADE-${loanData.deal_id || 'AUTO'}-${Date.now()}`;
+      
+      // Call trade execution endpoint with policy evaluation
+      const response = await fetch('/api/trades/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trade_id: tradeId,
+          borrower: borrowerName,
+          amount: tradeAmountNum,
+          rate: rate,
+          credit_agreement_id: null, // Could be enhanced to pass document ID
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'blocked') {
+        // Trade blocked by policy
+        setState(prev => ({
+          ...prev,
+          policyDecision: {
+            decision: 'BLOCK',
+            rule_applied: result.rule,
+            trace_id: result.trace_id,
+          },
+          policyLoading: false,
+          policyError: result.message || 'Trade execution blocked by compliance policy',
+        }));
+        return; // Don't confirm trade if blocked
+      }
+      
+      // Trade allowed or flagged - store trade_id for settlement
+      const confirmedTradeId = result.trade_id || tradeId;
+      
+      setState(prev => ({
+        ...prev,
+        tradeStatus: 'confirmed',
+        tradeId: confirmedTradeId,
+        policyDecision: result.policy_decision ? {
+          decision: result.policy_decision.decision,
+          rule_applied: result.policy_decision.rule_applied,
+          trace_id: result.policy_decision.trace_id,
+          requires_review: result.policy_decision.requires_review || false,
+        } : null,
+        policyLoading: false,
+        policyError: null,
+      }));
+      
+    } catch (error) {
+      console.error('Trade execution failed:', error);
+      setState(prev => ({
+        ...prev,
+        policyLoading: false,
+        policyError: error instanceof Error ? error.message : 'Failed to execute trade',
+      }));
+    }
   };
 
-  const handleSettleTrade = () => {
-    setState(prev => ({ ...prev, tradeStatus: 'settled' }));
+  const handleSettleTrade = async () => {
+    if (!tradeId) {
+      console.error('No trade ID available for settlement');
+      setState(prev => ({
+        ...prev,
+        paymentError: 'Trade ID not found. Please confirm trade first.'
+      }));
+      return;
+    }
+    
+    // Reset payment state
+    setState(prev => ({
+      ...prev,
+      paymentLoading: true,
+      paymentError: null,
+      paymentStatus: 'processing'
+    }));
+    
+    try {
+      // Call trade settlement endpoint (without payment payload first to get payment request)
+      const response = await fetch(`/api/trades/${tradeId}/settle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          payment_payload: null  // Request payment instructions
+        }),
+      });
+      
+      if (response.status === 402) {
+        // Payment Required - extract payment request
+        const paymentData = await response.json();
+        setState(prev => ({
+          ...prev,
+          paymentRequest: paymentData.payment_request || {
+            amount: paymentData.amount,
+            currency: paymentData.currency,
+            payer: paymentData.payer,
+            receiver: paymentData.receiver,
+            facilitator_url: paymentData.facilitator_url
+          },
+          paymentStatus: 'requested',
+          paymentLoading: false,
+        }));
+        return; // Show payment UI
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail?.message || 'Settlement failed');
+      }
+      
+      const result = await response.json();
+      
+      // Trade settled successfully
+      setState(prev => ({
+        ...prev,
+        tradeStatus: 'settled',
+        paymentStatus: 'completed',
+        paymentLoading: false,
+        paymentRequest: null,
+      }));
+      
+    } catch (error) {
+      console.error('Trade settlement failed:', error);
+      setState(prev => ({
+        ...prev,
+        paymentLoading: false,
+        paymentError: error instanceof Error ? error.message : 'Failed to settle trade',
+        paymentStatus: 'failed',
+      }));
+    }
+  };
+  
+  const handleSubmitPayment = async (paymentPayload: any) => {
+    if (!tradeId) {
+      setState(prev => ({
+        ...prev,
+        paymentError: 'Trade ID not found'
+      }));
+      return;
+    }
+    
+    setState(prev => ({
+      ...prev,
+      paymentLoading: true,
+      paymentError: null,
+      paymentStatus: 'processing'
+    }));
+    
+    try {
+      const response = await fetch(`/api/trades/${tradeId}/settle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          payment_payload: paymentPayload
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail?.message || 'Payment failed');
+      }
+      
+      const result = await response.json();
+      
+      // Payment successful - trade settled
+      setState(prev => ({
+        ...prev,
+        tradeStatus: 'settled',
+        paymentStatus: 'completed',
+        paymentLoading: false,
+        paymentRequest: null,
+      }));
+      
+    } catch (error) {
+      console.error('Payment submission failed:', error);
+      setState(prev => ({
+        ...prev,
+        paymentLoading: false,
+        paymentError: error instanceof Error ? error.message : 'Payment submission failed',
+        paymentStatus: 'failed',
+      }));
+    }
   };
 
   const handleClearTrade = () => {
@@ -77,6 +317,14 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
       ...prev,
       loanData: null,
       tradeStatus: 'pending',
+      tradeId: null,
+      policyDecision: null,
+      policyLoading: false,
+      policyError: null,
+      paymentRequest: null,
+      paymentLoading: false,
+      paymentError: null,
+      paymentStatus: 'idle',
     }));
     clearContext();
   };
@@ -220,17 +468,195 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
                   </div>
                 </div>
 
+                {/* Policy Decision Display */}
+                {policyDecision && (
+                  <div className={`mt-6 p-4 rounded-lg border ${
+                    policyDecision.decision === 'BLOCK' 
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : policyDecision.decision === 'FLAG'
+                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      {policyDecision.decision === 'BLOCK' && (
+                        <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      )}
+                      {policyDecision.decision === 'FLAG' && (
+                        <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      )}
+                      {policyDecision.decision === 'ALLOW' && (
+                        <Shield className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium mb-1">
+                          {policyDecision.decision === 'BLOCK' && 'Trade Blocked by Policy'}
+                          {policyDecision.decision === 'FLAG' && 'Trade Flagged for Review'}
+                          {policyDecision.decision === 'ALLOW' && 'Policy Compliance Verified'}
+                        </div>
+                        {policyDecision.rule_applied && (
+                          <p className="text-xs opacity-80">
+                            Rule: {policyDecision.rule_applied}
+                          </p>
+                        )}
+                        {policyDecision.requires_review && (
+                          <p className="text-xs mt-1 opacity-80">
+                            This trade requires manual review before settlement.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Policy Error Display */}
+                {policyError && (
+                  <div className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-medium mb-1">Policy Evaluation Error</div>
+                        <p className="text-xs opacity-80">{policyError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Request Display (x402 Payment Required) */}
+                {paymentRequest && paymentStatus === 'requested' && (
+                  <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                    <div className="flex items-start gap-3">
+                      <Wallet className="h-5 w-5 flex-shrink-0 mt-0.5 text-blue-400" />
+                      <div className="flex-1">
+                        <div className="font-medium mb-2 text-blue-400">Payment Required (x402)</div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Amount:</span>
+                            <span className="font-mono font-medium">
+                              {paymentRequest.amount} {paymentRequest.currency}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Payer:</span>
+                            <span>{paymentRequest.payer.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Receiver:</span>
+                            <span>{paymentRequest.receiver.name}</span>
+                          </div>
+                          <div className="mt-3 p-3 bg-slate-900/50 rounded border border-slate-700">
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Connect your wallet and submit payment to complete settlement.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Facilitator: {paymentRequest.facilitator_url}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              // In production, this would connect to wallet and get payment payload
+                              // For demo, we'll simulate a payment payload
+                              const mockPaymentPayload = {
+                                transaction: {
+                                  to: paymentRequest.receiver.id,
+                                  value: paymentRequest.amount,
+                                  currency: paymentRequest.currency
+                                },
+                                signature: "mock_signature_for_demo"
+                              };
+                              handleSubmitPayment(mockPaymentPayload);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <Wallet className="h-4 w-4 mr-2" />
+                            Submit Payment
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setState(prev => ({
+                                ...prev,
+                                paymentRequest: null,
+                                paymentStatus: 'idle'
+                              }));
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Status Display */}
+                {paymentStatus === 'processing' && (
+                  <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                      <div>
+                        <div className="font-medium text-blue-400">Processing Payment...</div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Verifying and settling payment via x402
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Error Display */}
+                {paymentError && (
+                  <div className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-medium mb-1">Payment Error</div>
+                        <p className="text-xs opacity-80">{paymentError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 flex gap-4">
                   {tradeStatus === 'pending' && (
-                    <Button onClick={handleConfirmTrade} className="bg-blue-600 hover:bg-blue-700">
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Confirm Trade
+                    <Button 
+                      onClick={handleConfirmTrade} 
+                      disabled={policyLoading || policyDecision?.decision === 'BLOCK'}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {policyLoading ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Evaluating Policy...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Confirm Trade
+                        </>
+                      )}
                     </Button>
                   )}
                   {tradeStatus === 'confirmed' && (
-                    <Button onClick={handleSettleTrade} className="bg-emerald-600 hover:bg-emerald-700">
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Mark as Settled
+                    <Button 
+                      onClick={handleSettleTrade} 
+                      disabled={paymentLoading}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {paymentLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing Payment...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Settle Trade
+                        </>
+                      )}
                     </Button>
                   )}
                   {tradeStatus === 'settled' && (

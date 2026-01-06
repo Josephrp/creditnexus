@@ -20,7 +20,11 @@ import {
   Download,
   LogIn,
   LogOut,
-  FileCheck
+  FileCheck,
+  Sparkles,
+  Zap,
+  Target,
+  ArrowRight
 } from 'lucide-react';
 import { fetchWithAuth } from '@/context/AuthContext';
 import { SkeletonDashboard, EmptyState } from '@/components/ui/skeleton';
@@ -82,6 +86,17 @@ interface DashboardMetrics {
     occurred_at: string;
     metadata: Record<string, unknown> | null;
   }>;
+  template_metrics?: {
+    total_generations: number;
+    success_rate: number;
+    average_generation_time_seconds: number;
+    most_used_templates: Array<{
+      template_id: number;
+      template_name: string;
+      template_category: string;
+      usage_count: number;
+    }>;
+  };
   last_updated: string;
 }
 
@@ -248,7 +263,23 @@ export function Dashboard() {
       setAnalytics(portfolioData.analytics);
       
       if (dashboardRes.ok && dashboardData.dashboard) {
-        setDashboardMetrics(dashboardData.dashboard);
+        const dashboard = dashboardData.dashboard;
+        
+        // Merge template metrics if available
+        try {
+          const templateMetricsRes = await fetchWithAuth('/api/analytics/template-metrics');
+          if (templateMetricsRes.ok) {
+            const templateData = await templateMetricsRes.json();
+            if (templateData.template_metrics) {
+              dashboard.template_metrics = templateData.template_metrics;
+            }
+          }
+        } catch (err) {
+          // Template metrics are optional, don't fail if unavailable
+          console.warn('Failed to fetch template metrics:', err);
+        }
+        
+        setDashboardMetrics(dashboard);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -577,6 +608,100 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Template Metrics Section */}
+      {dashboardMetrics?.template_metrics && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-purple-400" />
+              <h3 className="text-lg font-medium text-white">Template Generation Metrics</h3>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                <div className="text-2xl font-bold text-purple-400 mb-1">
+                  {dashboardMetrics.template_metrics.total_generations}
+                </div>
+                <div className="text-xs text-slate-400">Total Generations</div>
+              </div>
+              <div className="text-center p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                <div className="text-2xl font-bold text-emerald-400 mb-1">
+                  {dashboardMetrics.template_metrics.success_rate}%
+                </div>
+                <div className="text-xs text-slate-400">Success Rate</div>
+              </div>
+              <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                <div className="text-2xl font-bold text-blue-400 mb-1">
+                  {dashboardMetrics.template_metrics.average_generation_time_seconds}s
+                </div>
+                <div className="text-xs text-slate-400">Avg Time</div>
+              </div>
+            </div>
+
+            {dashboardMetrics.template_metrics.most_used_templates.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-slate-300 mb-3">Most Used Templates</h4>
+                <div className="space-y-2">
+                  {dashboardMetrics.template_metrics.most_used_templates.map((template, idx) => (
+                    <div
+                      key={template.template_id}
+                      className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                          <span className="text-xs font-bold text-purple-400">#{idx + 1}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">{template.template_name}</p>
+                          <p className="text-xs text-slate-400">{template.template_category}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-purple-400">{template.usage_count}</div>
+                        <div className="text-xs text-slate-500">uses</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="h-5 w-5 text-yellow-400" />
+              <h3 className="text-lg font-medium text-white">Quick Generate</h3>
+            </div>
+            
+            <p className="text-sm text-slate-400 mb-4">
+              Start generating LMA documents from templates with your CDM data.
+            </p>
+            
+            <button
+              onClick={() => {
+                // Navigate to document generator
+                const event = new CustomEvent('navigateToApp', { detail: { app: 'document-generator' } });
+                window.dispatchEvent(event);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg text-white font-medium transition-all"
+            >
+              <Sparkles className="h-5 w-5" />
+              Open Document Generator
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            
+            <div className="mt-4 p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-xs text-slate-400 mb-2">Quick Tips:</p>
+              <ul className="text-xs text-slate-500 space-y-1">
+                <li>• Extract data from documents first</li>
+                <li>• Select appropriate LMA template</li>
+                <li>• Review and customize generated content</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         <div className="flex items-center gap-2 mb-4">
