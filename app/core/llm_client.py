@@ -325,3 +325,7 @@ def get_embeddings_model(
 
 
 
+
+
+
+

@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 
 # revision identifiers, used by Alembic.
 revision: str = '4b5c6d7e8f9a'
-down_revision: Union[str, None] = '3a7f8b9c1d2e'
+down_revision: Union[str, None] = 'e650a2d25272'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -69,6 +69,10 @@ def downgrade() -> None:
     op.drop_index('idx_policy_decisions_decision', table_name='policy_decisions')
     op.drop_index('idx_policy_decisions_transaction', table_name='policy_decisions')
     op.drop_table('policy_decisions')
+
+
+
+
 
 
 

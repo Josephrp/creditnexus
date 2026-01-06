@@ -121,9 +121,9 @@ class LoanAsset(SQLModel, table=True):
         default=None,
         description="Error message if verification failed"
     )
-    metadata: Optional[dict] = Field(
+    asset_metadata: Optional[dict] = Field(
         default=None,
-        sa_column=Column(JSONB),
+        sa_column=Column(JSONB, name='metadata'),
         description="Additional metadata including penalty payment flags"
     )
     
@@ -173,10 +173,10 @@ class LoanAsset(SQLModel, table=True):
             # Apply penalty: base rate + penalty basis points
             self.current_interest_rate = self.base_interest_rate + (self.penalty_bps / 100)
             
-            # Set metadata to indicate penalty payment is required
+            # Set asset_metadata to indicate penalty payment is required
             # The penalty payment endpoint will process this
-            if self.metadata is None:
-                self.metadata = {}
-            self.metadata["penalty_payment_required"] = True
-            self.metadata["penalty_payment_triggered_at"] = datetime.utcnow().isoformat()
-            self.metadata["breach_ndvi_score"] = ndvi_score
+            if self.asset_metadata is None:
+                self.asset_metadata = {}
+            self.asset_metadata["penalty_payment_required"] = True
+            self.asset_metadata["penalty_payment_triggered_at"] = datetime.utcnow().isoformat()
+            self.asset_metadata["breach_ndvi_score"] = ndvi_score

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Numeric, Date
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import enum
 
@@ -463,8 +463,8 @@ class PolicyDecision(Base):
     
     # Evaluation details
     trace = Column(JSONB, nullable=True)  # Full evaluation trace
-    matched_rules = Column(PG_ARRAY(String), nullable=True)  # Array of matched rule names
-    metadata = Column(JSONB, nullable=True)  # Additional context
+    matched_rules = Column(ARRAY(String), nullable=True)  # Array of matched rule names
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional context
     
     # CDM Events (for full CDM compliance)
     cdm_events = Column(JSONB, nullable=True)  # Full CDM PolicyEvaluation events
@@ -494,7 +494,7 @@ class PolicyDecision(Base):
             "trace_id": self.trace_id,
             "trace": self.trace,
             "matched_rules": list(self.matched_rules) if self.matched_rules else [],
-            "metadata": self.metadata,
+            "metadata": self.additional_metadata,
             "cdm_events": self.cdm_events,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "document_id": self.document_id,
@@ -609,7 +609,7 @@ class PaymentSchedule(Base):
     processed_at = Column(DateTime, nullable=True)
     
     # Metadata
-    metadata = Column(JSONB, nullable=True)  # Additional schedule information
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional schedule information
     
     def to_dict(self):
         """Convert model to dictionary for API serialization."""
@@ -625,7 +625,7 @@ class PaymentSchedule(Base):
             "payment_frequency_multiplier": self.payment_frequency_multiplier,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "processed_at": self.processed_at.isoformat() if self.processed_at else None,
-            "metadata": self.metadata,
+            "metadata": self.additional_metadata,
         }
 
 
@@ -642,7 +642,7 @@ class LMATemplate(Base):
     governing_law = Column(String(50), nullable=True)
     version = Column(String(20), nullable=False)
     file_path = Column(Text, nullable=False)
-    metadata = Column(JSONB, nullable=True)
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)
     required_fields = Column(JSONB, nullable=True)
     optional_fields = Column(JSONB, nullable=True)
     ai_generated_sections = Column(JSONB, nullable=True)
@@ -664,7 +664,7 @@ class LMATemplate(Base):
             "governing_law": self.governing_law,
             "version": self.version,
             "file_path": self.file_path,
-            "metadata": self.metadata,
+            "metadata": self.additional_metadata,
             "required_fields": self.required_fields,
             "optional_fields": self.optional_fields,
             "ai_generated_sections": self.ai_generated_sections,

@@ -3,6 +3,7 @@ folder/
 .cursorrules
 *.mdc
 .cursor/
+
 # Environment variables
 .env
 

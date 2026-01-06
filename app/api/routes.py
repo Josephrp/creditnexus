@@ -764,8 +764,48 @@ async def extract_from_images(
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "CreditNexus API"}
+    """Health check endpoint that reports system status."""
+    from app.db import SessionLocal, engine
+    from app.core.config import settings
+    from fastapi.responses import JSONResponse
+    
+    # Check database availability
+    db_status = "unavailable"
+    db_type = None
+    if SessionLocal is not None and engine is not None:
+        db_status = "operational"
+        # Determine database type from URL
+        db_url = str(engine.url) if hasattr(engine, 'url') else None
+        if db_url:
+            if "sqlite" in db_url.lower():
+                db_type = "SQLite"
+            elif "postgresql" in db_url.lower() or "postgres" in db_url.lower():
+                db_type = "PostgreSQL"
+            else:
+                db_type = "Unknown"
+    
+    status = {
+        "status": "healthy",
+        "service": "CreditNexus API",
+        "services": {
+            "api": "operational",
+            "database": {
+                "status": db_status,
+                "type": db_type,
+                "enabled": settings.DATABASE_ENABLED
+            },
+            "llm": "operational",  # TODO: Add actual LLM health check
+            "policy_engine": "operational" if settings.POLICY_ENABLED else "disabled",
+        }
+    }
+    
+    # Mark as degraded if database is unavailable but enabled
+    if settings.DATABASE_ENABLED and db_status == "unavailable":
+        status["status"] = "degraded"
+        status["warnings"] = ["Database is enabled but not available"]
+    
+    status_code = 200 if status["status"] == "healthy" else 503
+    return JSONResponse(content=status, status_code=status_code)
 
 
 class ApproveRequest(BaseModel):
@@ -4913,15 +4953,15 @@ async def disburse_loan_with_payment(
         
         # Step 11: Update loan asset disbursement status
         # Note: LoanAsset model may need disbursement_status and disbursement_date fields
-        # For now, we'll log it in metadata
-        if hasattr(loan_asset, 'metadata'):
-            if loan_asset.metadata is None:
-                loan_asset.metadata = {}
-            loan_asset.metadata["disbursement_status"] = "disbursed"
-            loan_asset.metadata["disbursement_date"] = datetime.utcnow().isoformat()
-            loan_asset.metadata["disbursement_amount"] = str(total_commitment)
-            loan_asset.metadata["disbursement_currency"] = currency.value
-            loan_asset.metadata["payment_id"] = payment_event_db.payment_id
+        # For now, we'll log it in asset_metadata
+        if hasattr(loan_asset, 'asset_metadata'):
+            if loan_asset.asset_metadata is None:
+                loan_asset.asset_metadata = {}
+            loan_asset.asset_metadata["disbursement_status"] = "disbursed"
+            loan_asset.asset_metadata["disbursement_date"] = datetime.utcnow().isoformat()
+            loan_asset.asset_metadata["disbursement_amount"] = str(total_commitment)
+            loan_asset.asset_metadata["disbursement_currency"] = currency.value
+            loan_asset.asset_metadata["payment_id"] = payment_event_db.payment_id
         
         db.commit()
         
@@ -5161,13 +5201,13 @@ async def penalty_payment(
         db.add(payment_event_db)
         
         # Step 11: Update loan asset metadata to mark penalty as paid
-        if loan_asset.metadata is None:
-            loan_asset.metadata = {}
-        loan_asset.metadata["penalty_payment_required"] = False
-        loan_asset.metadata["penalty_payment_paid"] = True
-        loan_asset.metadata["penalty_payment_id"] = payment_event_db.payment_id
-        loan_asset.metadata["penalty_payment_date"] = datetime.utcnow().isoformat()
-        loan_asset.metadata["penalty_amount"] = str(penalty_amount)
+        if loan_asset.asset_metadata is None:
+            loan_asset.asset_metadata = {}
+        loan_asset.asset_metadata["penalty_payment_required"] = False
+        loan_asset.asset_metadata["penalty_payment_paid"] = True
+        loan_asset.asset_metadata["penalty_payment_id"] = payment_event_db.payment_id
+        loan_asset.asset_metadata["penalty_payment_date"] = datetime.utcnow().isoformat()
+        loan_asset.asset_metadata["penalty_amount"] = str(penalty_amount)
         
         db.commit()
         

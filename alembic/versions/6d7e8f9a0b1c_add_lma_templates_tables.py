@@ -39,7 +39,6 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.Comment('LMA template metadata for document generation'),
     )
     
     # Create generated_documents table
@@ -60,7 +59,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['template_id'], ['lma_templates.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['source_document_id'], ['documents.id'], ondelete='SET NULL'),
         sa.ForeignKeyConstraint(['created_by'], ['users.id'], ondelete='SET NULL'),
-        sa.Comment('Generated LMA documents from templates'),
     )
     
     # Create template_field_mappings table
@@ -76,7 +74,6 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['template_id'], ['lma_templates.id'], ondelete='CASCADE'),
-        sa.Comment('Field mappings from CDM to template placeholders'),
     )
     
     # Create indexes for fast queries
@@ -105,6 +102,10 @@ def downgrade() -> None:
     op.drop_table('template_field_mappings')
     op.drop_table('generated_documents')
     op.drop_table('lma_templates')
+
+
+
+
 
 
 

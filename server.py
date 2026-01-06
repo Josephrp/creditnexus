@@ -137,15 +137,17 @@ async def lifespan(app: FastAPI):
         app.state.x402_payment_service = None
     
     # Initialize database
-    if os.environ.get("DATABASE_URL"):
+    if settings.DATABASE_ENABLED:
         try:
-            from app.db import init_db
-            init_db()
-            logger.info("Database tables initialized successfully")
+            from app.db import init_db, engine
+            if engine is not None:
+                init_db()
+            else:
+                logger.warning("Database engine is None, skipping initialization")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
     else:
-        logger.warning("DATABASE_URL not set, skipping database initialization")
+        logger.info("Database is disabled (DATABASE_ENABLED=false)")
     
     yield
     

@@ -393,3 +393,7 @@ def process_multiple_image_files(
     return extracted_texts
 
 
+
+
+
+

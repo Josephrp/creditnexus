@@ -58,7 +58,7 @@ def log_policy_decision(
             trace_id=policy_decision.trace_id,
             trace=policy_decision.trace,
             matched_rules=policy_decision.matched_rules,
-            metadata=decision_metadata,
+            additional_metadata=decision_metadata,
             cdm_events=cdm_events or [],
             document_id=document_id,
             loan_asset_id=loan_asset_id,
@@ -286,6 +286,8 @@ def get_policy_statistics(
     except Exception as e:
         logger.error(f"Failed to get policy statistics: {e}", exc_info=True)
         raise
+
+
 
 
 

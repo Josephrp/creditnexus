@@ -20,12 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Add LMA template generation fields to documents table."""
-    # Add is_generated column
-    op.add_column('documents', sa.Column('is_generated', sa.Boolean(), nullable=False, server_default='false'))
+    """Add LMA template generation fields to documents table.
     
-    # Add template_id column with foreign key
-    op.add_column('documents', sa.Column('template_id', sa.Integer(), nullable=True))
+    Note: The columns is_generated, template_id, and source_cdm_data were already
+    created in migration e650a2d25272. This migration only adds the foreign key
+    constraint for template_id (since lma_templates table didn't exist then).
+    """
+    # Add foreign key constraint for template_id (column already exists)
     op.create_foreign_key(
         'fk_documents_template_id',
         'documents',
@@ -35,24 +36,19 @@ def upgrade() -> None:
         ondelete='SET NULL'
     )
     
-    # Add source_cdm_data column
-    op.add_column('documents', sa.Column('source_cdm_data', JSONB(), nullable=True))
-    
-    # Create indexes
-    op.create_index('idx_documents_is_generated', 'documents', ['is_generated'])
+    # Create index for template_id (if it doesn't already exist)
+    # Note: is_generated index already exists as ix_documents_is_generated
     op.create_index('idx_documents_template_id', 'documents', ['template_id'])
 
 
 def downgrade() -> None:
-    """Remove LMA template generation fields from documents table."""
-    # Drop indexes
+    """Remove LMA template generation fields from documents table.
+    
+    Note: We only drop the foreign key and index added in this migration.
+    The columns themselves remain (they were created in e650a2d25272).
+    """
+    # Drop index
     op.drop_index('idx_documents_template_id', table_name='documents')
-    op.drop_index('idx_documents_is_generated', table_name='documents')
     
     # Drop foreign key constraint
     op.drop_constraint('fk_documents_template_id', 'documents', type_='foreignkey')
-    
-    # Drop columns
-    op.drop_column('documents', 'source_cdm_data')
-    op.drop_column('documents', 'template_id')
-    op.drop_column('documents', 'is_generated')

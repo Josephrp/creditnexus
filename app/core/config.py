@@ -1,5 +1,7 @@
 """Configuration management using pydantic-settings for type-safe environment variables."""
 
+import logging
+import os
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
@@ -83,6 +85,26 @@ class Settings(BaseSettings):
     
     # ChromaDB Configuration
     CHROMADB_PERSIST_DIR: str = "./chroma_db"  # Directory to persist ChromaDB data
+    
+    # Database Configuration
+    DATABASE_URL: Optional[str] = None  # PostgreSQL or SQLite connection string
+    DATABASE_ENABLED: bool = True  # Feature flag to enable/disable database
+    
+    @field_validator('DATABASE_URL', mode='before')
+    @classmethod
+    def validate_database_url(cls, v):
+        """Auto-create SQLite URL for development if not provided."""
+        if v is None or v == "":
+            # Development fallback: use SQLite in project root
+            import os
+            db_path = os.path.join(os.getcwd(), "creditnexus.db")
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"DATABASE_URL not set. Using SQLite fallback: {db_path}\n"
+                "For production, set DATABASE_URL to a PostgreSQL connection string."
+            )
+            return f"sqlite:///{db_path}"
+        return v
     
     @field_validator('LLM_PROVIDER', mode='before')
     @classmethod

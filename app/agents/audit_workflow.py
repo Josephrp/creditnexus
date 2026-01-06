@@ -243,9 +243,9 @@ async def run_full_audit(
                             
                             loan_asset.risk_status = RiskStatus.WARNING
                             # Add policy metadata to loan asset
-                            if not hasattr(loan_asset, 'metadata') or loan_asset.metadata is None:
-                                loan_asset.metadata = {}
-                            loan_asset.metadata["policy_flag"] = {
+                            if not hasattr(loan_asset, 'asset_metadata') or loan_asset.asset_metadata is None:
+                                loan_asset.asset_metadata = {}
+                            loan_asset.asset_metadata["policy_flag"] = {
                                 "rule_applied": policy_result.rule_applied,
                                 "trace_id": policy_result.trace_id,
                                 "requires_review": True
