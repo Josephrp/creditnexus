@@ -80,38 +80,51 @@ async def run_full_audit(
         logger.info("Stage 1: Legal document analysis")
         legal_result = await analyze_legal_document(document_text)
         
+        # Handle SPT extraction (gracefully handle None if rate limited)
         if legal_result.spt:
-            # Store SPT data as JSON
-            loan_asset.spt_data = {
-                "resource_target": {
-                    "metric": legal_result.spt.resource_target.metric,
-                    "unit": legal_result.spt.resource_target.unit,
-                    "threshold": legal_result.spt.resource_target.threshold,
-                    "direction": legal_result.spt.resource_target.direction.value
-                },
-                "financial_consequence": {
-                    "type": legal_result.spt.financial_consequence.type.value,
-                    "penalty_bps": legal_result.spt.financial_consequence.penalty_bps,
-                    "trigger_mechanism": legal_result.spt.financial_consequence.trigger_mechanism.value
+            try:
+                # Store SPT data as JSON
+                loan_asset.spt_data = {
+                    "resource_target": {
+                        "metric": legal_result.spt.resource_target.metric,
+                        "unit": legal_result.spt.resource_target.unit,
+                        "threshold": legal_result.spt.resource_target.threshold,
+                        "direction": legal_result.spt.resource_target.direction.value
+                    },
+                    "financial_consequence": {
+                        "type": legal_result.spt.financial_consequence.type.value,
+                        "penalty_bps": legal_result.spt.financial_consequence.penalty_bps,
+                        "trigger_mechanism": legal_result.spt.financial_consequence.trigger_mechanism.value
+                    }
                 }
-            }
-            # Update penalty from SPT
-            loan_asset.penalty_bps = legal_result.spt.financial_consequence.penalty_bps
-            loan_asset.spt_threshold = legal_result.spt.resource_target.threshold
-            result.stages_completed.append("legal_analysis")
+                # Update penalty from SPT
+                loan_asset.penalty_bps = legal_result.spt.financial_consequence.penalty_bps
+                loan_asset.spt_threshold = legal_result.spt.resource_target.threshold
+                result.stages_completed.append("legal_analysis")
+            except Exception as e:
+                logger.warning(f"Failed to process SPT data: {e}")
+                result.stages_failed.append("legal_analysis")
         else:
             result.stages_failed.append("legal_analysis")
-            logger.warning("No SPT extracted from document")
+            logger.warning("No SPT extracted from document (may be due to rate limiting or missing data)")
         
+        # Handle address extraction (gracefully handle None if rate limited)
         if legal_result.collateral_address:
-            loan_asset.collateral_address = legal_result.collateral_address.full_address
-            result.stages_completed.append("address_extraction")
+            try:
+                loan_asset.collateral_address = legal_result.collateral_address.full_address
+                result.stages_completed.append("address_extraction")
+            except Exception as e:
+                logger.warning(f"Failed to process address data: {e}")
+                result.stages_failed.append("address_extraction")
         else:
             result.stages_failed.append("address_extraction")
+            logger.warning("No address extracted from document (may be due to rate limiting or missing data)")
             
     except Exception as e:
         logger.error(f"Legal analysis failed: {e}")
         result.stages_failed.append("legal_analysis")
+        if "address_extraction" not in result.stages_failed:
+            result.stages_failed.append("address_extraction")
         result.error = f"Legal analysis error: {str(e)}"
     
     # --- Stage 2: Generate Legal Vector ---
@@ -168,11 +181,17 @@ async def run_full_audit(
                         
                         # Create CDM Observation event for satellite verification
                         satellite_hash = verification.get("hash", "")
+                        # risk_status is already a string (RiskStatus is a class with string constants, not an Enum)
+                        # Ensure we have a string value
+                        risk_status_str = loan_asset.risk_status
+                        if not isinstance(risk_status_str, str):
+                            # If it's somehow not a string, convert it
+                            risk_status_str = str(risk_status_str)
                         observation_event = generate_cdm_observation(
                             trade_id=loan_id,
                             satellite_hash=satellite_hash,
                             ndvi_score=ndvi_score,
-                            status=loan_asset.risk_status.value
+                            status=risk_status_str
                         )
                         
                         # Evaluate loan asset securitization for compliance

@@ -2480,9 +2480,12 @@ async def get_template_metrics(
         # Total generations
         total_generations = db.query(GeneratedDocument).count()
         
-        # Success rate (completed / total)
+        # Success rate (approved or executed / total)
         successful_generations = db.query(GeneratedDocument).filter(
-            GeneratedDocument.status == GeneratedDocumentStatus.COMPLETED.value
+            GeneratedDocument.status.in_([
+                GeneratedDocumentStatus.APPROVED.value,
+                GeneratedDocumentStatus.EXECUTED.value
+            ])
         ).count()
         success_rate = (successful_generations / total_generations * 100) if total_generations > 0 else 0
         

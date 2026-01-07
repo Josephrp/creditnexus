@@ -6,6 +6,7 @@ This agent uses OpenAI function calling to extract:
 3. Text embeddings for semantic search
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -13,6 +14,11 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.embeddings import Embeddings
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import ValidationError
+try:
+    from openai import RateLimitError
+except ImportError:
+    # Fallback if openai package structure changes
+    RateLimitError = type('RateLimitError', (Exception,), {})
 
 from app.core.llm_client import get_chat_model, get_embeddings_model as get_llm_embeddings_model
 from app.models.spt_schema import (
@@ -108,13 +114,14 @@ Always provide the full_address field with the complete address string."""),
 ])
 
 
-async def extract_spt_from_text(text: str, max_retries: int = 2) -> Optional[SustainabilityPerformanceTarget]:
+async def extract_spt_from_text(text: str, max_retries: int = 3, max_rate_limit_retries: int = 5) -> Optional[SustainabilityPerformanceTarget]:
     """
     Extract Sustainability Performance Target from loan covenant text.
     
     Args:
         text: Raw text from loan agreement covenant section
         max_retries: Number of retry attempts on validation failure
+        max_rate_limit_retries: Maximum number of rate limit retries with exponential backoff
         
     Returns:
         SustainabilityPerformanceTarget if found, None otherwise
@@ -122,31 +129,91 @@ async def extract_spt_from_text(text: str, max_retries: int = 2) -> Optional[Sus
     structured_llm = create_spt_extraction_chain()
     chain = SPT_EXTRACTION_PROMPT | structured_llm
     
+    last_validation_error = None
+    rate_limit_retries = 0
+    
     for attempt in range(max_retries + 1):
         try:
             logger.info(f"SPT extraction attempt {attempt + 1}/{max_retries + 1}")
-            result = await chain.ainvoke({"text": text})
-            logger.info(f"Successfully extracted SPT: {result.resource_target.metric}")
-            return result
-        except ValidationError as e:
-            logger.warning(f"SPT validation error on attempt {attempt + 1}: {e}")
-            if attempt == max_retries:
-                logger.error("SPT extraction failed after all retries")
+            
+            # Add validation feedback to prompt if this is a retry
+            prompt_text = text
+            if attempt > 0 and last_validation_error:
+                prompt_text = f"""
+Previous extraction attempt failed with validation error:
+{str(last_validation_error)}
+
+Please ensure you extract:
+1. resource_target object with: metric (string), unit (string), threshold (float), direction (enum)
+2. financial_consequence object with: type (enum), penalty_bps (float), trigger_mechanism (enum)
+
+Original text:
+{text}
+"""
+            
+            result = await chain.ainvoke({"text": prompt_text})
+            
+            # Validate that required fields are present
+            if result.resource_target and result.financial_consequence:
+                logger.info(f"Successfully extracted SPT: {result.resource_target.metric}")
+                return result
+            else:
+                raise ValidationError("Missing required fields: resource_target or financial_consequence")
+                
+        except (RateLimitError, Exception) as e:
+            error_str = str(e)
+            
+            # Handle rate limiting with exponential backoff
+            if "429" in error_str or "RATE_LIMIT" in error_str.upper() or isinstance(e, RateLimitError):
+                rate_limit_retries += 1
+                if rate_limit_retries <= max_rate_limit_retries:
+                    # Exponential backoff: 2^retry seconds, max 60 seconds
+                    wait_time = min(2 ** rate_limit_retries, 60)
+                    logger.warning(
+                        f"Rate limit hit (attempt {rate_limit_retries}/{max_rate_limit_retries}). "
+                        f"Waiting {wait_time} seconds before retry..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue  # Retry the same attempt
+                else:
+                    logger.warning(
+                        f"Rate limit exceeded after {max_rate_limit_retries} retries. "
+                        "Continuing without SPT extraction."
+                    )
+                    return None  # Gracefully return None instead of failing
+            
+            # Handle validation errors
+            elif isinstance(e, ValidationError):
+                last_validation_error = e
+                logger.warning(f"SPT validation error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries:
+                    # Wait a bit before retry to avoid hammering the API
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    logger.warning("SPT extraction failed after all validation retries")
+                    return None
+            
+            # Handle other errors
+            else:
+                logger.error(f"SPT extraction error: {e}")
+                # For non-rate-limit errors, don't retry indefinitely
+                if attempt < max_retries:
+                    await asyncio.sleep(1)
+                    continue
                 return None
-        except Exception as e:
-            logger.error(f"SPT extraction error: {e}")
-            return None
     
     return None
 
 
-async def extract_collateral_address(text: str, max_retries: int = 2) -> Optional[CollateralAddress]:
+async def extract_collateral_address(text: str, max_retries: int = 3, max_rate_limit_retries: int = 5) -> Optional[CollateralAddress]:
     """
     Extract collateral property address from legal text using LLM.
     
     Args:
         text: Raw legal document text
         max_retries: Number of retry attempts on validation failure
+        max_rate_limit_retries: Maximum number of rate limit retries with exponential backoff
         
     Returns:
         CollateralAddress if found, None otherwise
@@ -154,20 +221,79 @@ async def extract_collateral_address(text: str, max_retries: int = 2) -> Optiona
     structured_llm = create_address_extraction_chain()
     chain = ADDRESS_EXTRACTION_PROMPT | structured_llm
     
+    last_validation_error = None
+    rate_limit_retries = 0
+    
     for attempt in range(max_retries + 1):
         try:
             logger.info(f"Address extraction attempt {attempt + 1}/{max_retries + 1}")
-            result = await chain.ainvoke({"text": text})
-            logger.info(f"Successfully extracted address: {result.full_address}")
-            return result
-        except ValidationError as e:
-            logger.warning(f"Address validation error on attempt {attempt + 1}: {e}")
-            if attempt == max_retries:
-                logger.error("Address extraction failed after all retries")
+            
+            # Add validation feedback to prompt if this is a retry
+            prompt_text = text
+            if attempt > 0 and last_validation_error:
+                prompt_text = f"""
+Previous extraction attempt failed with validation error:
+{str(last_validation_error)}
+
+Please ensure you extract a complete address with:
+- full_address (required string)
+- street, city, state, postal_code, country (all optional but recommended)
+
+Original text:
+{text}
+"""
+            
+            result = await chain.ainvoke({"text": prompt_text})
+            
+            # Validate that required field is present
+            if result.full_address:
+                logger.info(f"Successfully extracted address: {result.full_address}")
+                return result
+            else:
+                raise ValidationError("Missing required field: full_address")
+                
+        except (RateLimitError, Exception) as e:
+            error_str = str(e)
+            
+            # Handle rate limiting with exponential backoff
+            if "429" in error_str or "RATE_LIMIT" in error_str.upper() or isinstance(e, RateLimitError):
+                rate_limit_retries += 1
+                if rate_limit_retries <= max_rate_limit_retries:
+                    # Exponential backoff: 2^retry seconds, max 60 seconds
+                    wait_time = min(2 ** rate_limit_retries, 60)
+                    logger.warning(
+                        f"Rate limit hit (attempt {rate_limit_retries}/{max_rate_limit_retries}). "
+                        f"Waiting {wait_time} seconds before retry..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue  # Retry the same attempt
+                else:
+                    logger.warning(
+                        f"Rate limit exceeded after {max_rate_limit_retries} retries. "
+                        "Continuing without address extraction."
+                    )
+                    return None  # Gracefully return None instead of failing
+            
+            # Handle validation errors
+            elif isinstance(e, ValidationError):
+                last_validation_error = e
+                logger.warning(f"Address validation error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries:
+                    # Wait a bit before retry to avoid hammering the API
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    logger.warning("Address extraction failed after all validation retries")
+                    return None
+            
+            # Handle other errors
+            else:
+                logger.error(f"Address extraction error: {e}")
+                # For non-rate-limit errors, don't retry indefinitely
+                if attempt < max_retries:
+                    await asyncio.sleep(1)
+                    continue
                 return None
-        except Exception as e:
-            logger.error(f"Address extraction error: {e}")
-            return None
     
     return None
 
@@ -206,8 +332,14 @@ async def analyze_legal_document(text: str) -> LegalExtractionResult:
     """
     logger.info("Starting legal document analysis...")
     
-    # Extract SPT and address concurrently
+    # Extract SPT and address with a small delay between them to avoid race conditions
+    # when hitting rate limits. This helps prevent both requests from hitting rate limits
+    # at exactly the same time.
     spt = await extract_spt_from_text(text)
+    
+    # Small delay to stagger requests and reduce concurrent rate limit hits
+    await asyncio.sleep(0.5)
+    
     address = await extract_collateral_address(text)
     
     # Calculate confidence based on extraction success
