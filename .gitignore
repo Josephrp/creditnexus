@@ -18,6 +18,7 @@ venv/
 ENV/
 env/
 *.tar
+storage/
 
 # uv
 uv.lock
