@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     # LLM Provider Configuration
     LLM_PROVIDER: LLMProvider = LLMProvider.OPENAI
     LLM_MODEL: str = "gpt-4o"  # Default model name
+    # For HuggingFace, you can specify the provider in two ways:
+    # 1. In the model name: "model:provider" (e.g., "deepseek-ai/DeepSeek-V3.2-Exp:novita")
+    #    - Provider in model name takes highest priority
+    # 2. Via HUGGINGFACE_INFERENCE_PROVIDER env var (e.g., "novita")
+    #    - Used if no provider in model name
+    # Recommended models for Novita:
+    # - "meta-llama/Llama-3.1-8B-Instruct" or "meta-llama/Llama-3.1-8B-Instruct:novita"
+    # - "microsoft/Phi-3.5-mini-instruct" or "microsoft/Phi-3.5-mini-instruct:novita"
+    # - "deepseek-ai/DeepSeek-V3.2-Exp:novita" (example from user config)
     LLM_TEMPERATURE: float = 0.0
     
     # vLLM-specific settings
@@ -57,10 +66,37 @@ class Settings(BaseSettings):
     HUGGINGFACE_BASE_URL: Optional[str] = None  # Defaults to https://api-inference.huggingface.co/v1
     # For HuggingFace Inference Providers (Cohere, fal, etc.):
     # Use HUGGINGFACE_BASE_URL=router.huggingface.co/{provider}/v3/openai
+    # Or use init_chat_model with model_provider="huggingface" and provider parameter
+    HUGGINGFACE_INFERENCE_PROVIDER: Optional[str] = "novita"  # Default: "novita" (preferred provider)
+    # Available providers: black-forest-labs, cerebras, cohere, fal-ai, featherless-ai, 
+    # fireworks-ai, groq, hf-inference, hyperbolic, nebius, novita, nscale, openai, 
+    # replicate, sambanova, together
+    # "auto" selects first available provider based on user preferences at hf.co/settings/inference-providers
+    # Novita supports models like Llama-3.1-8B-Instruct, Phi-3.5-mini-instruct, and others
+    
+    # HuggingFace Local Model Configuration (separate from inference endpoints)
+    # Set to True to load models locally using transformers (requires GPU/CPU resources)
+    # Set to False to use inference endpoints (API-based, no local resources needed)
+    HUGGINGFACE_USE_LOCAL: bool = False  # Use local models instead of inference endpoints
+    # When HUGGINGFACE_USE_LOCAL=True:
+    # - Models are loaded locally using transformers library
+    # - Requires sufficient RAM/VRAM for the model
+    # - No API calls, works offline
+    # - HUGGINGFACE_INFERENCE_PROVIDER is ignored
+    # When HUGGINGFACE_USE_LOCAL=False (default):
+    # - Uses inference endpoints (Novita, Together, etc.)
+    # - Requires HUGGINGFACE_API_KEY
+    # - Uses HUGGINGFACE_INFERENCE_PROVIDER setting
     
     # Embeddings settings
-    EMBEDDINGS_MODEL: str = "text-embedding-3-small"
+    EMBEDDINGS_MODEL: str = "text-embedding-3-small"  # OpenAI default
+    # For HuggingFace embeddings: "sentence-transformers/all-MiniLM-L6-v2" (22.7M params, lightweight, perfect for laptops)
+    # Alternative: "BAAI/bge-small-en-v1.5" (33.4M params, slightly better quality)
     EMBEDDINGS_PROVIDER: Optional[LLMProvider] = None  # If None, uses LLM_PROVIDER
+    # Local embeddings configuration (for HuggingFace embeddings)
+    EMBEDDINGS_USE_LOCAL: bool = False  # Use local embeddings model instead of API
+    EMBEDDINGS_DEVICE: str = "cpu"  # Device for local embeddings: "cpu", "cuda", "cuda:0", etc.
+    EMBEDDINGS_MODEL_KWARGS: Optional[str] = None  # JSON string for additional model_kwargs (e.g., '{"device_map":"auto"}')
     
     # Policy Engine Configuration
     POLICY_ENABLED: bool = True  # Feature flag to enable/disable policy engine

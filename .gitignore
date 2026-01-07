@@ -17,6 +17,11 @@ __pycache__/
 venv/
 ENV/
 env/
+*.tar
+
+# uv
+uv.lock
+# Note: .python-version should be committed to ensure consistent Python versions
 
 # IDE
 .vscode/

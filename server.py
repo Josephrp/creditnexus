@@ -2,6 +2,7 @@
 
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -20,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler for startup/shutdown events."""
+    """
+    Application lifespan handler for startup/shutdown events.
+    
+    Note: CancelledError during shutdown is expected when uvicorn reloads.
+    This is normal behavior and indicates the reloader is restarting the server.
+    """
     from app.core.config import settings
     
     # Initialize LLM client configuration
@@ -32,7 +38,7 @@ async def lifespan(app: FastAPI):
             f"model={settings.LLM_MODEL}"
         )
     except Exception as e:
-        logger.error(f"Failed to initialize LLM client configuration: {e}")
+        logger.error(f"Failed to initialize LLM client configuration: {e}", exc_info=True)
         raise
     
     # Initialize Policy Engine with YAML rule loading
@@ -152,22 +158,34 @@ async def lifespan(app: FastAPI):
     yield
     
     # Cleanup
-    if settings.POLICY_ENABLED and hasattr(app.state, 'policy_config_loader'):
-        policy_config_loader = app.state.policy_config_loader
-        if policy_config_loader:
-            policy_config_loader.stop_file_watcher()
-    
-    # Cleanup x402 payment service
-    if settings.X402_ENABLED and hasattr(app.state, 'x402_payment_service'):
-        payment_service = app.state.x402_payment_service
-        if payment_service:
-            try:
-                await payment_service.close()
-                logger.info("x402 Payment service closed")
-            except Exception as e:
-                logger.error(f"Error closing x402 payment service: {e}")
+    try:
+        if settings.POLICY_ENABLED and hasattr(app.state, 'policy_config_loader'):
+            policy_config_loader = app.state.policy_config_loader
+            if policy_config_loader:
+                policy_config_loader.stop_file_watcher()
+        
+        # Cleanup x402 payment service
+        if settings.X402_ENABLED and hasattr(app.state, 'x402_payment_service'):
+            payment_service = app.state.x402_payment_service
+            if payment_service:
+                try:
+                    await payment_service.close()
+                    logger.info("x402 Payment service closed")
+                except asyncio.CancelledError:
+                    logger.warning("x402 Payment service close was cancelled")
+                    raise
+                except Exception as e:
+                    logger.error(f"Error closing x402 payment service: {e}")
+    except asyncio.CancelledError:
+        logger.warning("Shutdown cleanup was cancelled")
+        raise
+    except Exception as e:
+        logger.error(f"Error during shutdown cleanup: {e}")
     
     logger.info("Shutting down application...")
+    
+    # Note: If CancelledError occurs after this point, it's from uvicorn's
+    # internal reload mechanism and is expected behavior during development.
 
 
 app = FastAPI(
@@ -261,4 +279,18 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(
+        app, 
+        host="127.0.0.1", 
+        port=8000, 
+        reload=True,
+        reload_excludes=[
+            "*.venv/**",
+            ".venv/**",
+            "**/__pycache__/**",
+            "**/*.pyc",
+            "**/*.pyo",
+            "**/.git/**",
+            "**/node_modules/**",
+        ],
+    )

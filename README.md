@@ -6,6 +6,51 @@ CreditNexus is a next-generation financial operating system that bridges the gap
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+#### Install uv (Python Package Manager)
+
+CreditNexus uses **uv** for fast and reliable Python dependency management.
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Or via pip:
+```bash
+pip install uv
+```
+
+#### Setup Python Environment
+
+```bash
+# Install dependencies and create virtual environment
+uv sync
+```
+
+This will:
+- Create a `.venv` virtual environment with Python 3.11
+- Install all dependencies from `pyproject.toml`
+- Generate `uv.lock` for reproducible builds
+
+**Note:** You can run commands directly with `uv run <command>` without activating the virtual environment, or activate it manually:
+
+**Windows (PowerShell):**
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+**macOS/Linux:**
+```bash
+source .venv/bin/activate
+```
+
 ### 0. Database Setup
 
 #### PostgreSQL
@@ -40,7 +85,7 @@ After PostgreSQL is running, apply the database schema using Alembic:
 
 ```bash
 # In the root directory
-alembic upgrade head
+uv run alembic upgrade head
 ```
 
 This will create all necessary tables (documents, workflows, policy_decisions, users, etc.) based on the migration files in `alembic/versions/`.
@@ -51,10 +96,16 @@ The backend powers the AI agents, satellite imagery fetching, and FINOS CDM even
 
 ```bash
 # In the root directory
-uvicorn server:app --reload
+uv run uvicorn server:app --reload --host 127.0.0.1 --port 8000
 ```
 
 *Runs on http://localhost:8000*
+
+**Alternative:** If you've activated the virtual environment, you can run:
+
+```bash
+   uvicorn server:app --reload --host 127.0.0.1 --port 8000
+```
 
 ### 2. Frontend (The Interface)
 
@@ -138,10 +189,17 @@ The platform components are designed to work as a "Chain of Command" using the *
 ### Backend
 
 - **API**: FastAPI (Python)
+- **Package Manager**: uv (Python 3.11)
 - **AI/LLM**: LangChain + OpenAI GPT-4
 - **Geospatial**: TorchGeo (Deep Learning), SentinelHub (Satellite Imagery)
 - **Standard**: FINOS Common Domain Model (CDM) for trade events
 - **Database**: SQLite (Development) / PostgreSQL (Production ready)
+
+### Development Tools
+
+- **Dependencies**: Managed via `pyproject.toml` and `uv.lock`
+- **Testing**: `uv run pytest`
+- **Code Quality**: ruff, black, mypy (configured in `pyproject.toml`)
 
 ---
 
