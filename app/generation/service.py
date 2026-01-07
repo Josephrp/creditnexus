@@ -23,6 +23,7 @@ from app.templates.storage import TemplateStorage
 from app.generation.mapper import FieldMapper
 from app.generation.populator import AIFieldPopulator
 from app.generation.renderer import DocumentRenderer
+from app.utils.json_serializer import serialize_cdm_data
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +148,13 @@ class DocumentGenerationService:
         generation_summary = self.get_generation_summary(mapped_fields, ai_fields, missing_fields)
         
         # Create GeneratedDocument record
+        # Serialize CDM data to JSON-safe format (handles Decimal, datetime, etc.)
+        cdm_data_dict = serialize_cdm_data(cdm_data)
+        
         generated_doc = GeneratedDocument(
             template_id=template_id,
             source_document_id=source_document_id,
-            cdm_data=cdm_data.model_dump() if hasattr(cdm_data, 'model_dump') else cdm_data.dict() if hasattr(cdm_data, 'dict') else {},
+            cdm_data=cdm_data_dict,
             generated_content=None,  # Optional: store text content if needed
             file_path=file_path,
             status="draft",

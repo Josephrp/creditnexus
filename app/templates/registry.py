@@ -130,7 +130,7 @@ class TemplateRegistry:
             governing_law=template_data.get("governing_law"),
             version=template_data["version"],
             file_path=template_data["file_path"],
-            metadata=template_data.get("metadata"),
+            additional_metadata=template_data.get("metadata"),  # Use additional_metadata to match model
             required_fields=template_data.get("required_fields"),
             optional_fields=template_data.get("optional_fields"),
             ai_generated_sections=template_data.get("ai_generated_sections"),

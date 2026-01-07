@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchWithAuth } from '../../context/AuthContext';
+import { fetchWithAuth, useAuth } from '../../context/AuthContext';
 import { useFDC3 } from '../../context/FDC3Context';
 import type { GeneratedDocumentContext, CreditAgreementData as FDC3CreditAgreementData } from '../../context/FDC3Context';
 import { Loader2, FileText, Sparkles, AlertCircle, CheckCircle2, Merge } from 'lucide-react';
@@ -56,6 +56,7 @@ interface DocumentGeneratorProps {
 
 export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: DocumentGeneratorProps) {
   const { broadcast } = useFDC3();
+  const { isAuthenticated } = useAuth();
   
   // State
   const [templates, setTemplates] = useState<LMATemplate[]>([]);
@@ -214,6 +215,12 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
       return;
     }
 
+    // Check authentication before generating
+    if (!isAuthenticated) {
+      setError('You must be logged in to generate documents. Please log in and try again.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -229,6 +236,13 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
           source_document_id: null,
         }),
       });
+
+      if (response.status === 401) {
+        // Handle authentication error
+        const errorData = await response.json().catch(() => ({}));
+        setError('Authentication required. Please log in and try again.');
+        return;
+      }
 
       if (response.ok) {
         const doc = await response.json();
@@ -269,12 +283,19 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
         if (onDocumentGenerated) {
           onDocumentGenerated(doc);
         }
+      } else if (response.status === 401) {
+        // Handle authentication error specifically
+        const errorData = await response.json().catch(() => ({}));
+        setError('Authentication required. Please log in to generate documents.');
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Document generation failed');
+        // Handle other error responses
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail?.message || errorData.detail || errorData.message || 'Document generation failed';
+        setError(errorMessage);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Document generation failed');
+      const errorMessage = err instanceof Error ? err.message : 'Document generation failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -573,10 +594,12 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                 </button>
                 <button
                   onClick={handleGenerate}
-                  disabled={loading || !cdmData || !hasValidCdmData() || !!processingStep}
+                  disabled={loading || !cdmData || !hasValidCdmData() || !!processingStep || !isAuthenticated}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   title={
-                    !cdmData
+                    !isAuthenticated
+                      ? 'Please log in to generate documents'
+                      : !cdmData
                       ? 'Please provide CDM data'
                       : !hasValidCdmData()
                       ? 'CDM data is incomplete. Please ensure parties and facilities are provided.'

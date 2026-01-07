@@ -145,9 +145,133 @@ async def lifespan(app: FastAPI):
     # Initialize database
     if settings.DATABASE_ENABLED:
         try:
-            from app.db import init_db, engine
+            from app.db import init_db, engine, SessionLocal
             if engine is not None:
                 init_db()
+                
+                # Check if demo user exists and create if needed
+                try:
+                    from app.db.models import User
+                    db = SessionLocal()
+                    try:
+                        demo_user = db.query(User).filter(User.email == "demo@creditnexus.app").first()
+                        if not demo_user:
+                            logger.info("No demo user found. Creating demo user...")
+                            from app.auth.jwt_auth import get_password_hash
+                            from app.db.models import UserRole
+                            
+                            demo_user = User(
+                                email="demo@creditnexus.app",
+                                password_hash=get_password_hash("DemoPassword123!"),
+                                display_name="Demo User",
+                                role=UserRole.ADMIN.value,
+                                is_active=True,
+                                is_email_verified=True,
+                            )
+                            db.add(demo_user)
+                            db.commit()
+                            logger.info("Demo user created: demo@creditnexus.app / DemoPassword123!")
+                        else:
+                            logger.debug("Demo user already exists")
+                    except Exception as e:
+                        logger.warning(f"Failed to check/create demo user: {e}")
+                        db.rollback()
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize demo user: {e}")
+                
+                # Check if templates exist and seed if needed
+                try:
+                    from app.templates.registry import TemplateRegistry
+                    db = SessionLocal()
+                    try:
+                        templates = TemplateRegistry.list_templates(db)
+                        if not templates:
+                            logger.info("No templates found in database. Seeding default templates...")
+                            from scripts.seed_templates import seed_templates
+                            
+                            # Create sample template data
+                            templates_data = [
+                                {
+                                    "template_code": "LMA-CL-FA-2024-EN",
+                                    "name": "Corporate Lending Facility Agreement (English Law)",
+                                    "category": "Facility Agreement",
+                                    "subcategory": "Corporate Lending - Syndicated",
+                                    "governing_law": "English",
+                                    "version": "2024.1",
+                                    "file_path": "storage/templates/facility_agreements/corporate_lending/english/CL-FA-EN-2024.1.docx",
+                                    "required_fields": [
+                                        "parties[role='Borrower'].name",
+                                        "parties[role='Borrower'].lei",
+                                        "facilities[0].facility_name",
+                                        "facilities[0].commitment_amount.amount",
+                                        "facilities[0].commitment_amount.currency",
+                                        "facilities[0].maturity_date",
+                                        "facilities[0].interest_terms.rate_option.benchmark",
+                                        "facilities[0].interest_terms.rate_option.spread_bps",
+                                        "agreement_date",
+                                        "governing_law"
+                                    ],
+                                    "optional_fields": [
+                                        "parties[role='Administrative Agent']",
+                                        "parties[role='Lender']",
+                                        "sustainability_linked",
+                                        "esg_kpi_targets",
+                                        "deal_id",
+                                        "loan_identification_number"
+                                    ],
+                                    "ai_generated_sections": [
+                                        "representations_and_warranties",
+                                        "conditions_precedent",
+                                        "covenants",
+                                        "events_of_default",
+                                        "governing_law_clause"
+                                    ]
+                                },
+                                {
+                                    "template_code": "LMA-CL-TS-2024-EN",
+                                    "name": "Corporate Lending Term Sheet (English Law)",
+                                    "category": "Term Sheet",
+                                    "subcategory": "Corporate Lending",
+                                    "governing_law": "English",
+                                    "version": "2024.1",
+                                    "file_path": "storage/templates/term_sheets/corporate_lending/english/CL-TS-EN-2024.1.docx",
+                                    "required_fields": [
+                                        "parties[role='Borrower'].name",
+                                        "facilities[0].facility_name",
+                                        "facilities[0].commitment_amount.amount",
+                                        "facilities[0].commitment_amount.currency",
+                                        "facilities[0].maturity_date",
+                                        "facilities[0].interest_terms.rate_option.benchmark",
+                                        "facilities[0].interest_terms.rate_option.spread_bps"
+                                    ],
+                                    "optional_fields": [
+                                        "agreement_date",
+                                        "governing_law",
+                                        "sustainability_linked"
+                                    ],
+                                    "ai_generated_sections": [
+                                        "purpose",
+                                        "conditions_precedent",
+                                        "representations",
+                                        "fees"
+                                    ]
+                                }
+                            ]
+                            
+                            created = seed_templates(db, templates_data)
+                            db.commit()
+                            logger.info(f"Seeded {created} template(s) on startup")
+                        else:
+                            logger.info(f"Found {len(templates)} existing template(s) in database")
+                    except Exception as e:
+                        logger.warning(f"Failed to check/seed templates: {e}")
+                        db.rollback()
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize template seeding: {e}")
             else:
                 logger.warning("Database engine is None, skipping initialization")
         except Exception as e:

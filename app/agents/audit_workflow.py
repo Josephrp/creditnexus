@@ -233,24 +233,21 @@ async def run_full_audit(
                             )
                             result.stages_failed.append("policy_evaluation")
                             
-                            # Log policy decision to database if session available
+                            # Store policy decision info to create after loan_asset is persisted
+                            # (loan_asset.id doesn't exist yet, and foreign key requires the table to exist)
                             if db_session:
-                                try:
-                                    policy_decision_db = PolicyDecisionModel(
-                                        transaction_id=loan_id,
-                                        transaction_type="loan_asset_securitization",
-                                        decision=policy_result.decision,
-                                        rule_applied=policy_result.rule_applied,
-                                        trace_id=policy_result.trace_id,
-                                        trace=policy_result.trace,
-                                        matched_rules=policy_result.matched_rules,
-                                        metadata={"loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None},
-                                        cdm_events=[policy_evaluation_event]
-                                    )
-                                    db_session.add(policy_decision_db)
-                                    db_session.commit()
-                                except Exception as e:
-                                    logger.error(f"Failed to log policy decision to database: {e}")
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event]
+                                })
                         
                         # Handle FLAG decision - allow but mark for review
                         elif policy_result.decision == "FLAG":
@@ -270,27 +267,21 @@ async def run_full_audit(
                                 "requires_review": True
                             }
                             
-                            # Log policy decision to database if session available
+                            # Store policy decision info to create after loan_asset is persisted
                             if db_session:
-                                try:
-                                    policy_decision_db = PolicyDecisionModel(
-                                        transaction_id=loan_id,
-                                        transaction_type="loan_asset_securitization",
-                                        decision=policy_result.decision,
-                                        rule_applied=policy_result.rule_applied,
-                                        trace_id=policy_result.trace_id,
-                                        trace=policy_result.trace,
-                                        matched_rules=policy_result.matched_rules,
-                                        metadata={
-                                            "loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None,
-                                            "requires_review": True
-                                        },
-                                        cdm_events=[policy_evaluation_event]
-                                    )
-                                    db_session.add(policy_decision_db)
-                                    db_session.commit()
-                                except Exception as e:
-                                    logger.error(f"Failed to log policy decision to database: {e}")
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event],
+                                    "metadata": {"requires_review": True}
+                                })
                         
                         # Handle ALLOW decision - log for audit
                         else:
@@ -299,24 +290,20 @@ async def run_full_audit(
                                 f"loan_id={loan_id}, trace_id={policy_result.trace_id}"
                             )
                             
-                            # Log policy decision to database if session available
+                            # Store policy decision info to create after loan_asset is persisted
                             if db_session:
-                                try:
-                                    policy_decision_db = PolicyDecisionModel(
-                                        transaction_id=loan_id,
-                                        transaction_type="loan_asset_securitization",
-                                        decision=policy_result.decision,
-                                        rule_applied=policy_result.rule_applied,
-                                        trace_id=policy_result.trace_id,
-                                        trace=policy_result.trace,
-                                        matched_rules=policy_result.matched_rules,
-                                        metadata={"loan_asset_id": loan_asset.id if hasattr(loan_asset, 'id') else None},
-                                        cdm_events=[policy_evaluation_event]
-                                    )
-                                    db_session.add(policy_decision_db)
-                                    db_session.commit()
-                                except Exception as e:
-                                    logger.error(f"Failed to log policy decision to database: {e}")
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event]
+                                })
                     
                     except Exception as e:
                         # Log policy evaluation errors but don't block audit
@@ -341,8 +328,51 @@ async def run_full_audit(
         try:
             logger.info("Stage 5: Persisting to database")
             db_session.add(loan_asset)
-            db_session.commit()
+            db_session.flush()  # Flush to get the ID without committing
             db_session.refresh(loan_asset)
+            
+            # Now create policy decisions with the loan_asset_id
+            # Note: loan_assets table exists in DB (via Alembic), but LoanAsset is a SQLModel
+            # so it's not in Base.metadata. The foreign key will work at DB level.
+            if hasattr(loan_asset, '_pending_policy_decisions') and loan_asset._pending_policy_decisions:
+                for policy_data in loan_asset._pending_policy_decisions:
+                    try:
+                        # Create policy decision with loan_asset_id set
+                        # SQLAlchemy may warn about foreign key validation, but it will work at DB level
+                        policy_decision_db = PolicyDecisionModel(
+                            transaction_id=policy_data["transaction_id"],
+                            transaction_type=policy_data["transaction_type"],
+                            decision=policy_data["decision"],
+                            rule_applied=policy_data["rule_applied"],
+                            trace_id=policy_data["trace_id"],
+                            trace=policy_data["trace"],
+                            matched_rules=policy_data["matched_rules"],
+                            additional_metadata=policy_data.get("metadata", {}),
+                            cdm_events=policy_data["cdm_events"],
+                            loan_asset_id=loan_asset.id if loan_asset.id else None
+                        )
+                        db_session.add(policy_decision_db)
+                    except Exception as e:
+                        # Log warning but continue - policy decision is for audit trail
+                        # The loan_asset itself is more important than the policy decision record
+                        logger.warning(
+                            f"Failed to create policy decision for loan {loan_asset.loan_id}: {e}. "
+                            f"Policy decision will be logged in loan_asset metadata instead."
+                        )
+                        # Store policy decision info in loan_asset metadata as fallback
+                        if not loan_asset.asset_metadata:
+                            loan_asset.asset_metadata = {}
+                        if "policy_decisions" not in loan_asset.asset_metadata:
+                            loan_asset.asset_metadata["policy_decisions"] = []
+                        loan_asset.asset_metadata["policy_decisions"].append({
+                            "transaction_id": policy_data["transaction_id"],
+                            "decision": policy_data["decision"],
+                            "rule_applied": policy_data["rule_applied"],
+                            "trace_id": policy_data["trace_id"]
+                        })
+                        continue
+            
+            db_session.commit()
             result.stages_completed.append("database_persistence")
         except Exception as e:
             logger.error(f"Database persistence failed: {e}")
