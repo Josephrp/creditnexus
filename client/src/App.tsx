@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { DocumentParser } from '@/apps/docu-digitizer/DocumentParser';
 import { TradeBlotter } from '@/apps/trade-blotter/TradeBlotter';
 import { GreenLens } from '@/apps/green-lens/GreenLens';
+import { DocumentGenerator } from '@/apps/document-generator/DocumentGenerator';
 import { DocumentHistory } from '@/components/DocumentHistory';
 import { Dashboard } from '@/components/Dashboard';
 import { GroundTruthDashboard } from '@/components/GroundTruthDashboard';
@@ -17,7 +18,7 @@ import type { CreditAgreementData, IntentName, DocumentContext, AgreementContext
 import VerificationDashboard from '@/components/VerificationDashboard';
 import RiskWarRoom from '@/components/RiskWarRoom';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room' | 'document-generator';
 
 const mainApps: { id: AppView; name: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -37,6 +38,12 @@ const mainApps: { id: AppView; name: string; icon: React.ReactNode; description:
     name: 'Library',
     icon: <BookOpen className="h-5 w-5" />,
     description: 'Saved documents & history',
+  },
+  {
+    id: 'document-generator',
+    name: 'Document Generator',
+    icon: <Sparkles className="h-5 w-5" />,
+    description: 'Generate LMA documents from templates',
   },
 ];
 
@@ -75,12 +82,35 @@ const sidebarApps: { id: AppView; name: string; icon: React.ReactNode; descripti
 
 
 
+interface PolicyDecision {
+  decision: 'ALLOW' | 'BLOCK' | 'FLAG';
+  rule_applied?: string;
+  trace_id?: string;
+  requires_review?: boolean;
+}
+
+interface PaymentRequest {
+  amount: string;
+  currency: string;
+  payer: { id: string; name: string; lei?: string };
+  receiver: { id: string; name: string; lei?: string };
+  facilitator_url: string;
+}
+
 interface TradeBlotterState {
   loanData: CreditAgreementData | null;
   tradeStatus: 'pending' | 'confirmed' | 'settled';
   settlementDate: string;
   tradePrice: string;
   tradeAmount: string;
+  tradeId: string | null;
+  policyDecision: PolicyDecision | null;
+  policyLoading: boolean;
+  policyError: string | null;
+  paymentRequest: PaymentRequest | null;
+  paymentLoading: boolean;
+  paymentError: string | null;
+  paymentStatus: 'idle' | 'requested' | 'processing' | 'completed' | 'failed';
 }
 
 function App() {
@@ -96,6 +126,14 @@ function App() {
     settlementDate: '',
     tradePrice: '100.00',
     tradeAmount: '',
+    tradeId: null,
+    policyDecision: null,
+    policyLoading: false,
+    policyError: null,
+    paymentRequest: null,
+    paymentLoading: false,
+    paymentError: null,
+    paymentStatus: 'idle',
   });
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { isAvailable, pendingIntent, clearPendingIntent, onIntentReceived } = useFDC3();
@@ -104,6 +142,16 @@ function App() {
     console.log('[App] Processing FDC3 intent:', intent, context);
 
     switch (intent) {
+      case 'GenerateLMATemplate': {
+        // Handle GenerateLMATemplate intent - open Document Generator with CDM data from context
+        const cdmData = context as CreditAgreementData;
+        if (cdmData) {
+          setViewData(cdmData);
+          setActiveApp('document-generator');
+          console.log('[App] Opened Document Generator with CDM data from FDC3 intent');
+        }
+        break;
+      }
       case 'ViewLoanAgreement': {
         const agreementCtx = context as AgreementContext;
         if (agreementCtx.id?.agreementId) {
@@ -166,6 +214,20 @@ function App() {
       processIntent(intent, context);
     }
   }, [pendingIntent, clearPendingIntent]);
+
+  useEffect(() => {
+    const handleNavigate = (event: CustomEvent) => {
+      const app = (event.detail as { app?: AppView })?.app;
+      if (app) {
+        setActiveApp(app);
+      }
+    };
+
+    window.addEventListener('navigateToApp', handleNavigate as EventListener);
+    return () => {
+      window.removeEventListener('navigateToApp', handleNavigate as EventListener);
+    };
+  }, []);
 
   const handleBroadcast = () => {
     setHasBroadcast(true);
@@ -350,13 +412,23 @@ function App() {
             <DocumentParser
               onBroadcast={handleBroadcast}
               onSaveToLibrary={handleSaveToLibrary}
+              onGenerateFromTemplate={(data) => {
+                setViewData(data);
+                setActiveApp('document-generator');
+              }}
               initialData={viewData}
               initialContent={extractionContent}
             />
           )}
-          {activeApp === 'library' && (
-            <DocumentHistory onViewData={handleViewData} />
-          )}
+        {activeApp === 'library' && (
+            <DocumentHistory 
+              onViewData={handleViewData} 
+              onGenerateFromTemplate={(cdmData: Record<string, unknown>) => {
+                setViewData(cdmData as CreditAgreementData);
+                setActiveApp('document-generator');
+              }}
+            />
+        )}
           {activeApp === 'trade-blotter' && (
             <TradeBlotter
               state={tradeBlotterState}
@@ -364,6 +436,15 @@ function App() {
             />
           )}
           {activeApp === 'green-lens' && <GreenLens />}
+          {activeApp === 'document-generator' && (
+            <DocumentGenerator
+              initialCdmData={viewData || undefined}
+              onDocumentGenerated={(doc) => {
+                console.log('Document generated:', doc);
+                // Could navigate to library or show success message
+              }}
+            />
+          )}
           {activeApp === 'ground-truth' && <GroundTruthDashboard />}
           {activeApp === 'verification-demo' && <VerificationDashboard />}
           {activeApp === 'risk-war-room' && <RiskWarRoom />}

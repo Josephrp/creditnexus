@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
-import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen } from 'lucide-react';
+import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen, Sparkles } from 'lucide-react';
 import { useFDC3 } from '@/context/FDC3Context';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
@@ -11,6 +11,7 @@ import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3
 interface DocumentParserProps {
   onBroadcast?: () => void;
   onSaveToLibrary?: () => void;
+  onGenerateFromTemplate?: (data: CreditAgreementData) => void;
   initialData?: CreditAgreementData | null;
   initialContent?: string | null;
 }
@@ -18,6 +19,7 @@ interface DocumentParserProps {
 export function DocumentParser({
   onBroadcast,
   onSaveToLibrary,
+  onGenerateFromTemplate,
   initialData,
   initialContent
 }: DocumentParserProps) {
@@ -394,6 +396,19 @@ export function DocumentParser({
                   Broadcast to Desktop
                 </>
               )}
+            </Button>
+            <Button
+              onClick={() => {
+                if (editableData && onGenerateFromTemplate) {
+                  onGenerateFromTemplate(editableData);
+                }
+              }}
+              disabled={!editableData}
+              className="bg-purple-600 hover:bg-purple-700"
+              title="Generate LMA document from template using extracted data"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generate from Template
             </Button>
           </div>
 

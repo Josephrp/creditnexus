@@ -1,3 +1,9 @@
+dev/
+folder/
+.cursorrules
+*.mdc
+.cursor/
+
 # Environment variables
 .env
 
@@ -11,6 +17,12 @@ __pycache__/
 venv/
 ENV/
 env/
+*.tar
+storage/
+
+# uv
+uv.lock
+# Note: .python-version should be committed to ensure consistent Python versions
 
 # IDE
 .vscode/

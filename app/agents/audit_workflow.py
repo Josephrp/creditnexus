@@ -12,6 +12,7 @@ from app.agents.analyzer import analyze_legal_document, generate_legal_vector
 from app.agents.verifier import geocode_address, verify_asset_location
 from app.models.loan_asset import LoanAsset, RiskStatus
 from app.models.spt_schema import SustainabilityPerformanceTarget
+from app.services.policy_service import PolicyService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,7 +41,9 @@ class AuditResult:
 async def run_full_audit(
     loan_id: str,
     document_text: str,
-    db_session=None  # Optional SQLAlchemy session for persistence
+    db_session=None,  # Optional SQLAlchemy session for persistence
+    policy_service: Optional[PolicyService] = None,  # Optional policy service for compliance evaluation
+    credit_agreement=None  # Optional CreditAgreement for policy context
 ) -> AuditResult:
     """
     Execute the complete "Securitize & Verify" workflow.
@@ -77,38 +80,51 @@ async def run_full_audit(
         logger.info("Stage 1: Legal document analysis")
         legal_result = await analyze_legal_document(document_text)
         
+        # Handle SPT extraction (gracefully handle None if rate limited)
         if legal_result.spt:
-            # Store SPT data as JSON
-            loan_asset.spt_data = {
-                "resource_target": {
-                    "metric": legal_result.spt.resource_target.metric,
-                    "unit": legal_result.spt.resource_target.unit,
-                    "threshold": legal_result.spt.resource_target.threshold,
-                    "direction": legal_result.spt.resource_target.direction.value
-                },
-                "financial_consequence": {
-                    "type": legal_result.spt.financial_consequence.type.value,
-                    "penalty_bps": legal_result.spt.financial_consequence.penalty_bps,
-                    "trigger_mechanism": legal_result.spt.financial_consequence.trigger_mechanism.value
+            try:
+                # Store SPT data as JSON
+                loan_asset.spt_data = {
+                    "resource_target": {
+                        "metric": legal_result.spt.resource_target.metric,
+                        "unit": legal_result.spt.resource_target.unit,
+                        "threshold": legal_result.spt.resource_target.threshold,
+                        "direction": legal_result.spt.resource_target.direction.value
+                    },
+                    "financial_consequence": {
+                        "type": legal_result.spt.financial_consequence.type.value,
+                        "penalty_bps": legal_result.spt.financial_consequence.penalty_bps,
+                        "trigger_mechanism": legal_result.spt.financial_consequence.trigger_mechanism.value
+                    }
                 }
-            }
-            # Update penalty from SPT
-            loan_asset.penalty_bps = legal_result.spt.financial_consequence.penalty_bps
-            loan_asset.spt_threshold = legal_result.spt.resource_target.threshold
-            result.stages_completed.append("legal_analysis")
+                # Update penalty from SPT
+                loan_asset.penalty_bps = legal_result.spt.financial_consequence.penalty_bps
+                loan_asset.spt_threshold = legal_result.spt.resource_target.threshold
+                result.stages_completed.append("legal_analysis")
+            except Exception as e:
+                logger.warning(f"Failed to process SPT data: {e}")
+                result.stages_failed.append("legal_analysis")
         else:
             result.stages_failed.append("legal_analysis")
-            logger.warning("No SPT extracted from document")
+            logger.warning("No SPT extracted from document (may be due to rate limiting or missing data)")
         
+        # Handle address extraction (gracefully handle None if rate limited)
         if legal_result.collateral_address:
-            loan_asset.collateral_address = legal_result.collateral_address.full_address
-            result.stages_completed.append("address_extraction")
+            try:
+                loan_asset.collateral_address = legal_result.collateral_address.full_address
+                result.stages_completed.append("address_extraction")
+            except Exception as e:
+                logger.warning(f"Failed to process address data: {e}")
+                result.stages_failed.append("address_extraction")
         else:
             result.stages_failed.append("address_extraction")
+            logger.warning("No address extracted from document (may be due to rate limiting or missing data)")
             
     except Exception as e:
         logger.error(f"Legal analysis failed: {e}")
         result.stages_failed.append("legal_analysis")
+        if "address_extraction" not in result.stages_failed:
+            result.stages_failed.append("address_extraction")
         result.error = f"Legal analysis error: {str(e)}"
     
     # --- Stage 2: Generate Legal Vector ---
@@ -156,6 +172,143 @@ async def run_full_audit(
                 ndvi_score = verification["ndvi_score"]
                 loan_asset.update_verification(ndvi_score)
                 result.stages_completed.append("satellite_verification")
+                
+                # Policy evaluation after satellite verification (if enabled)
+                if policy_service:
+                    try:
+                        from app.models.cdm_events import generate_cdm_observation, generate_cdm_policy_evaluation
+                        from app.db.models import PolicyDecision as PolicyDecisionModel
+                        
+                        # Create CDM Observation event for satellite verification
+                        satellite_hash = verification.get("hash", "")
+                        # risk_status is already a string (RiskStatus is a class with string constants, not an Enum)
+                        # Ensure we have a string value
+                        risk_status_str = loan_asset.risk_status
+                        if not isinstance(risk_status_str, str):
+                            # If it's somehow not a string, convert it
+                            risk_status_str = str(risk_status_str)
+                        observation_event = generate_cdm_observation(
+                            trade_id=loan_id,
+                            satellite_hash=satellite_hash,
+                            ndvi_score=ndvi_score,
+                            status=risk_status_str
+                        )
+                        
+                        # Evaluate loan asset securitization for compliance
+                        policy_result = policy_service.evaluate_loan_asset(
+                            loan_asset=loan_asset,
+                            credit_agreement=credit_agreement
+                        )
+                        
+                        # Create CDM PolicyEvaluation event
+                        policy_evaluation_event = generate_cdm_policy_evaluation(
+                            transaction_id=loan_id,
+                            transaction_type="loan_asset_securitization",
+                            decision=policy_result.decision,
+                            rule_applied=policy_result.rule_applied,
+                            related_event_identifiers=[{
+                                "eventIdentifier": {
+                                    "issuer": "CreditNexus",
+                                    "assignedIdentifier": [{
+                                        "identifier": {"value": observation_event.get("meta", {}).get("globalKey", "")}
+                                    }]
+                                }
+                            }],
+                            evaluation_trace=policy_result.trace,
+                            matched_rules=policy_result.matched_rules
+                        )
+                        
+                        # Handle BLOCK decision - prevent securitization
+                        if policy_result.decision == "BLOCK":
+                            logger.warning(
+                                f"Policy evaluation BLOCKED loan asset securitization: "
+                                f"loan_id={loan_id}, rule={policy_result.rule_applied}, "
+                                f"trace_id={policy_result.trace_id}"
+                            )
+                            
+                            loan_asset.risk_status = RiskStatus.ERROR
+                            loan_asset.verification_error = (
+                                f"Policy violation: {policy_result.rule_applied}. "
+                                f"Securitization blocked by compliance policy."
+                            )
+                            result.stages_failed.append("policy_evaluation")
+                            
+                            # Store policy decision info to create after loan_asset is persisted
+                            # (loan_asset.id doesn't exist yet, and foreign key requires the table to exist)
+                            if db_session:
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event]
+                                })
+                        
+                        # Handle FLAG decision - allow but mark for review
+                        elif policy_result.decision == "FLAG":
+                            logger.info(
+                                f"Policy evaluation FLAGGED loan asset securitization: "
+                                f"loan_id={loan_id}, rule={policy_result.rule_applied}, "
+                                f"trace_id={policy_result.trace_id}"
+                            )
+                            
+                            loan_asset.risk_status = RiskStatus.WARNING
+                            # Add policy metadata to loan asset
+                            if not hasattr(loan_asset, 'asset_metadata') or loan_asset.asset_metadata is None:
+                                loan_asset.asset_metadata = {}
+                            loan_asset.asset_metadata["policy_flag"] = {
+                                "rule_applied": policy_result.rule_applied,
+                                "trace_id": policy_result.trace_id,
+                                "requires_review": True
+                            }
+                            
+                            # Store policy decision info to create after loan_asset is persisted
+                            if db_session:
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event],
+                                    "metadata": {"requires_review": True}
+                                })
+                        
+                        # Handle ALLOW decision - log for audit
+                        else:
+                            logger.debug(
+                                f"Policy evaluation ALLOWED loan asset securitization: "
+                                f"loan_id={loan_id}, trace_id={policy_result.trace_id}"
+                            )
+                            
+                            # Store policy decision info to create after loan_asset is persisted
+                            if db_session:
+                                if not hasattr(loan_asset, '_pending_policy_decisions'):
+                                    loan_asset._pending_policy_decisions = []
+                                loan_asset._pending_policy_decisions.append({
+                                    "transaction_id": loan_id,
+                                    "transaction_type": "loan_asset_securitization",
+                                    "decision": policy_result.decision,
+                                    "rule_applied": policy_result.rule_applied,
+                                    "trace_id": policy_result.trace_id,
+                                    "trace": policy_result.trace,
+                                    "matched_rules": policy_result.matched_rules,
+                                    "cdm_events": [policy_evaluation_event]
+                                })
+                    
+                    except Exception as e:
+                        # Log policy evaluation errors but don't block audit
+                        logger.error(f"Policy evaluation failed for loan {loan_id}: {e}", exc_info=True)
+                        # Continue with audit even if policy evaluation fails
             else:
                 loan_asset.risk_status = RiskStatus.ERROR
                 loan_asset.verification_error = verification.get("error", "Unknown error")
@@ -175,8 +328,51 @@ async def run_full_audit(
         try:
             logger.info("Stage 5: Persisting to database")
             db_session.add(loan_asset)
-            db_session.commit()
+            db_session.flush()  # Flush to get the ID without committing
             db_session.refresh(loan_asset)
+            
+            # Now create policy decisions with the loan_asset_id
+            # Note: loan_assets table exists in DB (via Alembic), but LoanAsset is a SQLModel
+            # so it's not in Base.metadata. The foreign key will work at DB level.
+            if hasattr(loan_asset, '_pending_policy_decisions') and loan_asset._pending_policy_decisions:
+                for policy_data in loan_asset._pending_policy_decisions:
+                    try:
+                        # Create policy decision with loan_asset_id set
+                        # SQLAlchemy may warn about foreign key validation, but it will work at DB level
+                        policy_decision_db = PolicyDecisionModel(
+                            transaction_id=policy_data["transaction_id"],
+                            transaction_type=policy_data["transaction_type"],
+                            decision=policy_data["decision"],
+                            rule_applied=policy_data["rule_applied"],
+                            trace_id=policy_data["trace_id"],
+                            trace=policy_data["trace"],
+                            matched_rules=policy_data["matched_rules"],
+                            additional_metadata=policy_data.get("metadata", {}),
+                            cdm_events=policy_data["cdm_events"],
+                            loan_asset_id=loan_asset.id if loan_asset.id else None
+                        )
+                        db_session.add(policy_decision_db)
+                    except Exception as e:
+                        # Log warning but continue - policy decision is for audit trail
+                        # The loan_asset itself is more important than the policy decision record
+                        logger.warning(
+                            f"Failed to create policy decision for loan {loan_asset.loan_id}: {e}. "
+                            f"Policy decision will be logged in loan_asset metadata instead."
+                        )
+                        # Store policy decision info in loan_asset metadata as fallback
+                        if not loan_asset.asset_metadata:
+                            loan_asset.asset_metadata = {}
+                        if "policy_decisions" not in loan_asset.asset_metadata:
+                            loan_asset.asset_metadata["policy_decisions"] = []
+                        loan_asset.asset_metadata["policy_decisions"].append({
+                            "transaction_id": policy_data["transaction_id"],
+                            "decision": policy_data["decision"],
+                            "rule_applied": policy_data["rule_applied"],
+                            "trace_id": policy_data["trace_id"]
+                        })
+                        continue
+            
+            db_session.commit()
             result.stages_completed.append("database_persistence")
         except Exception as e:
             logger.error(f"Database persistence failed: {e}")

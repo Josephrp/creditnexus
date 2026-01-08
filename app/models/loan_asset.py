@@ -121,6 +121,11 @@ class LoanAsset(SQLModel, table=True):
         default=None,
         description="Error message if verification failed"
     )
+    asset_metadata: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, name='metadata'),
+        description="Additional metadata including penalty payment flags"
+    )
     
     def to_dict(self) -> dict:
         """Convert model to dictionary for API responses."""
@@ -147,6 +152,10 @@ class LoanAsset(SQLModel, table=True):
         """
         Update verification state based on NDVI score.
         
+        When a breach is detected, this method sets metadata indicating that
+        a penalty payment is required. The actual payment request is handled
+        by the penalty payment endpoint.
+        
         Args:
             ndvi_score: Calculated NDVI value (0.0 to 1.0)
         """
@@ -163,3 +172,11 @@ class LoanAsset(SQLModel, table=True):
             self.risk_status = RiskStatus.BREACH
             # Apply penalty: base rate + penalty basis points
             self.current_interest_rate = self.base_interest_rate + (self.penalty_bps / 100)
+            
+            # Set asset_metadata to indicate penalty payment is required
+            # The penalty payment endpoint will process this
+            if self.asset_metadata is None:
+                self.asset_metadata = {}
+            self.asset_metadata["penalty_payment_required"] = True
+            self.asset_metadata["penalty_payment_triggered_at"] = datetime.utcnow().isoformat()
+            self.asset_metadata["breach_ndvi_score"] = ndvi_score

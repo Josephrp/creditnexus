@@ -1,5 +1,7 @@
 langchain>=0.1.0
 langchain-openai>=0.1.0
+langchain[huggingface]
+langchain-huggingface
 pydantic>=2.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
@@ -25,6 +27,12 @@ passlib
 python-jose[cryptography]
 email-validator
 alembic>=1.13.0
+sentence_transformers
+huggingface_hub
+logfire==4.17.0
+logfire-api==4.17.0
+opentelemetry-exporter-otlp-proto-http==1.39.1
+opentelemetry-instrumentation==0.58b0
 
 # Ground Truth Protocol - Core AI & Database
 langchain-openai>=0.1.7
@@ -41,3 +49,13 @@ geopy>=2.4.1
 # Map visualization & numerical
 folium>=0.15.1
 numpy>=1.24.0
+
+# Policy Engine & Configuration
+pyyaml>=6.0
+watchdog>=3.0  # Optional, for policy hot-reload
+
+# LMA Template Generation
+python-docx>=1.1.0  # For Word document generation
+
+# Document Retrieval
+chromadb>=0.4.0  # Vector database for document similarity search

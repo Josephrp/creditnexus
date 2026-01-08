@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Numeric, Date
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import enum
 
@@ -31,6 +31,7 @@ class WorkflowState(str, enum.Enum):
     APPROVED = "approved"
     PUBLISHED = "published"
     ARCHIVED = "archived"
+    GENERATED = "generated"  # For LMA template-generated documents
 
 
 class AuditAction(str, enum.Enum):
@@ -45,6 +46,36 @@ class AuditAction(str, enum.Enum):
     LOGIN = "login"
     LOGOUT = "logout"
     BROADCAST = "broadcast"
+
+
+class TemplateCategory(str, enum.Enum):
+    """LMA template categories."""
+    FACILITY_AGREEMENT = "Facility Agreement"
+    TERM_SHEET = "Term Sheet"
+    CONFIDENTIALITY_AGREEMENT = "Confidentiality Agreement"
+    SECONDARY_TRADING = "Secondary Trading"
+    SECURITY_INTERCREDITOR = "Security & Intercreditor"
+    ORIGINATION = "Origination Documents"
+    SUSTAINABLE_FINANCE = "Sustainable Finance"
+    REGIONAL = "Regional Documents"
+    REGULATORY = "Regulatory"
+    RESTRUCTURING = "Restructuring"
+    SUPPORTING = "Supporting Documents"
+
+
+class GeneratedDocumentStatus(str, enum.Enum):
+    """Status of generated documents."""
+    DRAFT = "draft"
+    REVIEW = "review"
+    APPROVED = "approved"
+    EXECUTED = "executed"
+
+
+class MappingType(str, enum.Enum):
+    """Types of field mappings."""
+    DIRECT = "direct"
+    COMPUTED = "computed"
+    AI_GENERATED = "ai_generated"
 
 
 class User(Base):
@@ -128,6 +159,11 @@ class Document(Base):
     
     current_version_id = Column(Integer, nullable=True)
     
+    # LMA Template Generation fields
+    is_generated = Column(Boolean, default=False, nullable=False, index=True)
+    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_cdm_data = Column(JSONB, nullable=True)  # CDM data used for generation
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -135,6 +171,7 @@ class Document(Base):
     uploaded_by_user = relationship("User", back_populates="documents")
     versions = relationship("DocumentVersion", back_populates="document", order_by="DocumentVersion.version_number.desc()")
     workflow = relationship("Workflow", back_populates="document", uselist=False)
+    lma_template = relationship("LMATemplate", foreign_keys=[template_id])
     
     def to_dict(self):
         """Convert model to dictionary."""
@@ -150,6 +187,9 @@ class Document(Base):
             "sustainability_linked": self.sustainability_linked,
             "current_version_id": self.current_version_id,
             "uploaded_by": self.uploaded_by,
+            "is_generated": self.is_generated,
+            "template_id": self.template_id,
+            "source_cdm_data": self.source_cdm_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -398,4 +438,306 @@ class StagedExtraction(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "reviewed_by": self.reviewed_by,
+        }
+
+
+class PolicyDecision(Base):
+    """Model for storing policy engine decisions and audit trail.
+    
+    Stores policy evaluation results with full CDM event support for
+    machine-readable and machine-executable compliance tracking.
+    """
+    
+    __tablename__ = "policy_decisions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Transaction identification
+    transaction_id = Column(String(255), nullable=False, index=True)
+    transaction_type = Column(String(50), nullable=False)
+    
+    # Policy decision
+    decision = Column(String(10), nullable=False, index=True)  # 'ALLOW', 'BLOCK', 'FLAG'
+    rule_applied = Column(String(255), nullable=True)
+    trace_id = Column(String(255), unique=True, nullable=False)
+    
+    # Evaluation details
+    trace = Column(JSONB, nullable=True)  # Full evaluation trace
+    matched_rules = Column(ARRAY(String), nullable=True)  # Array of matched rule names
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional context
+    
+    # CDM Events (for full CDM compliance)
+    cdm_events = Column(JSONB, nullable=True)  # Full CDM PolicyEvaluation events
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Foreign keys to CreditNexus entities
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    loan_asset_id = Column(Integer, ForeignKey("loan_assets.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Relationships
+    document = relationship("Document", backref="policy_decisions")
+    # Note: LoanAsset is a SQLModel in app.models.loan_asset, not in app.db.models
+    # Relationship will work if loan_assets table exists
+    user = relationship("User", backref="policy_decisions")
+    
+    def to_dict(self):
+        """Convert model to dictionary for API serialization."""
+        return {
+            "id": self.id,
+            "transaction_id": self.transaction_id,
+            "transaction_type": self.transaction_type,
+            "decision": self.decision,
+            "rule_applied": self.rule_applied,
+            "trace_id": self.trace_id,
+            "trace": self.trace,
+            "matched_rules": list(self.matched_rules) if self.matched_rules else [],
+            "metadata": self.additional_metadata,
+            "cdm_events": self.cdm_events,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "document_id": self.document_id,
+            "loan_asset_id": self.loan_asset_id,
+            "user_id": self.user_id,
+        }
+
+
+class PaymentEvent(Base):
+    """Model for storing x402 payment events with CDM compliance.
+    
+    Stores payment processing results with full CDM event support for
+    machine-readable and machine-executable payment tracking.
+    """
+    
+    __tablename__ = "payment_events"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Payment identification
+    payment_id = Column(String(255), nullable=False, unique=True, index=True)
+    payment_method = Column(String(50), nullable=False)  # x402, wire, ach, swift
+    payment_type = Column(String(50), nullable=False)  # loan_disbursement, trade_settlement, etc.
+    
+    # Party information
+    payer_id = Column(String(255), nullable=False)
+    payer_name = Column(String(255), nullable=False)
+    receiver_id = Column(String(255), nullable=False)
+    receiver_name = Column(String(255), nullable=False)
+    
+    # Payment amount
+    amount = Column(Numeric(20, 2), nullable=False)
+    currency = Column(String(3), nullable=False)
+    
+    # Payment status (CDM state machine)
+    status = Column(String(20), nullable=False, index=True)  # pending, verified, settled, failed, cancelled
+    
+    # x402-specific fields (JSONB for flexibility)
+    x402_payment_payload = Column(JSONB, nullable=True)
+    x402_verification = Column(JSONB, nullable=True)
+    x402_settlement = Column(JSONB, nullable=True)
+    transaction_hash = Column(String(255), nullable=True)
+    
+    # CDM references
+    related_trade_id = Column(String(255), nullable=True, index=True)
+    related_loan_id = Column(String(255), nullable=True, index=True)
+    related_facility_id = Column(String(255), nullable=True)
+    
+    # Full CDM event (JSONB for complete CDM compliance)
+    cdm_event = Column(JSONB, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    settled_at = Column(DateTime, nullable=True)
+    
+    def to_dict(self):
+        """Convert model to dictionary for API serialization."""
+        return {
+            "id": self.id,
+            "payment_id": self.payment_id,
+            "payment_method": self.payment_method,
+            "payment_type": self.payment_type,
+            "payer_id": self.payer_id,
+            "payer_name": self.payer_name,
+            "receiver_id": self.receiver_id,
+            "receiver_name": self.receiver_name,
+            "amount": float(self.amount) if self.amount else None,
+            "currency": self.currency,
+            "status": self.status,
+            "x402_payment_payload": self.x402_payment_payload,
+            "x402_verification": self.x402_verification,
+            "x402_settlement": self.x402_settlement,
+            "transaction_hash": self.transaction_hash,
+            "related_trade_id": self.related_trade_id,
+            "related_loan_id": self.related_loan_id,
+            "related_facility_id": self.related_facility_id,
+            "cdm_event": self.cdm_event,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "settled_at": self.settled_at.isoformat() if self.settled_at else None,
+        }
+
+
+class PaymentSchedule(Base):
+    """Model for storing scheduled payment information.
+    
+    Tracks periodic payments (interest, principal) that are scheduled
+    for future processing via x402 payment service.
+    """
+    
+    __tablename__ = "payment_schedules"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Loan asset reference
+    loan_asset_id = Column(Integer, nullable=False, index=True)
+    
+    # Payment details
+    amount = Column(Numeric(20, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD")
+    payment_type = Column(String(50), nullable=False)  # interest, principal, penalty
+    
+    # Schedule information
+    scheduled_date = Column(DateTime, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, processed, failed, cancelled
+    
+    # Payment frequency (for recurring payments)
+    payment_frequency_period = Column(String(20), nullable=True)  # Day, Week, Month, Year
+    payment_frequency_multiplier = Column(Integer, nullable=True)  # e.g., 3 for "every 3 months"
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at = Column(DateTime, nullable=True)
+    
+    # Metadata
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional schedule information
+    
+    def to_dict(self):
+        """Convert model to dictionary for API serialization."""
+        return {
+            "id": self.id,
+            "loan_asset_id": self.loan_asset_id,
+            "amount": float(self.amount) if self.amount else None,
+            "currency": self.currency,
+            "payment_type": self.payment_type,
+            "scheduled_date": self.scheduled_date.isoformat() if self.scheduled_date else None,
+            "status": self.status,
+            "payment_frequency_period": self.payment_frequency_period,
+            "payment_frequency_multiplier": self.payment_frequency_multiplier,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "metadata": self.additional_metadata,
+        }
+
+
+class LMATemplate(Base):
+    """LMA template metadata for document generation."""
+    
+    __tablename__ = "lma_templates"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_code = Column(String(50), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=False, index=True)
+    subcategory = Column(String(100), nullable=True, index=True)
+    governing_law = Column(String(50), nullable=True)
+    version = Column(String(20), nullable=False)
+    file_path = Column(Text, nullable=False)
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)
+    required_fields = Column(JSONB, nullable=True)
+    optional_fields = Column(JSONB, nullable=True)
+    ai_generated_sections = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    generated_documents = relationship("GeneratedDocument", back_populates="template", cascade="all, delete-orphan")
+    field_mappings = relationship("TemplateFieldMapping", back_populates="template", cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "template_code": self.template_code,
+            "name": self.name,
+            "category": self.category,
+            "subcategory": self.subcategory,
+            "governing_law": self.governing_law,
+            "version": self.version,
+            "file_path": self.file_path,
+            "metadata": self.additional_metadata,
+            "required_fields": self.required_fields,
+            "optional_fields": self.optional_fields,
+            "ai_generated_sections": self.ai_generated_sections,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class GeneratedDocument(Base):
+    """Generated LMA documents from templates."""
+    
+    __tablename__ = "generated_documents"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    cdm_data = Column(JSONB, nullable=False)
+    generated_content = Column(Text, nullable=True)
+    file_path = Column(Text, nullable=True)
+    status = Column(String(50), server_default="draft", nullable=False, index=True)
+    generation_summary = Column(JSONB, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    template = relationship("LMATemplate", back_populates="generated_documents")
+    source_document = relationship("Document", foreign_keys=[source_document_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "source_document_id": self.source_document_id,
+            "cdm_data": self.cdm_data,
+            "generated_content": self.generated_content,
+            "file_path": self.file_path,
+            "status": self.status,
+            "generation_summary": self.generation_summary,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class TemplateFieldMapping(Base):
+    """Field mappings from CDM to template placeholders."""
+    
+    __tablename__ = "template_field_mappings"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_field = Column(String(255), nullable=False, index=True)
+    cdm_field = Column(String(255), nullable=False)
+    mapping_type = Column(String(50), nullable=True)
+    transformation_rule = Column(Text, nullable=True)
+    is_required = Column(Boolean, server_default="false", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    template = relationship("LMATemplate", back_populates="field_mappings")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "template_field": self.template_field,
+            "cdm_field": self.cdm_field,
+            "mapping_type": self.mapping_type,
+            "transformation_rule": self.transformation_rule,
+            "is_required": self.is_required,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

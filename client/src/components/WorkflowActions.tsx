@@ -12,7 +12,9 @@ import {
   AlertCircle,
   Clock,
   User,
-  Calendar
+  Calendar,
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 
@@ -92,6 +94,11 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
   const handleApprove = () => executeWorkflowAction('approve');
   const handlePublish = () => executeWorkflowAction('publish');
   const handleArchive = () => executeWorkflowAction('archive');
+  const handleRegenerate = () => {
+    // Navigate to document generator with the document's source CDM data
+    // This would require passing document data or fetching it
+    window.location.href = `/document-generator?documentId=${documentId}`;
+  };
   
   const handleReject = () => {
     if (!rejectReason.trim()) {
@@ -150,6 +157,13 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
           color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
           icon: <Archive className="h-4 w-4" />,
           description: 'This document has been archived.',
+        };
+      case 'generated':
+        return {
+          label: 'Generated',
+          color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+          icon: <Sparkles className="h-4 w-4" />,
+          description: 'This document was generated from an LMA template and is ready for review.',
         };
       default:
         return {
@@ -288,6 +302,36 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
             </>
           )}
 
+          {workflow.state === 'generated' && (
+            <>
+              {canSubmit && (
+                <Button
+                  size="sm"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500"
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <FileText className="h-4 w-4 mr-2" />
+                  )}
+                  Review Generated Document
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                onClick={handleRegenerate}
+                disabled={isLoading}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Regenerate
+              </Button>
+            </>
+          )}
+
           {workflow.state === 'approved' && canReview && (
             <Button
               size="sm"
@@ -304,7 +348,7 @@ export function WorkflowActions({ documentId, workflow, onWorkflowUpdate }: Work
             </Button>
           )}
 
-          {workflow.state !== 'archived' && canReview && (
+          {workflow.state !== 'archived' && workflow.state !== 'generated' && canReview && (
             <Button
               size="sm"
               variant="ghost"

@@ -2,6 +2,7 @@
 
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -20,17 +21,295 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler for startup/shutdown events."""
-    if os.environ.get("DATABASE_URL"):
+    """
+    Application lifespan handler for startup/shutdown events.
+    
+    Note: CancelledError during shutdown is expected when uvicorn reloads.
+    This is normal behavior and indicates the reloader is restarting the server.
+    """
+    from app.core.config import settings
+    
+    # Initialize LLM client configuration
+    try:
+        from app.core.llm_client import init_llm_config
+        init_llm_config(settings)
+        logger.info(
+            f"LLM client configured: provider={settings.LLM_PROVIDER.value}, "
+            f"model={settings.LLM_MODEL}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize LLM client configuration: {e}", exc_info=True)
+        raise
+    
+    # Initialize Policy Engine with YAML rule loading
+    if settings.POLICY_ENABLED:
         try:
-            from app.db import init_db
-            init_db()
-            logger.info("Database tables initialized successfully")
+            from app.core.policy_config import PolicyConfigLoader
+            from app.services.policy_engine_factory import create_policy_engine
+            from app.services.policy_service import PolicyService
+            
+            # Create policy config loader
+            policy_config_loader = PolicyConfigLoader(settings)
+            
+            # Load all rules from YAML files
+            rules_yaml = policy_config_loader.load_all_rules()
+            
+            if not rules_yaml:
+                logger.warning("No policy rules loaded - policy engine will use default allow behavior")
+                rules_yaml = """
+- name: default_allow
+  when: {}
+  action: allow
+  priority: 0
+  description: "Default allow for all transactions not caught by other rules"
+"""
+            
+            # Validate rules
+            policy_config_loader.validate_rules(rules_yaml)
+            
+            # Initialize policy engine (vendor-agnostic interface)
+            policy_engine = create_policy_engine(
+                vendor=settings.POLICY_ENGINE_VENDOR or "default"
+            )
+            
+            # Load rules into engine
+            policy_engine.load_rules(rules_yaml)
+            
+            # Create policy service instance
+            policy_service = PolicyService(policy_engine)
+            
+            # Store in app state for dependency injection
+            app.state.policy_service = policy_service
+            app.state.policy_config_loader = policy_config_loader
+            
+            # Get metadata for logging
+            metadata = policy_config_loader.get_rules_metadata()
+            logger.info(
+                f"Policy engine initialized: {metadata.get('rules_count', 0)} rule(s) "
+                f"from {metadata.get('files_count', 0)} file(s)"
+            )
+            
+            # Start file watcher if auto-reload enabled
+            if settings.POLICY_AUTO_RELOAD:
+                def reload_policy_rules():
+                    """Reload policy rules from YAML files (called by file watcher)."""
+                    try:
+                        logger.info("Reloading policy rules...")
+                        rules_yaml = policy_config_loader.load_all_rules()
+                        policy_config_loader.validate_rules(rules_yaml)
+                        policy_engine.load_rules(rules_yaml)
+                        logger.info("Policy rules reloaded successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to reload policy rules: {e}")
+                
+                policy_config_loader.start_file_watcher(reload_policy_rules)
+                logger.info("Policy auto-reload enabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize policy engine: {e}")
+            if settings.POLICY_ENABLED:
+                raise  # Fail fast if policy is required
+    else:
+        logger.info("Policy engine is disabled (POLICY_ENABLED=false)")
+        app.state.policy_service = None
+        app.state.policy_config_loader = None
+    
+    # Initialize x402 Payment Service
+    if settings.X402_ENABLED:
+        try:
+            from app.services.x402_payment_service import X402PaymentService
+            
+            # Create x402 payment service instance
+            payment_service = X402PaymentService(
+                facilitator_url=settings.X402_FACILITATOR_URL,
+                network=settings.X402_NETWORK,
+                token=settings.X402_TOKEN
+            )
+            
+            # Store in app state for dependency injection
+            app.state.x402_payment_service = payment_service
+            
+            logger.info(
+                f"x402 Payment service initialized: "
+                f"facilitator={settings.X402_FACILITATOR_URL}, "
+                f"network={settings.X402_NETWORK}, "
+                f"token={settings.X402_TOKEN}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize x402 payment service: {e}")
+            if settings.X402_ENABLED:
+                raise  # Fail fast if x402 is required
+    else:
+        logger.info("x402 Payment service is disabled (X402_ENABLED=false)")
+        app.state.x402_payment_service = None
+    
+    # Initialize database
+    if settings.DATABASE_ENABLED:
+        try:
+            from app.db import init_db, engine, SessionLocal
+            if engine is not None:
+                init_db()
+                
+                # Check if demo user exists and create if needed
+                try:
+                    from app.db.models import User
+                    db = SessionLocal()
+                    try:
+                        demo_user = db.query(User).filter(User.email == "demo@creditnexus.app").first()
+                        if not demo_user:
+                            logger.info("No demo user found. Creating demo user...")
+                            from app.auth.jwt_auth import get_password_hash
+                            from app.db.models import UserRole
+                            
+                            demo_user = User(
+                                email="demo@creditnexus.app",
+                                password_hash=get_password_hash("DemoPassword123!"),
+                                display_name="Demo User",
+                                role=UserRole.ADMIN.value,
+                                is_active=True,
+                                is_email_verified=True,
+                            )
+                            db.add(demo_user)
+                            db.commit()
+                            logger.info("Demo user created: demo@creditnexus.app / DemoPassword123!")
+                        else:
+                            logger.debug("Demo user already exists")
+                    except Exception as e:
+                        logger.warning(f"Failed to check/create demo user: {e}")
+                        db.rollback()
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize demo user: {e}")
+                
+                # Check if templates exist and seed if needed
+                try:
+                    from app.templates.registry import TemplateRegistry
+                    db = SessionLocal()
+                    try:
+                        templates = TemplateRegistry.list_templates(db)
+                        if not templates:
+                            logger.info("No templates found in database. Seeding default templates...")
+                            from scripts.seed_templates import seed_templates
+                            
+                            # Create sample template data
+                            templates_data = [
+                                {
+                                    "template_code": "LMA-CL-FA-2024-EN",
+                                    "name": "Corporate Lending Facility Agreement (English Law)",
+                                    "category": "Facility Agreement",
+                                    "subcategory": "Corporate Lending - Syndicated",
+                                    "governing_law": "English",
+                                    "version": "2024.1",
+                                    "file_path": "storage/templates/facility_agreements/corporate_lending/english/CL-FA-EN-2024.1.docx",
+                                    "required_fields": [
+                                        "parties[role='Borrower'].name",
+                                        "parties[role='Borrower'].lei",
+                                        "facilities[0].facility_name",
+                                        "facilities[0].commitment_amount.amount",
+                                        "facilities[0].commitment_amount.currency",
+                                        "facilities[0].maturity_date",
+                                        "facilities[0].interest_terms.rate_option.benchmark",
+                                        "facilities[0].interest_terms.rate_option.spread_bps",
+                                        "agreement_date",
+                                        "governing_law"
+                                    ],
+                                    "optional_fields": [
+                                        "parties[role='Administrative Agent']",
+                                        "parties[role='Lender']",
+                                        "sustainability_linked",
+                                        "esg_kpi_targets",
+                                        "deal_id",
+                                        "loan_identification_number"
+                                    ],
+                                    "ai_generated_sections": [
+                                        "representations_and_warranties",
+                                        "conditions_precedent",
+                                        "covenants",
+                                        "events_of_default",
+                                        "governing_law_clause"
+                                    ]
+                                },
+                                {
+                                    "template_code": "LMA-CL-TS-2024-EN",
+                                    "name": "Corporate Lending Term Sheet (English Law)",
+                                    "category": "Term Sheet",
+                                    "subcategory": "Corporate Lending",
+                                    "governing_law": "English",
+                                    "version": "2024.1",
+                                    "file_path": "storage/templates/term_sheets/corporate_lending/english/CL-TS-EN-2024.1.docx",
+                                    "required_fields": [
+                                        "parties[role='Borrower'].name",
+                                        "facilities[0].facility_name",
+                                        "facilities[0].commitment_amount.amount",
+                                        "facilities[0].commitment_amount.currency",
+                                        "facilities[0].maturity_date",
+                                        "facilities[0].interest_terms.rate_option.benchmark",
+                                        "facilities[0].interest_terms.rate_option.spread_bps"
+                                    ],
+                                    "optional_fields": [
+                                        "agreement_date",
+                                        "governing_law",
+                                        "sustainability_linked"
+                                    ],
+                                    "ai_generated_sections": [
+                                        "purpose",
+                                        "conditions_precedent",
+                                        "representations",
+                                        "fees"
+                                    ]
+                                }
+                            ]
+                            
+                            created = seed_templates(db, templates_data)
+                            db.commit()
+                            logger.info(f"Seeded {created} template(s) on startup")
+                        else:
+                            logger.info(f"Found {len(templates)} existing template(s) in database")
+                    except Exception as e:
+                        logger.warning(f"Failed to check/seed templates: {e}")
+                        db.rollback()
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize template seeding: {e}")
+            else:
+                logger.warning("Database engine is None, skipping initialization")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
     else:
-        logger.warning("DATABASE_URL not set, skipping database initialization")
+        logger.info("Database is disabled (DATABASE_ENABLED=false)")
+    
     yield
+    
+    # Cleanup
+    try:
+        if settings.POLICY_ENABLED and hasattr(app.state, 'policy_config_loader'):
+            policy_config_loader = app.state.policy_config_loader
+            if policy_config_loader:
+                policy_config_loader.stop_file_watcher()
+        
+        # Cleanup x402 payment service
+        if settings.X402_ENABLED and hasattr(app.state, 'x402_payment_service'):
+            payment_service = app.state.x402_payment_service
+            if payment_service:
+                try:
+                    await payment_service.close()
+                    logger.info("x402 Payment service closed")
+                except asyncio.CancelledError:
+                    logger.warning("x402 Payment service close was cancelled")
+                    raise
+                except Exception as e:
+                    logger.error(f"Error closing x402 payment service: {e}")
+    except asyncio.CancelledError:
+        logger.warning("Shutdown cleanup was cancelled")
+        raise
+    except Exception as e:
+        logger.error(f"Error during shutdown cleanup: {e}")
+    
+    logger.info("Shutting down application...")
+    
+    # Note: If CancelledError occurs after this point, it's from uvicorn's
+    # internal reload mechanism and is expected behavior during development.
 
 
 app = FastAPI(
@@ -124,4 +403,18 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(
+        app, 
+        host="127.0.0.1", 
+        port=8000, 
+        reload=True,
+        reload_excludes=[
+            "*.venv/**",
+            ".venv/**",
+            "**/__pycache__/**",
+            "**/*.pyc",
+            "**/*.pyo",
+            "**/.git/**",
+            "**/node_modules/**",
+        ],
+    )

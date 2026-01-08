@@ -158,8 +158,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshUser();
         return true;
       } else {
-        const error = await response.json();
-        setAuthError(error.detail || 'Login failed');
+        const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+        // Handle Pydantic validation errors (422)
+        if (response.status === 422 && error.detail) {
+          if (Array.isArray(error.detail)) {
+            // Pydantic validation errors are arrays
+            const errorMessages = error.detail.map((e: any) => {
+              const field = e.loc ? e.loc.join('.') : 'field';
+              return `${field}: ${e.msg || e.message || String(e)}`;
+            });
+            setAuthError(errorMessages.join('; '));
+          } else if (typeof error.detail === 'string') {
+            setAuthError(error.detail);
+          } else {
+            setAuthError('Invalid email or password format');
+          }
+        } else {
+          setAuthError(error.detail || 'Login failed');
+        }
         return false;
       }
     } catch (error) {

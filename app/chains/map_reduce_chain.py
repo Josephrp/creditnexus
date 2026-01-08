@@ -9,10 +9,10 @@ import logging
 from typing import List
 from pydantic import ValidationError
 
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.core.config import settings
+from app.core.llm_client import get_chat_model
 from app.models.cdm import CreditAgreement, ExtractionResult
 from app.models.partial_cdm import PartialCreditAgreement
 from app.utils.document_splitter import CreditAgreementSplitter, DocumentChunk
@@ -20,19 +20,16 @@ from app.utils.document_splitter import CreditAgreementSplitter, DocumentChunk
 logger = logging.getLogger(__name__)
 
 
-def create_partial_extraction_chain() -> ChatOpenAI:
+def create_partial_extraction_chain() -> BaseChatModel:
     """Create a chain for extracting partial data from document sections.
     
+    Uses the LLM client abstraction to support multiple providers.
+    
     Returns:
-        A ChatOpenAI instance configured with structured output
+        A BaseChatModel instance configured with structured output
         bound to the PartialCreditAgreement model.
     """
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value()
-    )
-    
+    llm = get_chat_model(temperature=0)
     structured_llm = llm.with_structured_output(PartialCreditAgreement)
     return structured_llm
 
@@ -77,19 +74,16 @@ Extract all relevant credit agreement data from this section."""
     return prompt
 
 
-def create_reducer_chain() -> ChatOpenAI:
+def create_reducer_chain() -> BaseChatModel:
     """Create a reducer chain for merging partial extractions.
     
+    Uses the LLM client abstraction to support multiple providers.
+    
     Returns:
-        A ChatOpenAI instance configured with structured output
+        A BaseChatModel instance configured with structured output
         bound to the CreditAgreement model.
     """
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        temperature=0,
-        api_key=settings.OPENAI_API_KEY.get_secret_value()
-    )
-    
+    llm = get_chat_model(temperature=0)
     structured_llm = llm.with_structured_output(ExtractionResult)
     return structured_llm
 

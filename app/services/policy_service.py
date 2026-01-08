@@ -1,0 +1,574 @@
+"""
+Policy Service Layer for CreditNexus.
+
+Provides CDM-compliant interfaces to the policy engine, handling transaction
+mapping and result interpretation. This service layer bridges CDM models and
+the vendor-agnostic policy engine interface.
+"""
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from decimal import Decimal
+
+from app.models.cdm import CreditAgreement
+from app.models.loan_asset import LoanAsset
+from app.models.cdm_events import generate_cdm_policy_evaluation
+from app.services.policy_engine_interface import PolicyEngineInterface
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PolicyDecision:
+    """Result of policy evaluation."""
+    decision: str  # "ALLOW", "BLOCK", "FLAG"
+    rule_applied: Optional[str]  # Name of rule that triggered decision
+    trace_id: str  # Unique trace identifier for audit
+    trace: List[Dict[str, Any]]  # Full evaluation trace
+    matched_rules: List[str]  # All matching rules (for audit)
+    metadata: Dict[str, Any]  # Additional context (document_id, loan_asset_id, etc.)
+
+
+class PolicyService:
+    """
+    Service layer for policy engine integration.
+    
+    Provides CDM-compliant interfaces to the policy engine,
+    handling transaction mapping and result interpretation.
+    """
+    
+    def __init__(self, policy_engine: PolicyEngineInterface):
+        """
+        Initialize with policy engine instance.
+        
+        Args:
+            policy_engine: Vendor-agnostic policy engine interface
+        """
+        self.engine = policy_engine
+    
+    def evaluate_facility_creation(
+        self,
+        credit_agreement: CreditAgreement,
+        document_id: Optional[int] = None
+    ) -> PolicyDecision:
+        """
+        Evaluate a new loan facility for compliance.
+        
+        Args:
+            credit_agreement: Extracted CDM CreditAgreement
+            document_id: Optional document ID for audit trail
+            
+        Returns:
+            PolicyDecision with ALLOW/BLOCK/FLAG
+        """
+        # Convert CDM to policy transaction
+        tx = self._cdm_to_policy_transaction(
+            credit_agreement=credit_agreement,
+            transaction_type="facility_creation"
+        )
+        
+        # Evaluate
+        result = self.engine.evaluate(tx)
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=f"facility_{document_id}_{datetime.utcnow().isoformat()}" if document_id else f"facility_{datetime.utcnow().isoformat()}",
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={"document_id": document_id}
+        )
+    
+    def evaluate_trade_execution(
+        self,
+        cdm_event: Dict[str, Any],
+        credit_agreement: Optional[CreditAgreement] = None
+    ) -> PolicyDecision:
+        """
+        Evaluate a trade execution for compliance.
+        
+        Args:
+            cdm_event: CDM TradeExecution event dictionary
+            credit_agreement: Optional source credit agreement
+            
+        Returns:
+            PolicyDecision
+        """
+        tx = self._cdm_trade_event_to_policy_transaction(cdm_event, credit_agreement)
+        result = self.engine.evaluate(tx)
+        
+        # Extract trade ID from CDM event
+        trade_id = "unknown"
+        try:
+            trade = cdm_event.get("trade", {})
+            trade_identifier = trade.get("tradeIdentifier", {})
+            assigned_ids = trade_identifier.get("assignedIdentifier", [])
+            if assigned_ids:
+                trade_id = assigned_ids[0].get("identifier", {}).get("value", "unknown")
+        except (KeyError, IndexError, AttributeError):
+            pass
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=f"trade_{trade_id}_{datetime.utcnow().isoformat()}",
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={"cdm_event_type": "TradeExecution", "trade_id": trade_id}
+        )
+    
+    def evaluate_loan_asset(
+        self,
+        loan_asset: LoanAsset,
+        credit_agreement: Optional[CreditAgreement] = None
+    ) -> PolicyDecision:
+        """
+        Evaluate loan asset securitization for compliance.
+        
+        Args:
+            loan_asset: LoanAsset model instance
+            credit_agreement: Optional source credit agreement
+            
+        Returns:
+            PolicyDecision
+        """
+        tx = self._loan_asset_to_policy_transaction(loan_asset, credit_agreement)
+        result = self.engine.evaluate(tx)
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=f"asset_{loan_asset.loan_id}_{datetime.utcnow().isoformat()}",
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={"loan_asset_id": loan_asset.id, "loan_id": loan_asset.loan_id}
+        )
+    
+    def evaluate_terms_change(
+        self,
+        trade_id: str,
+        current_rate: float,
+        proposed_rate: float,
+        reason: str
+    ) -> PolicyDecision:
+        """
+        Evaluate interest rate change for compliance.
+        
+        Args:
+            trade_id: Trade identifier
+            current_rate: Current interest rate
+            proposed_rate: Proposed new rate
+            reason: Reason for change
+            
+        Returns:
+            PolicyDecision
+        """
+        tx = {
+            "transaction_id": f"terms_change_{trade_id}",
+            "transaction_type": "terms_change",
+            "timestamp": datetime.utcnow().isoformat(),
+            "current_rate": current_rate,
+            "proposed_rate": proposed_rate,
+            "rate_delta": proposed_rate - current_rate,
+            "reason": reason,
+            "context": "InterestRateAdjustment"
+        }
+        
+        result = self.engine.evaluate(tx)
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=f"terms_{trade_id}_{datetime.utcnow().isoformat()}",
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={"trade_id": trade_id}
+        )
+    
+    # Private helper methods for CDM mapping
+    def _cdm_to_policy_transaction(
+        self,
+        credit_agreement: CreditAgreement,
+        transaction_type: str
+    ) -> Dict[str, Any]:
+        """Convert CDM CreditAgreement to policy transaction format."""
+        # Find borrower from parties list
+        borrower = next(
+            (p for p in (credit_agreement.parties or []) if "borrower" in p.role.lower()),
+            None
+        )
+        
+        # Calculate total commitment from all facilities
+        total_commitment = Decimal("0")
+        if credit_agreement.facilities:
+            for facility in credit_agreement.facilities:
+                if facility.commitment_amount:
+                    total_commitment += facility.commitment_amount.amount
+        
+        # Extract currency from first facility (assume all facilities use same currency)
+        currency = "USD"  # Default
+        if credit_agreement.facilities and credit_agreement.facilities[0].commitment_amount:
+            currency = credit_agreement.facilities[0].commitment_amount.currency.value
+        
+        # Extract ESG KPI targets
+        esg_kpi_targets = []
+        if credit_agreement.esg_kpi_targets:
+            for kpi in credit_agreement.esg_kpi_targets:
+                esg_kpi_targets.append({
+                    "kpi_type": kpi.kpi_type.value if hasattr(kpi.kpi_type, 'value') else str(kpi.kpi_type),
+                    "target_value": kpi.target_value,
+                    "unit": kpi.unit
+                })
+        
+        return {
+            "transaction_id": credit_agreement.deal_id or credit_agreement.loan_identification_number or "unknown",
+            "transaction_type": transaction_type,
+            "timestamp": datetime.utcnow().isoformat(),
+            "originator": {
+                "id": borrower.id if borrower else "unknown",
+                "name": borrower.name if borrower else "unknown",
+                "role": borrower.role if borrower else "Borrower",
+                "lei": borrower.lei,
+                "kyc_status": True,  # Assume KYC'd if in CDM
+                "jurisdiction": credit_agreement.governing_law.value if hasattr(credit_agreement.governing_law, 'value') else str(credit_agreement.governing_law) if credit_agreement.governing_law else "Unknown"
+            },
+            "amount": float(total_commitment),
+            "currency": currency,
+            "facility_name": credit_agreement.facilities[0].facility_name if credit_agreement.facilities else None,
+            "facility_type": "SyndicatedLoan",
+            "sustainability_linked": credit_agreement.sustainability_linked or False,
+            "esg_kpi_targets": esg_kpi_targets,
+            "governing_law": credit_agreement.governing_law.value if hasattr(credit_agreement.governing_law, 'value') else str(credit_agreement.governing_law) if credit_agreement.governing_law else "Unknown",
+            "regulatory_framework": self._infer_regulatory_framework(credit_agreement),
+            "context": "CreditAgreement_Creation"
+        }
+    
+    def _cdm_trade_event_to_policy_transaction(
+        self,
+        cdm_event: Dict[str, Any],
+        credit_agreement: Optional[CreditAgreement] = None
+    ) -> Dict[str, Any]:
+        """Convert CDM TradeExecution event to policy transaction."""
+        trade = cdm_event.get("trade", {})
+        tradable_product = trade.get("tradableProduct", {})
+        counterparties = tradable_product.get("counterparty", [])
+        economic_terms = tradable_product.get("economicTerms", {})
+        notional = economic_terms.get("notional", {})
+        
+        # Extract originator (first counterparty)
+        originator_id = "unknown"
+        if counterparties:
+            originator = counterparties[0]
+            party_ref = originator.get("partyReference", {})
+            originator_id = party_ref.get("globalReference", "unknown")
+        
+        # Extract beneficiary (second counterparty if exists)
+        beneficiary_id = None
+        if len(counterparties) > 1:
+            beneficiary = counterparties[1]
+            party_ref = beneficiary.get("partyReference", {})
+            beneficiary_id = party_ref.get("globalReference")
+        
+        # Extract amount and currency
+        amount = 0.0
+        currency = "USD"
+        if notional:
+            amount_obj = notional.get("amount", {})
+            amount = float(amount_obj.get("value", 0.0))
+            currency_obj = notional.get("currency", {})
+            currency = currency_obj.get("value", "USD")
+        
+        # Extract trade identifier
+        trade_id = "unknown"
+        trade_identifier = trade.get("tradeIdentifier", {})
+        assigned_ids = trade_identifier.get("assignedIdentifier", [])
+        if assigned_ids:
+            trade_id = assigned_ids[0].get("identifier", {}).get("value", "unknown")
+        
+        return {
+            "transaction_id": trade_id,
+            "transaction_type": "trade_execution",
+            "timestamp": cdm_event.get("eventDate", datetime.utcnow().isoformat()),
+            "originator": {
+                "id": originator_id,
+                "kyc_status": True,  # Assume KYC'd for CDM events
+                "jurisdiction": "Unknown"
+            },
+            "beneficiary": {
+                "id": beneficiary_id,
+                "kyc_status": True
+            } if beneficiary_id else None,
+            "amount": amount,
+            "currency": currency,
+            "interest_rate": self._extract_rate_from_cdm(cdm_event),
+            "context": "TradeExecution"
+        }
+    
+    def _loan_asset_to_policy_transaction(
+        self,
+        loan_asset: LoanAsset,
+        credit_agreement: Optional[CreditAgreement] = None
+    ) -> Dict[str, Any]:
+        """Convert LoanAsset to policy transaction."""
+        return {
+            "transaction_id": loan_asset.loan_id,
+            "transaction_type": "loan_asset_securitization",
+            "timestamp": loan_asset.created_at.isoformat() if loan_asset.created_at else datetime.utcnow().isoformat(),
+            "amount": 0,  # Not applicable for asset verification
+            "currency": "USD",  # Default
+            "spt_threshold": loan_asset.spt_threshold,
+            "ndvi_score": loan_asset.last_verified_score,
+            "risk_status": loan_asset.risk_status,
+            "collateral_address": loan_asset.collateral_address,
+            "geo_lat": loan_asset.geo_lat,
+            "geo_lon": loan_asset.geo_lon,
+            "context": "LoanAsset_Securitization"
+        }
+    
+    def _infer_regulatory_framework(self, credit_agreement: CreditAgreement) -> List[str]:
+        """Infer applicable regulatory frameworks from credit agreement."""
+        frameworks = []
+        
+        # ESG compliance
+        if credit_agreement.sustainability_linked:
+            frameworks.append("ESG_Compliance")
+        
+        # US regulations based on jurisdiction
+        governing_law = credit_agreement.governing_law
+        if governing_law:
+            gov_law_str = governing_law.value if hasattr(governing_law, 'value') else str(governing_law)
+            if gov_law_str in ["NY", "Delaware", "California"]:
+                frameworks.append("US_Regulations")
+        
+        # MiCA (Markets in Crypto-Assets) for EUR transactions
+        if credit_agreement.facilities:
+            for facility in credit_agreement.facilities:
+                if facility.commitment_amount:
+                    currency = facility.commitment_amount.currency
+                    currency_str = currency.value if hasattr(currency, 'value') else str(currency)
+                    if "EUR" in currency_str:
+                        frameworks.append("MiCA")
+                        break
+        
+        # Basel III (applies to all large financial institutions)
+        # Could add logic here to check if parties are banks
+        
+        # FATF (Financial Action Task Force) - applies globally
+        frameworks.append("FATF")
+        
+        return frameworks
+    
+    def _extract_rate_from_cdm(self, cdm_event: Dict[str, Any]) -> Optional[float]:
+        """Extract interest rate from CDM event (helper method)."""
+        try:
+            trade = cdm_event.get("trade", {})
+            tradable_product = trade.get("tradableProduct", {})
+            economic_terms = tradable_product.get("economicTerms", {})
+            
+            # Try to extract rate from various possible locations
+            # This is a simplified extraction - may need adjustment based on actual CDM structure
+            rate_schedule = economic_terms.get("rateSchedule", {})
+            if rate_schedule:
+                # Extract first rate value if available
+                pass  # Implementation depends on CDM rate structure
+            
+            return None  # Return None if rate cannot be extracted
+        except (KeyError, AttributeError, TypeError):
+            return None
+    
+    def evaluate_with_cdm_process(
+        self,
+        cdm_event: Dict[str, Any],
+        credit_agreement: Optional[CreditAgreement] = None
+    ) -> Dict[str, Any]:
+        """
+        CDM-compliant policy evaluation following CDM process model.
+        
+        CDM Process Model:
+        1. VALIDATION: Validate CDM event structure
+        2. CALCULATION: Evaluate policy rules
+        3. EVENT CREATION: Create PolicyEvaluation CDM event
+        
+        This method ensures full CDM compliance by:
+        - Validating event structure before processing
+        - Following deterministic evaluation process
+        - Creating machine-readable and machine-executable CDM events
+        
+        Args:
+            cdm_event: CDM event dictionary (TradeExecution, Observation, TermsChange, etc.)
+            credit_agreement: Optional source credit agreement for context
+            
+        Returns:
+            Dictionary containing:
+            {
+                "policy_evaluation_event": CDM PolicyEvaluation event,
+                "decision": "ALLOW" | "BLOCK" | "FLAG",
+                "rule_applied": Optional[str],
+                "matched_rules": List[str],
+                "trace": List[Dict[str, Any]]
+            }
+            
+        Raises:
+            ValueError: If CDM event structure is invalid
+        """
+        # STEP 1: VALIDATION (CDM principle)
+        self._validate_cdm_event(cdm_event)
+        
+        # STEP 2: CALCULATION (Policy evaluation)
+        # Convert CDM event to policy transaction format
+        policy_transaction = self._cdm_trade_event_to_policy_transaction(cdm_event, credit_agreement)
+        
+        # Evaluate using policy engine
+        evaluation_result = self.engine.evaluate(policy_transaction)
+        
+        # STEP 3: EVENT CREATION (CDM event model)
+        # Extract transaction identifier from CDM event
+        transaction_id = self._extract_transaction_id_from_cdm(cdm_event)
+        transaction_type = self._infer_transaction_type(cdm_event)
+        
+        # Build related event identifiers
+        related_event_identifiers = []
+        if "meta" in cdm_event and "globalKey" in cdm_event["meta"]:
+            related_event_identifiers.append({
+                "eventIdentifier": {
+                    "issuer": "CreditNexus",
+                    "assignedIdentifier": [{
+                        "identifier": {
+                            "value": cdm_event["meta"]["globalKey"]
+                        }
+                    }]
+                }
+            })
+        
+        # Create CDM PolicyEvaluation event
+        policy_event = generate_cdm_policy_evaluation(
+            transaction_id=transaction_id,
+            transaction_type=transaction_type,
+            decision=evaluation_result["decision"],
+            rule_applied=evaluation_result.get("rule"),
+            related_event_identifiers=related_event_identifiers,
+            evaluation_trace=evaluation_result.get("trace", []),
+            matched_rules=evaluation_result.get("matched_rules", [])
+        )
+        
+        return {
+            "policy_evaluation_event": policy_event,
+            "decision": evaluation_result["decision"],
+            "rule_applied": evaluation_result.get("rule"),
+            "matched_rules": evaluation_result.get("matched_rules", []),
+            "trace": evaluation_result.get("trace", [])
+        }
+    
+    def _validate_cdm_event(self, cdm_event: Dict[str, Any]) -> None:
+        """
+        Validate CDM event structure (CDM compliance requirement).
+        
+        Ensures the event follows CDM event model:
+        - eventType: Required string
+        - eventDate: Required ISO 8601 timestamp
+        - meta.globalKey: Required unique identifier
+        - Event-specific structure based on eventType
+        
+        Args:
+            cdm_event: CDM event dictionary to validate
+            
+        Raises:
+            ValueError: If event structure is invalid
+        """
+        if not isinstance(cdm_event, dict):
+            raise ValueError("CDM event must be a dictionary")
+        
+        # Validate required top-level fields
+        if "eventType" not in cdm_event:
+            raise ValueError("CDM event missing required field: eventType")
+        
+        if "eventDate" not in cdm_event:
+            raise ValueError("CDM event missing required field: eventDate")
+        
+        # Validate eventDate format (should be ISO 8601)
+        try:
+            from datetime import datetime
+            # Try to parse the date
+            datetime.fromisoformat(cdm_event["eventDate"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError(
+                f"CDM event eventDate must be ISO 8601 format, got: {cdm_event.get('eventDate')}"
+            )
+        
+        # Validate meta.globalKey (required for CDM compliance)
+        if "meta" not in cdm_event:
+            raise ValueError("CDM event missing required field: meta")
+        
+        if not isinstance(cdm_event["meta"], dict):
+            raise ValueError("CDM event meta must be a dictionary")
+        
+        if "globalKey" not in cdm_event["meta"]:
+            raise ValueError("CDM event meta missing required field: globalKey")
+        
+        # Validate eventType-specific structure
+        event_type = cdm_event["eventType"]
+        
+        if event_type == "TradeExecution":
+            if "trade" not in cdm_event:
+                raise ValueError("TradeExecution event missing required field: trade")
+        
+        elif event_type == "Observation":
+            if "observation" not in cdm_event:
+                raise ValueError("Observation event missing required field: observation")
+        
+        elif event_type == "TermsChange":
+            if "tradeState" not in cdm_event:
+                raise ValueError("TermsChange event missing required field: tradeState")
+        
+        elif event_type == "PolicyEvaluation":
+            if "policyEvaluation" not in cdm_event:
+                raise ValueError("PolicyEvaluation event missing required field: policyEvaluation")
+        
+        # Additional validation could be added for other event types
+        logger.debug(f"CDM event validation passed for eventType: {event_type}")
+    
+    def _extract_transaction_id_from_cdm(self, cdm_event: Dict[str, Any]) -> str:
+        """Extract transaction ID from CDM event."""
+        event_type = cdm_event.get("eventType", "")
+        
+        if event_type == "TradeExecution":
+            trade = cdm_event.get("trade", {})
+            trade_identifier = trade.get("tradeIdentifier", {})
+            assigned_ids = trade_identifier.get("assignedIdentifier", [])
+            if assigned_ids:
+                return assigned_ids[0].get("identifier", {}).get("value", "unknown")
+        
+        elif event_type == "Observation":
+            observation = cdm_event.get("observation", {})
+            related_trade_ids = observation.get("relatedTradeIdentifier", [])
+            if related_trade_ids:
+                return related_trade_ids[0].get("identifier", {}).get("value", "unknown")
+        
+        elif event_type == "TermsChange":
+            trade_state = cdm_event.get("tradeState", {})
+            trade_identifiers = trade_state.get("tradeIdentifier", [])
+            if trade_identifiers:
+                return trade_identifiers[0].get("identifier", {}).get("value", "unknown")
+        
+        # Fallback to globalKey if available
+        if "meta" in cdm_event and "globalKey" in cdm_event["meta"]:
+            return cdm_event["meta"]["globalKey"]
+        
+        return "unknown"
+    
+    def _infer_transaction_type(self, cdm_event: Dict[str, Any]) -> str:
+        """Infer transaction type from CDM event."""
+        event_type = cdm_event.get("eventType", "")
+        
+        # Map CDM event types to policy transaction types
+        event_type_map = {
+            "TradeExecution": "trade_execution",
+            "Observation": "observation",
+            "TermsChange": "terms_change",
+            "PolicyEvaluation": "policy_evaluation"
+        }
+        
+        return event_type_map.get(event_type, "unknown")
+

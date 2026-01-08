@@ -100,6 +100,24 @@ export interface ApprovalResultContext extends Context {
   newStatus?: 'draft' | 'under_review' | 'approved' | 'published' | 'rejected';
 }
 
+export interface GeneratedDocumentContext extends Context {
+  type: 'finos.creditnexus.generatedDocument';
+  id?: {
+    documentId: string;
+    templateId?: number;
+  };
+  template?: {
+    id: number;
+    code: string;
+    name: string;
+    category: string;
+  };
+  sourceCdmData?: CreditAgreementData;
+  generatedAt?: string;
+  filePath?: string;
+  status?: string;
+}
+
 export interface ESGDataContext extends Context {
   type: 'finos.creditnexus.esgData';
   agreementId?: string;
@@ -134,7 +152,8 @@ export type IntentName =
   | 'ApproveLoanAgreement'
   | 'ViewESGAnalytics'
   | 'ExtractCreditAgreement'
-  | 'ViewPortfolio';
+  | 'ViewPortfolio'
+  | 'GenerateLMATemplate';
 
 export type IntentHandler = FDC3IntentHandler;
 
@@ -324,6 +343,7 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
         'ViewESGAnalytics',
         'ExtractCreditAgreement',
         'ViewPortfolio',
+        'GenerateLMATemplate',
       ];
 
       for (const intent of intents) {

@@ -283,6 +283,95 @@ class CreditAgreement(BaseModel):
         if not borrower_parties and self.extraction_status == ExtractionStatus.SUCCESS:
             object.__setattr__(self, 'extraction_status', ExtractionStatus.PARTIAL)
         return self
+    
+    @model_validator(mode='after')
+    def validate_policy_compliance(self) -> 'CreditAgreement':
+        """
+        CDM-compliant validation: Policy checks at point of creation.
+        
+        This follows CDM principle: "Validation constraints at point of creation"
+        Performs basic policy compliance checks embedded in the CDM model.
+        Full policy evaluation is done by PolicyService, but this ensures
+        data quality and basic compliance at the model level.
+        
+        Checks:
+        - Sanctioned parties (LEI-based)
+        - ESG compliance (sustainability-linked loans must have KPI targets)
+        - Jurisdiction restrictions (high-risk jurisdictions flagged)
+        """
+        if self.extraction_status == ExtractionStatus.FAILURE:
+            return self
+        
+        # Check sanctioned parties (embedded logic)
+        if self.parties:
+            for party in self.parties:
+                if party.lei and self._is_sanctioned(party.lei):
+                    raise ValueError(
+                        f"Party {party.name} (LEI: {party.lei}) is on sanctions list. "
+                        "Transactions with sanctioned entities are not permitted."
+                    )
+        
+        # Check ESG compliance (embedded logic)
+        if self.sustainability_linked and not self.esg_kpi_targets:
+            raise ValueError(
+                "Sustainability-linked loans must have ESG KPI targets defined. "
+                "Please specify at least one ESG KPI target."
+            )
+        
+        # Check jurisdiction restrictions (embedded logic)
+        # Note: High-risk jurisdictions are flagged by policy engine, not blocked here
+        # This validation ensures data quality but doesn't block creation
+        if self.governing_law:
+            high_risk = self._get_high_risk_jurisdictions()
+            gov_law_str = self.governing_law.value if hasattr(self.governing_law, 'value') else str(self.governing_law)
+            if gov_law_str in high_risk:
+                # Log warning but don't block (policy engine will flag)
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Credit agreement involves high-risk jurisdiction: {gov_law_str}. "
+                    "This will be flagged for review by policy engine."
+                )
+        
+        return self
+    
+    def _is_sanctioned(self, lei: str) -> bool:
+        """
+        Check if LEI is on sanctions list (external data source).
+        
+        This is a placeholder implementation. In production, this would:
+        - Query external sanctions database (OFAC, UN, EU sanctions lists)
+        - Cache results for performance
+        - Update cache periodically
+        
+        Args:
+            lei: Legal Entity Identifier to check
+            
+        Returns:
+            True if entity is sanctioned, False otherwise
+        """
+        # Placeholder: In production, query external sanctions database
+        # For now, return False (no sanctions detected)
+        # Example implementation:
+        # SANCTIONED_LEIS = {"12345678901234567890", "09876543210987654321"}
+        # return lei in SANCTIONED_LEIS
+        return False
+    
+    def _get_high_risk_jurisdictions(self) -> List[str]:
+        """
+        Get list of high-risk jurisdictions (FATF blacklist, etc.).
+        
+        This is a placeholder implementation. In production, this would:
+        - Query FATF high-risk jurisdictions list
+        - Query country risk databases
+        - Update periodically
+        
+        Returns:
+            List of high-risk jurisdiction identifiers
+        """
+        # Placeholder: In production, query external risk databases
+        # FATF high-risk jurisdictions, etc.
+        return []  # Empty list for now
 
 
 class ExtractionResult(BaseModel):
