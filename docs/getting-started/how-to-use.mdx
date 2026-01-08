@@ -1,0 +1,167 @@
+---
+title: How to Use CreditNexus
+description: Step-by-step guide to using the CreditNexus application
+---
+
+<CardGroup cols={2}>
+  <Card
+    title="Document Processing"
+    icon="file-text"
+    href="/guides/document-extraction"
+  >
+    Extract and process credit agreements
+  </Card>
+  <Card
+    title="Document Generation"
+    icon="file-plus"
+    href="/guides/document-generation"
+  >
+    Generate LMA templates from CDM data
+  </Card>
+  <Card
+    title="Trade Execution"
+    icon="trending-up"
+    href="/guides/trade-execution"
+  >
+    Execute and settle trades
+  </Card>
+  <Card
+    title="Verification"
+    icon="check-circle"
+    href="/guides/verification"
+  >
+    Verify loans and bonds
+  </Card>
+</CardGroup>
+
+## Overview
+
+CreditNexus provides a comprehensive platform for financial institutions to process credit agreements, verify bonds and loans, and ensure regulatory compliance. This guide walks you through the main workflows.
+
+## Main Workflows
+
+### 1. Document Processing
+
+**Extract Credit Agreement Data**
+
+1. Navigate to the **Document Parser** tab
+2. Upload a credit agreement document (PDF, DOCX, or text)
+3. The system automatically extracts structured CDM data
+4. Review and validate the extracted information
+5. Save the document to your library
+
+**Key Features:**
+- AI-powered extraction using GPT-4o, vLLM, or HuggingFace
+- Automatic CDM compliance validation
+- Policy enforcement at extraction point
+- Support for documents up to 50k+ characters
+
+### 2. Document Generation
+
+**Generate LMA Templates**
+
+1. Navigate to the **Document Generator** tab
+2. Select a CDM data source from your library
+3. Choose an LMA template
+4. Review field mappings (CDM → Template)
+5. Generate the document
+6. Download or save the generated document
+
+**Key Features:**
+- Template-based document generation
+- Automatic field mapping
+- AI-powered field population
+- CDM data hydration
+
+### 3. Trade Execution
+
+**Execute and Settle Trades**
+
+1. Navigate to the **Trade Blotter** tab
+2. Create a new trade execution
+3. Enter trade details (borrower, amount, rate)
+4. Review policy evaluation results
+5. Execute the trade
+6. Settle payment using x402 protocol
+
+**Key Features:**
+- Real-time policy evaluation
+- CDM-compliant trade events
+- x402 payment integration
+- Automatic settlement
+
+### 4. Verification
+
+**Verify Loans and Bonds**
+
+1. Navigate to the **Green Lens** or **Verification Demo** tab
+2. Upload loan or bond information
+3. For sustainability-linked loans, satellite verification is performed
+4. Review verification results
+5. Access ground truth data
+
+**Key Features:**
+- Satellite-based NDVI analysis
+- Land use classification
+- Ground truth verification
+- ESG compliance checking
+
+## Application Management
+
+### Individual Applications
+
+1. Navigate to **Applications** → **Individual**
+2. Fill out the multi-step application form:
+   - Personal Information
+   - Financial Information
+   - Loan Requirements
+3. Upload required documents
+4. Submit application
+5. Track status in dashboard
+
+### Business Applications
+
+1. Navigate to **Applications** → **Business**
+2. Select application type:
+   - **Sell Debt/Bonds**: Monetize existing debt instruments
+   - **Buy Loan**: Apply for business credit
+3. Complete business information
+4. Upload financial statements and legal documents
+5. Submit application
+
+## Calendar & Meetings
+
+1. Navigate to **Calendar** tab
+2. View scheduled meetings
+3. Create new meetings:
+   - Click on calendar date/time
+   - Fill meeting details
+   - Add attendees
+   - Generate ICS file for calendar integration
+4. Download ICS files for external calendar apps
+
+## Best Practices
+
+### Document Processing
+- Ensure documents are clear and readable
+- Review extracted data before saving
+- Use consistent naming conventions
+- Tag documents for easy retrieval
+
+### Policy Compliance
+- Review policy evaluation results
+- Address any flagged issues promptly
+- Keep policy rules up to date
+- Monitor compliance dashboard
+
+### Data Management
+- Regularly backup CDM data
+- Use version control for documents
+- Maintain audit trails
+- Export data for external systems
+
+## Next Steps
+
+- Read the [Document Extraction Guide](/guides/document-extraction) for detailed workflows
+- Explore [API Reference](/api-reference/authentication) for integration options
+- Check [Architecture Overview](/architecture/overview) to understand system design

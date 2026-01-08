@@ -112,7 +112,10 @@ class AIFieldPopulator:
         )
         
         if not prompt_template:
-            logger.warning(f"No prompt template found for section '{section_name}' in category '{template.category}'")
+            logger.info(
+                f"No prompt template found for section '{section_name}' in category '{template.category}'. "
+                f"This section may be optional or the prompt template may need to be added."
+            )
             return None
         
         # Prepare prompt variables from CDM data
@@ -136,7 +139,10 @@ class AIFieldPopulator:
             return content.strip()
             
         except Exception as e:
-            logger.error(f"Error invoking LLM for section {section_name}: {e}", exc_info=True)
+            logger.info(
+                f"Could not generate content for section '{section_name}': {e}. "
+                f"This may be expected if the section is optional or prompt template is missing."
+            )
             return None
     
     def _prepare_prompt_variables(

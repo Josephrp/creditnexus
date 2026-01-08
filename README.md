@@ -60,7 +60,7 @@ Ensure PostgreSQL is running and accessible. The application uses the `DATABASE_
 **Windows:**
 
 ```bash
-# Start PostgreSQL service using the psql client
+# Start PostgreSQL service using the psql client - use your own path
 "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -c "CREATE DATABASE creditnexus;"
 ```
 

@@ -3,10 +3,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
-import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen, Sparkles } from 'lucide-react';
+import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen, Sparkles, Mic, Image as ImageIcon, Search, Type } from 'lucide-react';
 import { useFDC3 } from '@/context/FDC3Context';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
+import { MultimodalInputTabs } from './MultimodalInputTabs';
+import type { TranscriptionResult, ExtractionResult, DocumentResult } from './MultimodalInputTabs';
 
 interface DocumentParserProps {
   onBroadcast?: () => void;
@@ -38,6 +40,14 @@ export function DocumentParser({
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [sourceFilename, setSourceFilename] = useState<string | null>(null);
+  
+  // Multimodal sources state
+  const [multimodalSources, setMultimodalSources] = useState<{
+    audio?: { text?: string; cdm?: Record<string, unknown> };
+    image?: { text?: string; cdm?: Record<string, unknown> };
+    document?: { cdm?: Record<string, unknown>; documentId?: number };
+    text?: { text: string; cdm?: Record<string, unknown> };
+  }>({});
 
   const isPdfFile = (file: File) => {
     return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -65,7 +75,11 @@ export function DocumentParser({
   };
 
   const handleExtract = async () => {
-    if (!documentText.trim() && !uploadedFile) return;
+    // Check if we have multimodal sources
+    const hasMultimodalSources = Object.keys(multimodalSources).length > 0;
+    const hasFileOrText = documentText.trim() || uploadedFile;
+    
+    if (!hasFileOrText && !hasMultimodalSources) return;
 
     setIsExtracting(true);
     setError(null);
@@ -75,7 +89,57 @@ export function DocumentParser({
     try {
       let response: Response;
 
-      if (uploadedFile) {
+      // If we have multimodal sources, use fusion API
+      if (hasMultimodalSources) {
+        const fusionRequest: Record<string, unknown> = {
+          use_llm_fusion: true,
+        };
+
+        // Add CDM data and text from each source
+        if (multimodalSources.audio) {
+          if (multimodalSources.audio.cdm) {
+            fusionRequest.audio_cdm = multimodalSources.audio.cdm;
+          }
+          if (multimodalSources.audio.text) {
+            fusionRequest.audio_text = multimodalSources.audio.text;
+          }
+        }
+        if (multimodalSources.image) {
+          if (multimodalSources.image.cdm) {
+            fusionRequest.image_cdm = multimodalSources.image.cdm;
+          }
+          if (multimodalSources.image.text) {
+            fusionRequest.image_text = multimodalSources.image.text;
+          }
+        }
+        if (multimodalSources.document) {
+          if (multimodalSources.document.cdm) {
+            fusionRequest.document_cdm = multimodalSources.document.cdm;
+          }
+        }
+        if (multimodalSources.text) {
+          if (multimodalSources.text.cdm) {
+            fusionRequest.text_cdm = multimodalSources.text.cdm;
+          }
+          if (multimodalSources.text.text) {
+            fusionRequest.text_input = multimodalSources.text.text;
+          }
+        }
+
+        // Also include file/text if available
+        if (uploadedFile) {
+          // For file uploads with multimodal, we'd need to extract first
+          // For now, prioritize multimodal sources
+        } else if (documentText.trim()) {
+          fusionRequest.text_input = documentText;
+        }
+
+        response = await fetchWithAuth('/api/multimodal/fuse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fusionRequest),
+        });
+      } else if (uploadedFile) {
         const formData = new FormData();
         formData.append('file', uploadedFile);
         response = await fetchWithAuth('/api/upload', {
@@ -105,7 +169,7 @@ export function DocumentParser({
 
       const result = await response.json();
 
-      if (result.status === 'irrelevant_document') {
+      if (result.status === 'irrelevant_document' || result.status === 'error') {
         setError(result.message || 'This document does not appear to be a credit agreement.');
         return;
       }
@@ -117,11 +181,22 @@ export function DocumentParser({
         }
         const data = {
           ...result.agreement,
-          extraction_status: result.status,
+          extraction_status: result.status || 'success',
         };
         setExtractedData(data);
         setEditableData(data);
-        if (result.status === 'partial_data_missing' && result.message) {
+        
+        // Clear multimodal sources after successful extraction
+        const hadMultimodalSources = Object.keys(multimodalSources).length > 0;
+        setMultimodalSources({});
+        
+        if (hadMultimodalSources) {
+          if (result.conflicts_count > 0) {
+            addToast(`Data fused successfully with ${result.conflicts_count} conflict(s) resolved`, 'success');
+          } else {
+            addToast('Data fused and extracted successfully', 'success');
+          }
+        } else if (result.status === 'partial_data_missing' && result.message) {
           setWarningMessage(result.message);
           addToast('Document extracted with some missing data', 'warning');
         } else {
@@ -230,6 +305,153 @@ export function DocumentParser({
     setSaveSuccess(false);
     setIsEditing(false);
     setSourceFilename(null);
+    setMultimodalSources({});
+  };
+
+  const handleAudioComplete = (result: TranscriptionResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleAudioComplete',
+          message: 'Audio transcription complete',
+          data: { hasTranscription: !!result.transcription, hasAgreement: !!result.agreement },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      audio: {
+        text: result.transcription,
+        cdm: result.agreement as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (result.agreement) {
+      const agreementData = result.agreement as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleImageComplete = (result: ExtractionResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleImageComplete',
+          message: 'Image OCR complete',
+          data: { hasOcrText: !!result.ocr_text, hasAgreement: !!result.agreement },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      image: {
+        text: result.ocr_text,
+        cdm: result.agreement as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (result.agreement) {
+      const agreementData = result.agreement as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleDocumentSelect = (document: DocumentResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleDocumentSelect',
+          message: 'Document selected',
+          data: { documentId: document.document_id, hasCdmData: !!document.cdm_data },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      document: {
+        documentId: document.document_id,
+        cdm: document.cdm_data as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (document.cdm_data) {
+      const agreementData = document.cdm_data as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleTextInput = (text: string, cdmData?: Record<string, unknown>) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleTextInput',
+          message: 'Text input received',
+          data: { textLength: text.length, hasCdmData: !!cdmData },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      text: {
+        text,
+        cdm: cdmData
+      }
+    }));
+    
+    setDocumentText(text);
+    
+    if (cdmData) {
+      const agreementData = cdmData as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
   };
 
   const borrower = editableData?.parties?.find(p => p.role.toLowerCase().includes('borrower'));
@@ -255,39 +477,125 @@ export function DocumentParser({
         <Card className="border-slate-700 bg-slate-800/50">
           <CardContent className="p-6">
             <div className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <label className="group cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".pdf,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <div className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center transition-all hover:border-emerald-500 hover:bg-emerald-500/5">
-                    <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mx-auto mb-4 group-hover:bg-emerald-500/20">
-                      <Upload className="h-8 w-8 text-slate-400 group-hover:text-emerald-400" />
+              <Tabs defaultValue="file" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 border border-slate-700">
+                  <TabsTrigger
+                    value="file"
+                    className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    File Upload
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="multimodal"
+                    className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Multimodal Input
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="file" className="mt-4">
+                  <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <label className="group cursor-pointer">
+                        <input
+                          type="file"
+                          accept=".pdf,.txt"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <div className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center transition-all hover:border-emerald-500 hover:bg-emerald-500/5">
+                          <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center mx-auto mb-4 group-hover:bg-emerald-500/20">
+                            <Upload className="h-8 w-8 text-slate-400 group-hover:text-emerald-400" />
+                          </div>
+                          <p className="font-medium mb-1">Drop file here or click to upload</p>
+                          <p className="text-sm text-muted-foreground">Supports PDF and TXT files</p>
+                        </div>
+                      </label>
+
+                      <div className="space-y-3">
+                        <textarea
+                          placeholder="Or paste your credit agreement text here..."
+                          value={uploadedFile ? '' : documentText}
+                          onChange={(e) => {
+                            setDocumentText(e.target.value);
+                            setUploadedFile(null);
+                            setError(null);
+                          }}
+                          disabled={!!uploadedFile}
+                          className="w-full h-[180px] px-4 py-3 text-sm border border-slate-600 rounded-xl bg-slate-900/50 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:opacity-50"
+                        />
+                      </div>
                     </div>
-                    <p className="font-medium mb-1">Drop file here or click to upload</p>
-                    <p className="text-sm text-muted-foreground">Supports PDF and TXT files</p>
                   </div>
-                </label>
+                </TabsContent>
 
-                <div className="space-y-3">
-                  <textarea
-                    placeholder="Or paste your credit agreement text here..."
-                    value={uploadedFile ? '' : documentText}
-                    onChange={(e) => {
-                      setDocumentText(e.target.value);
-                      setUploadedFile(null);
-                      setError(null);
+                <TabsContent value="multimodal" className="mt-4">
+                  <MultimodalInputTabs
+                    onAudioComplete={handleAudioComplete}
+                    onImageComplete={handleImageComplete}
+                    onDocumentSelect={handleDocumentSelect}
+                    onTextInput={handleTextInput}
+                    onError={(err) => {
+                      setError(err);
+                      addToast(err, 'error');
                     }}
-                    disabled={!!uploadedFile}
-                    className="w-full h-[180px] px-4 py-3 text-sm border border-slate-600 rounded-xl bg-slate-900/50 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:opacity-50"
                   />
-                </div>
-              </div>
+                </TabsContent>
+              </Tabs>
 
-              {(documentText || uploadedFile) && (
+              {/* Active sources indicator */}
+              {Object.keys(multimodalSources).length > 0 && (
+                <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-emerald-400" />
+                      <p className="font-medium text-slate-100">
+                        Active Sources ({Object.keys(multimodalSources).length})
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMultimodalSources({})}
+                      className="text-slate-400 hover:text-slate-200"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Clear All
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {multimodalSources.audio && (
+                      <div className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-sm text-emerald-300 flex items-center gap-2">
+                        <Mic className="h-3 w-3" />
+                        Audio
+                      </div>
+                    )}
+                    {multimodalSources.image && (
+                      <div className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-sm text-emerald-300 flex items-center gap-2">
+                        <ImageIcon className="h-3 w-3" />
+                        Image
+                      </div>
+                    )}
+                    {multimodalSources.document && (
+                      <div className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-sm text-emerald-300 flex items-center gap-2">
+                        <Search className="h-3 w-3" />
+                        Document
+                      </div>
+                    )}
+                    {multimodalSources.text && (
+                      <div className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-sm text-emerald-300 flex items-center gap-2">
+                        <Type className="h-3 w-3" />
+                        Text
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Extract button - shown when file/text or multimodal sources are available */}
+              {(documentText || uploadedFile || Object.keys(multimodalSources).length > 0) && (
                 <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl border border-slate-700">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -295,11 +603,17 @@ export function DocumentParser({
                     </div>
                     <div>
                       <p className="font-medium">
-                        {uploadedFile ? uploadedFile.name : 'Document Ready'}
+                        {uploadedFile 
+                          ? uploadedFile.name 
+                          : Object.keys(multimodalSources).length > 0
+                          ? `${Object.keys(multimodalSources).length} source(s) ready`
+                          : 'Document Ready'}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {uploadedFile
                           ? `PDF file - ${(uploadedFile.size / 1024).toFixed(1)} KB`
+                          : Object.keys(multimodalSources).length > 0
+                          ? 'Click to fuse and extract CDM data'
                           : `${documentText.length.toLocaleString()} characters`}
                       </p>
                     </div>
@@ -315,7 +629,10 @@ export function DocumentParser({
                         Processing...
                       </>
                     ) : (
-                      'Extract Data'
+                      <>
+                        {Object.keys(multimodalSources).length > 0 && <Sparkles className="h-4 w-4 mr-2" />}
+                        Extract Data
+                      </>
                     )}
                   </Button>
                 </div>

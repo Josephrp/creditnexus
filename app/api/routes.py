@@ -1298,6 +1298,65 @@ async def get_document(
         )
 
 
+@router.get("/documents/{document_id}/cdm-data")
+async def get_document_cdm_data(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get CDM data for a specific document.
+    
+    Args:
+        document_id: The document ID.
+        db: Database session.
+        current_user: The current user (optional).
+        
+    Returns:
+        CDM data extracted from the document.
+    """
+    try:
+        doc = db.query(Document).options(
+            joinedload(Document.versions)
+        ).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        # Try source_cdm_data first, then latest version's extracted_data
+        cdm_data = None
+        if doc.source_cdm_data:
+            cdm_data = doc.source_cdm_data
+        elif doc.current_version_id:
+            version = db.query(DocumentVersion).filter(
+                DocumentVersion.id == doc.current_version_id
+            ).first()
+            if version and version.extracted_data:
+                cdm_data = version.extracted_data
+        
+        if not cdm_data:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "No CDM data found for this document"}
+            )
+        
+        return {
+            "status": "success",
+            "document_id": document_id,
+            "cdm_data": cdm_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting CDM data for document {document_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get CDM data: {str(e)}"}
+        )
+
+
 class DocumentRetrieveRequest(BaseModel):
     """Request model for document retrieval."""
     query: str = Field(..., description="Query text or CDM data (JSON string) to search for similar documents")
@@ -2741,6 +2800,44 @@ def get_workflow_or_404(db: Session, document_id: int) -> Workflow:
     return workflow
 
 
+def _get_transaction_id_from_document(db: Session, document_id: int) -> Optional[str]:
+    """
+    Extract transaction ID (deal_id or loan_identification_number) from document.
+    
+    Checks source_cdm_data first, then falls back to DocumentVersion.extracted_data.
+    
+    Args:
+        db: Database session
+        document_id: Document ID
+        
+    Returns:
+        Transaction ID string or None if not found
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        return None
+    
+    # Try source_cdm_data first
+    if doc.source_cdm_data:
+        if doc.source_cdm_data.get("deal_id"):
+            return doc.source_cdm_data.get("deal_id")
+        if doc.source_cdm_data.get("loan_identification_number"):
+            return doc.source_cdm_data.get("loan_identification_number")
+    
+    # Fallback to latest version's extracted_data
+    if doc.current_version_id:
+        version = db.query(DocumentVersion).filter(
+            DocumentVersion.id == doc.current_version_id
+        ).first()
+        if version and version.extracted_data:
+            if version.extracted_data.get("deal_id"):
+                return version.extracted_data.get("deal_id")
+            if version.extracted_data.get("loan_identification_number"):
+                return version.extracted_data.get("loan_identification_number")
+    
+    return None
+
+
 @router.post("/documents/{document_id}/workflow/submit")
 async def submit_for_review(
     document_id: int,
@@ -2776,16 +2873,9 @@ async def submit_for_review(
         
         # Check for policy decisions that might affect workflow priority
         # Query for recent policy decision for this document's transaction
-        doc = db.query(Document).filter(Document.id == document_id).first()
-        if doc:
-            # Try to get transaction ID from document metadata
-            transaction_id = None
-            if doc.deal_id:
-                transaction_id = doc.deal_id
-            elif doc.loan_identification_number:
-                transaction_id = doc.loan_identification_number
-            
-            if transaction_id:
+        transaction_id = _get_transaction_id_from_document(db, document_id)
+        
+        if transaction_id:
                 recent_policy_decision = db.query(PolicyDecisionModel).filter(
                     PolicyDecisionModel.transaction_id == transaction_id,
                     PolicyDecisionModel.transaction_type == "facility_creation"
@@ -5893,6 +5983,7 @@ async def generate_document(
         return {
             "id": generated_doc.id,
             "template_id": generated_doc.template_id,
+            "source_document_id": generated_doc.source_document_id,
             "file_path": generated_doc.file_path,
             "status": generated_doc.status,
             "generation_summary": generated_doc.generation_summary,
@@ -6051,4 +6142,795 @@ async def export_generated_document(
     except Exception as e:
         logger.error(f"Error exporting document {document_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+# ============================================================================
+# Application Management API Endpoints
+# ============================================================================
+
+from app.db.models import Application, Inquiry, Meeting, ApplicationType, ApplicationStatus, InquiryType, InquiryStatus
+from app.services.ics_generator import generate_ics_file, save_ics_file, get_ics_file_path
+from fastapi.responses import FileResponse
+from pathlib import Path
+
+
+class ApplicationCreate(BaseModel):
+    """Request model for creating an application."""
+    application_type: str = Field(..., description="Type: 'individual' or 'business'")
+    application_data: Optional[dict] = Field(None, description="General application form data")
+    business_data: Optional[dict] = Field(None, description="Business-specific data (debt selling, loan buying)")
+    individual_data: Optional[dict] = Field(None, description="Individual-specific data")
+
+
+class ApplicationUpdate(BaseModel):
+    """Request model for updating an application."""
+    application_data: Optional[dict] = None
+    business_data: Optional[dict] = None
+    individual_data: Optional[dict] = None
+
+
+class ApplicationResponse(BaseModel):
+    """Response model for application."""
+    id: int
+    application_type: str
+    status: str
+    user_id: Optional[int]
+    submitted_at: Optional[str]
+    reviewed_at: Optional[str]
+    approved_at: Optional[str]
+    rejected_at: Optional[str]
+    rejection_reason: Optional[str]
+    application_data: Optional[dict]
+    business_data: Optional[dict]
+    individual_data: Optional[dict]
+    created_at: str
+    updated_at: str
+
+
+@router.post("/applications", response_model=ApplicationResponse)
+async def create_application(
+    request: ApplicationCreate,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Create a new application."""
+    # Validate application type
+    if request.application_type not in [ApplicationType.INDIVIDUAL.value, ApplicationType.BUSINESS.value]:
+        raise HTTPException(status_code=400, detail="Invalid application_type. Must be 'individual' or 'business'")
+    
+    application = Application(
+        application_type=request.application_type,
+        status=ApplicationStatus.DRAFT.value,
+        user_id=current_user.id if current_user else None,
+        application_data=request.application_data,
+        business_data=request.business_data,
+        individual_data=request.individual_data
+    )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+    
+    if current_user:
+        log_audit_action(db, AuditAction.CREATE, "application", application.id, current_user.id)
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+@router.get("/applications", response_model=List[ApplicationResponse])
+async def list_applications(
+    status: Optional[str] = Query(None),
+    application_type: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List applications with filtering and pagination."""
+    query = db.query(Application)
+    
+    # Filter by user (unless admin)
+    if current_user.role != "admin":
+        query = query.filter(Application.user_id == current_user.id)
+    
+    # Filter by status
+    if status:
+        query = query.filter(Application.status == status)
+    
+    # Filter by type
+    if application_type:
+        query = query.filter(Application.application_type == application_type)
+    
+    # Pagination
+    offset = (page - 1) * limit
+    applications = query.order_by(Application.created_at.desc()).offset(offset).limit(limit).all()
+    
+    return [ApplicationResponse(**app.to_dict()) for app in applications]
+
+
+@router.get("/applications/{application_id}", response_model=ApplicationResponse)
+async def get_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get application by ID."""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and application.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this application")
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+@router.put("/applications/{application_id}", response_model=ApplicationResponse)
+async def update_application(
+    application_id: int,
+    request: ApplicationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update an application."""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and application.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this application")
+    
+    # Only allow updates if status is DRAFT or SUBMITTED
+    if application.status not in [ApplicationStatus.DRAFT.value, ApplicationStatus.SUBMITTED.value]:
+        raise HTTPException(status_code=400, detail="Cannot update application in current status")
+    
+    # Update fields
+    if request.application_data is not None:
+        application.application_data = request.application_data
+    if request.business_data is not None:
+        application.business_data = request.business_data
+    if request.individual_data is not None:
+        application.individual_data = request.individual_data
+    
+    db.commit()
+    db.refresh(application)
+    
+    log_audit_action(db, AuditAction.UPDATE, "application", application.id, current_user.id)
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+@router.post("/applications/{application_id}/submit", response_model=ApplicationResponse)
+async def submit_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Submit an application for review."""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and application.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to submit this application")
+    
+    if application.status != ApplicationStatus.DRAFT.value:
+        raise HTTPException(status_code=400, detail="Application can only be submitted from DRAFT status")
+    
+    application.status = ApplicationStatus.SUBMITTED.value
+    application.submitted_at = datetime.utcnow()
+    db.commit()
+    db.refresh(application)
+    
+    log_audit_action(db, AuditAction.UPDATE, "application", application.id, current_user.id, metadata={"action": "submit"})
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+@router.post("/applications/{application_id}/approve", response_model=ApplicationResponse)
+async def approve_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Approve an application (admin only)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    application.status = ApplicationStatus.APPROVED.value
+    application.approved_at = datetime.utcnow()
+    application.reviewed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(application)
+    
+    log_audit_action(db, AuditAction.APPROVE, "application", application.id, current_user.id)
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+@router.post("/applications/{application_id}/reject", response_model=ApplicationResponse)
+async def reject_application(
+    application_id: int,
+    rejection_reason: str = Query(..., description="Reason for rejection"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Reject an application (admin only)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    application.status = ApplicationStatus.REJECTED.value
+    application.rejected_at = datetime.utcnow()
+    application.reviewed_at = datetime.utcnow()
+    application.rejection_reason = rejection_reason
+    db.commit()
+    db.refresh(application)
+    
+    log_audit_action(db, AuditAction.REJECT, "application", application.id, current_user.id, metadata={"rejection_reason": rejection_reason})
+    
+    return ApplicationResponse(**application.to_dict())
+
+
+# ============================================================================
+# Inquiry Management API Endpoints
+# ============================================================================
+
+
+class InquiryCreate(BaseModel):
+    """Request model for creating an inquiry."""
+    inquiry_type: str = Field(..., description="Type: 'general', 'application_status', 'technical_support', 'sales'")
+    subject: str = Field(..., description="Inquiry subject")
+    message: str = Field(..., description="Inquiry message")
+    application_id: Optional[int] = Field(None, description="Optional linked application ID")
+    priority: Optional[str] = Field("normal", description="Priority: 'low', 'normal', 'high', 'urgent'")
+
+
+class InquiryUpdate(BaseModel):
+    """Request model for updating an inquiry."""
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[int] = None
+    response_message: Optional[str] = None
+
+
+class InquiryResponse(BaseModel):
+    """Response model for inquiry."""
+    id: int
+    inquiry_type: str
+    status: str
+    priority: str
+    application_id: Optional[int]
+    user_id: Optional[int]
+    email: str
+    name: str
+    subject: str
+    message: str
+    assigned_to: Optional[int]
+    resolved_at: Optional[str]
+    resolved_by: Optional[int]
+    response_message: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+@router.post("/inquiries", response_model=InquiryResponse)
+async def create_inquiry(
+    request: InquiryCreate,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Create a new inquiry."""
+    inquiry = Inquiry(
+        inquiry_type=request.inquiry_type,
+        status=InquiryStatus.NEW.value,
+        priority=request.priority or "normal",
+        application_id=request.application_id,
+        user_id=current_user.id if current_user else None,
+        email=current_user.email if current_user else "",
+        name=current_user.display_name if current_user else "",
+        subject=request.subject,
+        message=request.message
+    )
+    db.add(inquiry)
+    db.commit()
+    db.refresh(inquiry)
+    
+    if current_user:
+        log_audit_action(db, AuditAction.CREATE, "inquiry", inquiry.id, current_user.id)
+    
+    return InquiryResponse(**inquiry.to_dict())
+
+
+@router.get("/inquiries", response_model=List[InquiryResponse])
+async def list_inquiries(
+    status: Optional[str] = Query(None),
+    inquiry_type: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List inquiries with filtering and pagination."""
+    query = db.query(Inquiry)
+    
+    # Filter by user (unless admin)
+    if current_user.role != "admin":
+        query = query.filter(Inquiry.user_id == current_user.id)
+    
+    # Apply filters
+    if status:
+        query = query.filter(Inquiry.status == status)
+    if inquiry_type:
+        query = query.filter(Inquiry.inquiry_type == inquiry_type)
+    if priority:
+        query = query.filter(Inquiry.priority == priority)
+    
+    # Pagination
+    offset = (page - 1) * limit
+    inquiries = query.order_by(Inquiry.created_at.desc()).offset(offset).limit(limit).all()
+    
+    return [InquiryResponse(**inq.to_dict()) for inq in inquiries]
+
+
+@router.get("/inquiries/{inquiry_id}", response_model=InquiryResponse)
+async def get_inquiry(
+    inquiry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get inquiry by ID."""
+    inquiry = db.query(Inquiry).filter(Inquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and inquiry.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this inquiry")
+    
+    return InquiryResponse(**inquiry.to_dict())
+
+
+@router.put("/inquiries/{inquiry_id}", response_model=InquiryResponse)
+async def update_inquiry(
+    inquiry_id: int,
+    request: InquiryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update an inquiry."""
+    inquiry = db.query(Inquiry).filter(Inquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and inquiry.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this inquiry")
+    
+    # Update fields
+    if request.status is not None:
+        inquiry.status = request.status
+    if request.priority is not None:
+        inquiry.priority = request.priority
+    if request.assigned_to is not None and current_user.role == "admin":
+        inquiry.assigned_to = request.assigned_to
+    if request.response_message is not None:
+        inquiry.response_message = request.response_message
+    
+    db.commit()
+    db.refresh(inquiry)
+    
+    log_audit_action(db, AuditAction.UPDATE, "inquiry", inquiry.id, current_user.id)
+    
+    return InquiryResponse(**inquiry.to_dict())
+
+
+@router.post("/inquiries/{inquiry_id}/assign", response_model=InquiryResponse)
+async def assign_inquiry(
+    inquiry_id: int,
+    user_id: int = Query(..., description="User ID to assign inquiry to"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Assign an inquiry to a user (admin only)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    inquiry = db.query(Inquiry).filter(Inquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    
+    inquiry.assigned_to = user_id
+    inquiry.status = InquiryStatus.IN_PROGRESS.value
+    db.commit()
+    db.refresh(inquiry)
+    
+    log_audit_action(db, AuditAction.UPDATE, "inquiry", inquiry.id, current_user.id, metadata={"action": "assign", "assigned_to": user_id})
+    
+    return InquiryResponse(**inquiry.to_dict())
+
+
+@router.post("/inquiries/{inquiry_id}/resolve", response_model=InquiryResponse)
+async def resolve_inquiry(
+    inquiry_id: int,
+    response_message: str = Query(..., description="Response message"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Resolve an inquiry."""
+    inquiry = db.query(Inquiry).filter(Inquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and inquiry.assigned_to != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to resolve this inquiry")
+    
+    inquiry.status = InquiryStatus.RESOLVED.value
+    inquiry.resolved_at = datetime.utcnow()
+    inquiry.resolved_by = current_user.id
+    inquiry.response_message = response_message
+    db.commit()
+    db.refresh(inquiry)
+    
+    log_audit_action(db, AuditAction.UPDATE, "inquiry", inquiry.id, current_user.id, metadata={"action": "resolve"})
+    
+    return InquiryResponse(**inquiry.to_dict())
+
+
+# ============================================================================
+# Meeting Management API Endpoints
+# ============================================================================
+
+
+class MeetingCreate(BaseModel):
+    """Request model for creating a meeting."""
+    title: str = Field(..., description="Meeting title")
+    description: Optional[str] = Field(None, description="Meeting description")
+    scheduled_at: str = Field(..., description="Scheduled date/time (ISO 8601)")
+    duration_minutes: int = Field(30, ge=15, le=480, description="Duration in minutes")
+    meeting_type: Optional[str] = Field(None, description="Meeting type")
+    application_id: Optional[int] = Field(None, description="Optional linked application ID")
+    attendees: Optional[List[dict]] = Field(None, description="List of attendees {email, name, status}")
+    meeting_link: Optional[str] = Field(None, description="Zoom/Teams meeting link")
+
+
+class MeetingUpdate(BaseModel):
+    """Request model for updating a meeting."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    scheduled_at: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    meeting_type: Optional[str] = None
+    attendees: Optional[List[dict]] = None
+    meeting_link: Optional[str] = None
+
+
+class MeetingResponse(BaseModel):
+    """Response model for meeting."""
+    id: int
+    title: str
+    description: Optional[str]
+    scheduled_at: str
+    duration_minutes: int
+    meeting_type: Optional[str]
+    application_id: Optional[int]
+    organizer_id: int
+    attendees: Optional[List[dict]]
+    meeting_link: Optional[str]
+    ics_file_path: Optional[str]
+    created_at: str
+    updated_at: str
+
+
+@router.post("/meetings", response_model=MeetingResponse)
+async def create_meeting(
+    request: MeetingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Create a new meeting."""
+    # Parse scheduled_at
+    try:
+        scheduled_at = datetime.fromisoformat(request.scheduled_at.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid scheduled_at format. Use ISO 8601 format.")
+    
+    # Validate scheduled_at is in future
+    if scheduled_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+    
+    meeting = Meeting(
+        title=request.title,
+        description=request.description,
+        scheduled_at=scheduled_at,
+        duration_minutes=request.duration_minutes,
+        meeting_type=request.meeting_type,
+        application_id=request.application_id,
+        organizer_id=current_user.id,
+        attendees=request.attendees,
+        meeting_link=request.meeting_link
+    )
+    db.add(meeting)
+    db.commit()
+    db.refresh(meeting)
+    
+    log_audit_action(db, AuditAction.CREATE, "meeting", meeting.id, current_user.id)
+    
+    return MeetingResponse(**meeting.to_dict())
+
+
+@router.get("/meetings", response_model=List[MeetingResponse])
+async def list_meetings(
+    application_id: Optional[int] = Query(None),
+    organizer_id: Optional[int] = Query(None),
+    start_date: Optional[str] = Query(None, description="Start date filter (ISO 8601)"),
+    end_date: Optional[str] = Query(None, description="End date filter (ISO 8601)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List meetings with filtering."""
+    query = db.query(Meeting)
+    
+    # Filter by application
+    if application_id:
+        query = query.filter(Meeting.application_id == application_id)
+    
+    # Filter by organizer
+    if organizer_id:
+        query = query.filter(Meeting.organizer_id == organizer_id)
+    elif current_user.role != "admin":
+        # Non-admins only see their own meetings
+        query = query.filter(Meeting.organizer_id == current_user.id)
+    
+    # Filter by date range
+    if start_date:
+        try:
+            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            query = query.filter(Meeting.scheduled_at >= start)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format")
+    
+    if end_date:
+        try:
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            query = query.filter(Meeting.scheduled_at <= end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format")
+    
+    meetings = query.order_by(Meeting.scheduled_at.asc()).all()
+    
+    return [MeetingResponse(**mtg.to_dict()) for mtg in meetings]
+
+
+@router.get("/meetings/{meeting_id}", response_model=MeetingResponse)
+async def get_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get meeting by ID."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Check authorization (organizer or admin)
+    if current_user.role != "admin" and meeting.organizer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this meeting")
+    
+    return MeetingResponse(**meeting.to_dict())
+
+
+@router.put("/meetings/{meeting_id}", response_model=MeetingResponse)
+async def update_meeting(
+    meeting_id: int,
+    request: MeetingUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Update a meeting."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Check authorization (organizer or admin)
+    if current_user.role != "admin" and meeting.organizer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this meeting")
+    
+    # Update fields
+    if request.title is not None:
+        meeting.title = request.title
+    if request.description is not None:
+        meeting.description = request.description
+    if request.scheduled_at is not None:
+        try:
+            scheduled_at = datetime.fromisoformat(request.scheduled_at.replace('Z', '+00:00'))
+            if scheduled_at < datetime.utcnow():
+                raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+            meeting.scheduled_at = scheduled_at
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid scheduled_at format")
+    if request.duration_minutes is not None:
+        meeting.duration_minutes = request.duration_minutes
+    if request.meeting_type is not None:
+        meeting.meeting_type = request.meeting_type
+    if request.attendees is not None:
+        meeting.attendees = request.attendees
+    if request.meeting_link is not None:
+        meeting.meeting_link = request.meeting_link
+    
+    db.commit()
+    db.refresh(meeting)
+    
+    log_audit_action(db, AuditAction.UPDATE, "meeting", meeting.id, current_user.id)
+    
+    return MeetingResponse(**meeting.to_dict())
+
+
+@router.delete("/meetings/{meeting_id}")
+async def delete_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Delete a meeting."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Check authorization (organizer or admin)
+    if current_user.role != "admin" and meeting.organizer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this meeting")
+    
+    log_audit_action(db, AuditAction.DELETE, "meeting", meeting.id, current_user.id)
+    
+    db.delete(meeting)
+    db.commit()
+    
+    return {"message": "Meeting deleted successfully"}
+
+
+@router.post("/meetings/{meeting_id}/generate-ics")
+async def generate_meeting_ics(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate .ics file for a meeting."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and meeting.organizer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to generate ICS for this meeting")
+    
+    # Generate and save ICS file
+    file_path = save_ics_file(meeting, db)
+    
+    return {"message": "ICS file generated successfully", "file_path": file_path}
+
+
+@router.get("/meetings/{meeting_id}/ics")
+async def download_meeting_ics(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download .ics file for a meeting."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Check authorization
+    if current_user.role != "admin" and meeting.organizer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to download ICS for this meeting")
+    
+    # Get or generate ICS file
+    file_path = get_ics_file_path(meeting)
+    if not file_path:
+        # Generate if doesn't exist
+        file_path = save_ics_file(meeting, db)
+    
+    path = Path(file_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="ICS file not found")
+    
+    return FileResponse(
+        path=str(path),
+        filename=f"meeting_{meeting_id}.ics",
+        media_type="text/calendar"
+    )
+
+
+# ============================================================================
+# Wallet Authentication API Endpoints
+# ============================================================================
+
+
+class WalletAuthRequest(BaseModel):
+    """Request model for wallet authentication."""
+    wallet_address: str = Field(..., description="Ethereum wallet address")
+    signature: str = Field(..., description="Signed message signature")
+    message: str = Field(..., description="Message that was signed")
+
+
+@router.post("/auth/wallet/nonce")
+async def get_wallet_nonce(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """Get nonce for wallet authentication."""
+    import secrets
+    from datetime import datetime, timedelta
+    
+    wallet_address = request.get("wallet_address", "").lower()
+    if not wallet_address:
+        raise HTTPException(status_code=400, detail="wallet_address is required")
+    
+    # Generate nonce
+    nonce = secrets.token_hex(16)
+    
+    # Create message to sign
+    message = f"CreditNexus Authentication\n\nWallet: {wallet_address}\nNonce: {nonce}\nTimestamp: {datetime.utcnow().isoformat()}"
+    
+    # Store nonce temporarily (in production, use Redis or similar)
+    # For now, we'll include it in the message
+    
+    return {
+        "nonce": nonce,
+        "message": message,
+        "wallet_address": wallet_address
+    }
+
+
+@router.post("/auth/wallet")
+async def wallet_authentication(
+    request: WalletAuthRequest,
+    db: Session = Depends(get_db)
+):
+    """Authenticate using wallet signature (placeholder - requires cryptographic verification)."""
+    # TODO: Implement cryptographic signature verification
+    # For now, this is a placeholder that finds or creates a user by wallet address
+    
+    # Find existing user by wallet address
+    user = db.query(User).filter(User.wallet_address == request.wallet_address.lower()).first()
+    
+    if not user:
+        # Create new user with wallet address
+        user = User(
+            email=f"{request.wallet_address[:8]}@wallet.local",
+            display_name=f"Wallet {request.wallet_address[:8]}",
+            wallet_address=request.wallet_address.lower(),
+            role="viewer",
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    # Generate JWT tokens (using existing auth system)
+    from app.auth.jwt_auth import create_access_token, create_refresh_token
+    
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+    
+    log_audit_action(db, AuditAction.LOGIN, "user", user.id, user.id, metadata={"method": "wallet"})
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user.to_dict()
+    }
 

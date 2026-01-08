@@ -51,6 +51,7 @@ interface DocumentSearchProps {
   initialQuery?: string;
   topK?: number;
   className?: string;
+  theme?: 'light' | 'dark';
 }
 
 export function DocumentSearch({
@@ -59,7 +60,9 @@ export function DocumentSearch({
   initialQuery = '',
   topK = 5,
   className = '',
+  theme = 'light',
 }: DocumentSearchProps) {
+  const isDark = theme === 'dark';
   const [query, setQuery] = useState(initialQuery);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,10 +151,10 @@ export function DocumentSearch({
   };
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 p-6 ${className}`}>
+    <div className={`${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-gray-200'} rounded-lg border p-6 ${className}`}>
       <div className="flex items-center gap-3 mb-4">
-        <Search className="w-5 h-5 text-gray-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Document Search</h3>
+        <Search className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-600'}`} />
+        <h3 className={`text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Document Search</h3>
       </div>
 
       {/* Search Input */}
@@ -163,13 +166,13 @@ export function DocumentSearch({
             onChange={(e) => setQuery(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Search by text or paste CDM data (JSON)..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-600 bg-slate-900/50 text-slate-100 focus:ring-emerald-500/20 focus:border-emerald-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg focus:ring-2 disabled:opacity-50`}
             disabled={isSearching}
           />
           <button
             onClick={handleSearch}
             disabled={isSearching || !query.trim()}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className={`px-6 py-2 ${isDark ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
           >
             {isSearching ? (
               <>
@@ -185,17 +188,17 @@ export function DocumentSearch({
           </button>
         </div>
 
-        <p className="text-xs text-gray-500">
+        <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           Enter search text or paste CDM data as JSON to find similar documents
         </p>
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+        <div className={`mb-4 ${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'} rounded-lg p-3`}>
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600" />
-            <p className="text-sm text-red-700">{error}</p>
+            <AlertCircle className={`w-4 h-4 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+            <p className={`text-sm ${isDark ? 'text-red-400' : 'text-red-700'}`}>{error}</p>
           </div>
         </div>
       )}
@@ -204,7 +207,7 @@ export function DocumentSearch({
       {searchResults.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-gray-900">
+            <h4 className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               Found {searchResults.length} similar document{searchResults.length > 1 ? 's' : ''}
             </h4>
             <button
@@ -213,7 +216,7 @@ export function DocumentSearch({
                 setSelectedDocument(null);
                 setShowCdmData(false);
               }}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              className={`text-xs ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-500 hover:text-gray-700'}`}
             >
               Clear
             </button>
@@ -225,23 +228,23 @@ export function DocumentSearch({
                 key={doc.document_id}
                 className={`border rounded-lg p-4 cursor-pointer transition-all ${
                   selectedDocument?.document_id === doc.document_id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    ? (isDark ? 'border-emerald-500 bg-emerald-500/10' : 'border-blue-500 bg-blue-50')
+                    : (isDark ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800/50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50')
                 }`}
                 onClick={() => handleSelectDocument(doc)}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <FileText className="w-4 h-4 text-gray-600" />
-                      <h5 className="font-medium text-gray-900">{doc.document.title}</h5>
+                      <FileText className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-gray-600'}`} />
+                      <h5 className={`font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{doc.document.title}</h5>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                      <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-100 text-blue-800'}`}>
                         {(doc.similarity_score * 100).toFixed(1)}% match
                       </span>
                       {doc.document.sustainability_linked && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded flex items-center gap-1">
+                        <span className={`text-xs px-2 py-0.5 rounded flex items-center gap-1 ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-green-100 text-green-800'}`}>
                           <Scale className="w-3 h-3" />
                           ESG
                         </span>
@@ -249,11 +252,11 @@ export function DocumentSearch({
                     </div>
                   </div>
                   {selectedDocument?.document_id === doc.document_id && (
-                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                    <CheckCircle2 className={`w-5 h-5 ${isDark ? 'text-emerald-400' : 'text-blue-600'}`} />
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                <div className={`grid grid-cols-2 gap-2 text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
                   {doc.document.borrower_name && (
                     <div className="flex items-center gap-1">
                       <Building2 className="w-3 h-3" />
@@ -283,10 +286,13 @@ export function DocumentSearch({
                 {doc.workflow && (
                   <div className="mt-2 text-xs">
                     <span className={`px-2 py-0.5 rounded ${
-                      doc.workflow.state === 'approved' ? 'bg-green-100 text-green-800' :
-                      doc.workflow.state === 'published' ? 'bg-blue-100 text-blue-800' :
-                      doc.workflow.state === 'under_review' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
+                      doc.workflow.state === 'approved' 
+                        ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-green-100 text-green-800')
+                        : doc.workflow.state === 'published'
+                        ? (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-800')
+                        : doc.workflow.state === 'under_review'
+                        ? (isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800')
+                        : (isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-800')
                     }`}>
                       {doc.workflow.state}
                     </span>
@@ -301,23 +307,23 @@ export function DocumentSearch({
       {/* Selected Document Details */}
       {selectedDocument && (
         <div className="mt-4 space-y-3">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className={`${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-blue-50 border-blue-200'} rounded-lg p-3`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-800">Selected Document</span>
+                <CheckCircle2 className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-blue-600'}`} />
+                <span className={`text-sm font-medium ${isDark ? 'text-emerald-300' : 'text-blue-800'}`}>Selected Document</span>
               </div>
               <button
                 onClick={() => {
                   setSelectedDocument(null);
                   setShowCdmData(false);
                 }}
-                className="text-blue-600 hover:text-blue-800"
+                className={`${isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-blue-600 hover:text-blue-800'}`}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-blue-700">
+            <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-blue-700'}`}>
               {selectedDocument.document.title} • Similarity: {(selectedDocument.similarity_score * 100).toFixed(1)}%
             </p>
           </div>
@@ -327,15 +333,15 @@ export function DocumentSearch({
             <div>
               <button
                 onClick={() => setShowCdmData(!showCdmData)}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm transition-colors flex items-center justify-between"
+                className={`w-full px-4 py-2 ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} rounded-lg font-medium text-sm transition-colors flex items-center justify-between`}
               >
                 <span>View CDM Data</span>
                 <ExternalLink className={`w-4 h-4 transition-transform ${showCdmData ? 'rotate-90' : ''}`} />
               </button>
 
               {showCdmData && (
-                <div className="mt-2 bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto">
-                  <pre className="text-xs text-gray-700 whitespace-pre-wrap">
+                <div className={`mt-2 ${isDark ? 'bg-slate-900/50' : 'bg-gray-50'} rounded-lg p-3 max-h-64 overflow-y-auto`}>
+                  <pre className={`text-xs ${isDark ? 'text-slate-300' : 'text-gray-700'} whitespace-pre-wrap`}>
                     {JSON.stringify(selectedDocument.cdm_data, null, 2)}
                   </pre>
                 </div>
@@ -351,7 +357,7 @@ export function DocumentSearch({
                   onCdmDataSelect(selectedDocument.cdm_data);
                 }
               }}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors"
+              className={`w-full px-4 py-2 ${isDark ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg font-medium text-sm transition-colors`}
             >
               Use This CDM Data
             </button>
@@ -361,7 +367,7 @@ export function DocumentSearch({
 
       {/* Empty State */}
       {!isSearching && searchResults.length === 0 && !error && query && (
-        <div className="text-center py-8 text-gray-500">
+        <div className={`text-center py-8 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No results found. Try a different search query.</p>
         </div>
@@ -369,6 +375,9 @@ export function DocumentSearch({
     </div>
   );
 }
+
+
+
 
 
 

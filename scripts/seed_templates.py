@@ -64,6 +64,11 @@ def seed_templates(db, templates_data: List[Dict[str, Any]]) -> int:
             created_count += 1
             logger.info(f"Created template: {template.name} ({template.template_code})")
             
+            # Validate AI-generated sections have corresponding prompts
+            ai_sections = template_data.get("ai_generated_sections", [])
+            if ai_sections:
+                _validate_ai_sections(template.category, ai_sections)
+            
             # Seed field mappings if provided
             mappings = template_data.get("field_mappings", [])
             if mappings:
@@ -109,6 +114,57 @@ def seed_field_mappings(db, template_id: int, mappings: List[Dict[str, Any]]) ->
     
     logger.info(f"Created {created_count} field mapping(s) for template {template_id}")
     return created_count
+
+
+def _validate_ai_sections(template_category: str, ai_sections: List[str]) -> None:
+    """
+    Validate that all AI-generated sections have corresponding prompt templates.
+    
+    Args:
+        template_category: Template category (e.g., "Facility Agreement")
+        ai_sections: List of AI-generated section names
+    """
+    from app.prompts.templates.loader import PromptLoader
+    from pathlib import Path
+    import importlib.util
+    
+    # First check if prompt module file exists
+    module_map = PromptLoader.PROMPT_MODULE_MAP
+    if template_category not in module_map:
+        logger.warning(
+            f"Template category '{template_category}' not mapped in PROMPT_MODULE_MAP. "
+            f"AI-generated sections will not be validated."
+        )
+        return
+    
+    module_path = module_map[template_category]
+    # Convert module path to file path
+    module_file = Path(module_path.replace(".", "/") + ".py")
+    if not module_file.exists():
+        logger.warning(
+            f"Prompt module file not found for category '{template_category}': {module_path}. "
+            f"AI-generated sections will not be available."
+        )
+        return
+    
+    # Validate each section has a prompt
+    missing_prompts = []
+    for section in ai_sections:
+        try:
+            prompt = PromptLoader.get_prompt_for_section(template_category, section)
+            if not prompt:
+                missing_prompts.append(section)
+        except (ImportError, KeyError) as e:
+            logger.warning(
+                f"Error loading prompt for section '{section}' in category '{template_category}': {e}"
+            )
+            missing_prompts.append(section)
+    
+    if missing_prompts:
+        logger.warning(
+            f"Template category '{template_category}' has AI-generated sections without prompts: "
+            f"{', '.join(missing_prompts)}. These sections will not be generated."
+        )
 
 
 def load_template_metadata(json_path: Path) -> List[Dict[str, Any]]:
@@ -378,6 +434,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 

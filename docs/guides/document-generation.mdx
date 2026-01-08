@@ -1,0 +1,104 @@
+---
+title: Document Generation Guide
+description: Generate LMA templates from CDM data
+---
+
+## Overview
+
+The Document Generation workflow allows you to create LMA (Loan Market Association) templates from your extracted CDM data.
+
+## Prerequisites
+
+- CDM data extracted from credit agreements (via Document Parser)
+- LMA template files available in the system
+
+## Step-by-Step Process
+
+### 1. Access Document Generator
+
+Navigate to the **Document Generator** tab in the main application interface.
+
+### 2. Select CDM Data Source
+
+Choose from your library of extracted documents:
+- Browse recent documents
+- Search by borrower name or deal ID
+- Filter by date or status
+
+### 3. Choose Template
+
+Select an LMA template:
+- Standard loan agreement templates
+- Custom templates (if available)
+- Template preview available
+
+### 4. Review Field Mappings
+
+The system automatically maps CDM fields to template fields:
+- Review automatic mappings
+- Adjust mappings if needed
+- Verify data accuracy
+
+### 5. Generate Document
+
+Click "Generate Document" to:
+- Populate template with CDM data
+- Apply AI-powered field population for missing data
+- Render final document
+
+### 6. Download or Save
+
+- Download generated document (DOCX format)
+- Save to library for future reference
+- Share via FDC3 context
+
+## Field Mapping
+
+### Automatic Mapping
+
+The system automatically maps common fields:
+- Party names and details
+- Loan amounts and currencies
+- Interest rates and terms
+- Payment schedules
+
+### Manual Adjustment
+
+You can manually adjust mappings:
+- Change field assignments
+- Add custom fields
+- Remove unnecessary fields
+
+## AI Field Population
+
+For fields not present in CDM data, the system uses AI to:
+- Infer missing values from context
+- Generate appropriate placeholders
+- Suggest field values based on patterns
+
+## Best Practices
+
+1. **Verify Data**: Always review CDM data before generation
+2. **Check Mappings**: Ensure field mappings are correct
+3. **Review Output**: Review generated documents before finalizing
+4. **Template Updates**: Keep templates up to date
+
+## Troubleshooting
+
+**Template not populating correctly:**
+- Check CDM data completeness
+- Verify field mappings
+- Review template structure
+
+**Missing fields:**
+- Use AI field population
+- Manually enter missing data
+- Update source CDM data
+
+## Next Steps
+
+After generation, you can:
+- Download and use documents
+- Share with stakeholders
+- Store in document library
+- Use in trade execution workflows

@@ -1,0 +1,44 @@
+---
+title: Architecture Overview
+description: High-level architecture of CreditNexus
+---
+
+## System Architecture
+
+CreditNexus follows a layered architecture with clear separation of concerns:
+
+### Backend Layer
+
+- **API Layer**: FastAPI with dependency injection and Pydantic validation
+- **Service Layer**: Business logic and orchestration
+- **Data Layer**: SQLAlchemy 2.0 with PostgreSQL
+- **Policy Layer**: Policy-as-code engine for compliance enforcement
+
+### Frontend Layer
+
+- **React 18**: Modern React with hooks and functional components
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Utility-first styling
+- **FDC3 Integration**: Desktop interoperability
+
+### AI/ML Layer
+
+- **LLM Abstraction**: Support for multiple providers (OpenAI, vLLM, HuggingFace)
+- **Extraction Chains**: Simple and map-reduce extraction strategies
+- **Satellite Analysis**: TorchGeo for NDVI verification
+
+## Data Flow
+
+1. **Document Upload**: User uploads credit agreement
+2. **Text Extraction**: Document text is extracted
+3. **AI Extraction**: LLM extracts structured CDM data
+4. **Policy Validation**: Policy engine validates compliance
+5. **CDM Event Creation**: Policy decisions stored as CDM events
+6. **Storage**: Data persisted in PostgreSQL with audit logging
+
+## Key Principles
+
+- **CDM Compliance**: All data follows FINOS CDM standards
+- **Policy-as-Code**: Deterministic policy enforcement
+- **Type Safety**: Full TypeScript and Pydantic validation
+- **Audit Trail**: Complete audit logging for compliance

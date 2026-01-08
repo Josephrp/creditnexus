@@ -1,0 +1,128 @@
+---
+title: Installation
+description: Detailed installation instructions for CreditNexus
+---
+
+## System Requirements
+
+- **Python**: 3.11 or higher
+- **Node.js**: 20.x or higher
+- **PostgreSQL**: 14 or higher
+- **Operating System**: Linux, macOS, or Windows
+
+## Backend Installation
+
+### Using uv (Recommended)
+
+1. Install `uv` package manager:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Clone the repository:
+```bash
+git clone https://github.com/yourusername/creditnexus.git
+cd creditnexus
+```
+
+3. Sync dependencies:
+```bash
+uv sync
+```
+
+4. Activate the virtual environment:
+```bash
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+### Using pip
+
+Alternatively, you can use pip:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Database Setup
+
+1. Create a PostgreSQL database:
+```bash
+createdb creditnexus
+```
+
+2. Configure database connection in `.env`:
+```env
+DATABASE_URL=postgresql://user:password@localhost/creditnexus
+```
+
+3. Run migrations:
+```bash
+uv run alembic upgrade head
+```
+
+## Frontend Installation
+
+1. Navigate to client directory:
+```bash
+cd client
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+## Environment Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost/creditnexus
+
+# LLM Configuration
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o
+OPENAI_API_KEY=sk-...
+
+# Policy Engine
+POLICY_ENABLED=true
+POLICY_RULES_DIR=app/policies
+
+# Authentication
+JWT_SECRET_KEY=your-secret-key
+JWT_ALGORITHM=HS256
+```
+
+## Verification
+
+1. Start the backend:
+```bash
+uv run python server.py
+```
+
+2. Start the frontend:
+```bash
+cd client && npm run dev
+```
+
+3. Verify installation by accessing `http://localhost:5173`
+
+## Troubleshooting
+
+### Common Issues
+
+**Database Connection Error**
+- Verify PostgreSQL is running
+- Check DATABASE_URL in .env file
+- Ensure database exists
+
+**LLM API Errors**
+- Verify API keys are set correctly
+- Check network connectivity
+- Review rate limits
+
+**Frontend Build Errors**
+- Clear node_modules and reinstall
+- Check Node.js version (20+)
+- Verify all dependencies are installed

@@ -1,0 +1,118 @@
+---
+title: Trade Execution Guide
+description: Execute and settle trades with policy compliance
+---
+
+## Overview
+
+The Trade Execution workflow allows you to execute trades, evaluate policies, and settle payments using the x402 protocol.
+
+## Step-by-Step Process
+
+### 1. Access Trade Blotter
+
+Navigate to the **Trade Blotter** tab in the main application interface.
+
+### 2. Create Trade Execution
+
+Click "New Trade" and enter:
+- **Borrower**: Select from parties
+- **Amount**: Trade amount
+- **Rate**: Interest rate
+- **Currency**: Trade currency
+- **Trade Date**: Execution date
+
+### 3. Policy Evaluation
+
+The system automatically evaluates:
+- Regulatory compliance (MiCA, Basel III, FATF)
+- Sanctioned party checking
+- Risk assessment
+- Policy rules application
+
+**Policy Decisions:**
+- **ALLOW**: Trade can proceed
+- **FLAG**: Trade requires review
+- **BLOCK**: Trade cannot proceed
+
+### 4. Review Results
+
+Review policy evaluation:
+- Decision and reasoning
+- Applied rules
+- Risk factors
+- Recommendations
+
+### 5. Execute Trade
+
+If approved:
+- Confirm trade execution
+- Create CDM TradeExecution event
+- Update trade blotter
+- Broadcast FDC3 context
+
+### 6. Settle Payment
+
+For trade settlement:
+- Connect MetaMask wallet
+- Process payment via x402 protocol
+- Verify transaction
+- Complete settlement
+
+## Policy Evaluation
+
+### Real-Time Enforcement
+
+Policy evaluation happens in real-time:
+- Automatic rule checking
+- CDM-compliant event creation
+- Audit trail generation
+
+### Decision Types
+
+- **ALLOW**: Trade proceeds normally
+- **FLAG**: Requires manual review
+- **BLOCK**: Trade cannot execute
+
+## Payment Settlement
+
+### x402 Protocol
+
+CreditNexus uses x402 payment protocol:
+- Blockchain-based payments
+- Secure transaction verification
+- CDM-compliant payment events
+
+### MetaMask Integration
+
+1. Connect MetaMask wallet
+2. Approve transaction
+3. Verify payment
+4. Complete settlement
+
+## Best Practices
+
+1. **Pre-Review**: Review policy rules before execution
+2. **Verify Parties**: Ensure party information is accurate
+3. **Check Limits**: Verify trade amounts within limits
+4. **Monitor Flags**: Address flagged trades promptly
+
+## Troubleshooting
+
+**Trade blocked by policy:**
+- Review policy evaluation details
+- Address compliance issues
+- Consult compliance team
+
+**Payment settlement fails:**
+- Check wallet connection
+- Verify sufficient balance
+- Review transaction details
+
+## Next Steps
+
+After trade execution:
+- View trade in blotter
+- Access payment receipts
+- Export trade data
+- Generate reports

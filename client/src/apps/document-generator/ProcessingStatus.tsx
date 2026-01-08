@@ -54,6 +54,7 @@ interface ProcessingStatusProps {
   onFuse?: () => void;
   canFuse?: boolean;
   className?: string;
+  theme?: 'light' | 'dark';
 }
 
 export function ProcessingStatus({
@@ -66,7 +67,9 @@ export function ProcessingStatus({
   onFuse,
   canFuse = false,
   className = '',
+  theme = 'light',
 }: ProcessingStatusProps) {
+  const isDark = theme === 'dark';
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
   const [editingSource, setEditingSource] = useState<string | null>(null);
@@ -152,15 +155,15 @@ export function ProcessingStatus({
     <div className={`space-y-4 ${className}`}>
       {/* Processing Indicator */}
       {isProcessing && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className={isDark ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-blue-200 bg-blue-50'}>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+              <Loader2 className={`w-5 h-5 ${isDark ? 'text-emerald-400' : 'text-blue-600'} animate-spin`} />
               <div className="flex-1">
-                <p className="text-sm font-medium text-blue-900">
+                <p className={`text-sm font-medium ${isDark ? 'text-emerald-300' : 'text-blue-900'}`}>
                   {processingStep || 'Processing...'}
                 </p>
-                <p className="text-xs text-blue-700 mt-1">
+                <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-blue-700'} mt-1`}>
                   Extracting and analyzing data from input sources
                 </p>
               </div>
@@ -171,17 +174,20 @@ export function ProcessingStatus({
 
       {/* Extracted Data Sources */}
       {extractedData.length > 0 && (
-        <Card>
+        <Card className={isDark ? 'border-slate-700 bg-slate-800/50' : ''}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Extracted Data Sources</CardTitle>
-                <CardDescription>
+                <CardTitle className={`text-lg ${isDark ? 'text-slate-100' : ''}`}>Extracted Data Sources</CardTitle>
+                <CardDescription className={isDark ? 'text-slate-400' : ''}>
                   {extractedData.length} source(s) processed
                 </CardDescription>
               </div>
               {canFuse && onFuse && (
-                <Button onClick={onFuse} className="flex items-center gap-2">
+                <Button 
+                  onClick={onFuse} 
+                  className={`flex items-center gap-2 ${isDark ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                >
                   <Merge className="w-4 h-4" />
                   Fuse Sources
                 </Button>
@@ -198,16 +204,16 @@ export function ProcessingStatus({
                 return (
                   <div
                     key={sourceId}
-                    className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                    className={`border rounded-lg p-4 ${isDark ? 'border-slate-700 bg-slate-900/50' : 'border-gray-200 bg-gray-50'}`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xl">{getSourceIcon(data.source)}</span>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
                             {getSourceLabel(data.source)}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                             {data.timestamp.toLocaleTimeString()}
                             {data.confidence && ` • ${Math.round(data.confidence * 100)}% confidence`}
                           </p>
@@ -215,15 +221,15 @@ export function ProcessingStatus({
                       </div>
                       <div className="flex items-center gap-2">
                         {data.extractionStatus === 'success' && (
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <CheckCircle2 className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-green-600'}`} />
                         )}
                         {data.extractionStatus === 'partial_data_missing' && (
-                          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                          <AlertTriangle className={`w-4 h-4 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
                         )}
                         {onEdit && !isEditing && (
                           <button
                             onClick={() => handleEdit(data)}
-                            className="p-1 text-gray-600 hover:text-blue-600"
+                            className={`p-1 ${isDark ? 'text-slate-400 hover:text-emerald-400' : 'text-gray-600 hover:text-blue-600'}`}
                             title="Edit data"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -232,7 +238,7 @@ export function ProcessingStatus({
                         {onRemove && (
                           <button
                             onClick={() => onRemove(sourceId)}
-                            className="p-1 text-gray-600 hover:text-red-600"
+                            className={`p-1 ${isDark ? 'text-slate-400 hover:text-red-400' : 'text-gray-600 hover:text-red-600'}`}
                             title="Remove source"
                           >
                             <X className="w-4 h-4" />
@@ -240,7 +246,7 @@ export function ProcessingStatus({
                         )}
                         <button
                           onClick={() => toggleSourceExpansion(sourceId)}
-                          className="p-1 text-gray-600 hover:text-gray-900"
+                          className={`p-1 ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
                         >
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4" />
@@ -252,7 +258,7 @@ export function ProcessingStatus({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-3 space-y-3 pt-3 border-t border-gray-200">
+                      <div className={`mt-3 space-y-3 pt-3 border-t ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
                         {isEditing ? (
                           <div className="space-y-2">
                             <textarea
@@ -265,13 +271,13 @@ export function ProcessingStatus({
                                   // Invalid JSON, keep as is
                                 }
                               }}
-                              className="w-full h-48 font-mono text-xs border border-gray-300 rounded p-2"
+                              className={`w-full h-48 font-mono text-xs border rounded p-2 ${isDark ? 'border-slate-600 bg-slate-900/50 text-slate-100' : 'border-gray-300'}`}
                             />
                             <div className="flex gap-2">
                               <Button
                                 onClick={handleSaveEdit}
                                 size="sm"
-                                className="flex-1"
+                                className={`flex-1 ${isDark ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
                               >
                                 Save
                               </Button>
@@ -279,7 +285,7 @@ export function ProcessingStatus({
                                 onClick={handleCancelEdit}
                                 size="sm"
                                 variant="outline"
-                                className="flex-1"
+                                className={`flex-1 ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : ''}`}
                               >
                                 Cancel
                               </Button>
@@ -289,10 +295,10 @@ export function ProcessingStatus({
                           <>
                             {data.rawText && (
                               <div>
-                                <p className="text-xs font-medium text-gray-700 mb-1">
+                                <p className={`text-xs font-medium mb-1 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                                   Raw Text:
                                 </p>
-                                <p className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-200 max-h-32 overflow-y-auto">
+                                <p className={`text-xs p-2 rounded border max-h-32 overflow-y-auto ${isDark ? 'text-slate-300 bg-slate-900/50 border-slate-700' : 'text-gray-600 bg-white border-gray-200'}`}>
                                   {data.rawText.substring(0, 500)}
                                   {data.rawText.length > 500 && '...'}
                                 </p>
@@ -300,10 +306,10 @@ export function ProcessingStatus({
                             )}
                             {data.cdmData && (
                               <div>
-                                <p className="text-xs font-medium text-gray-700 mb-1">
+                                <p className={`text-xs font-medium mb-1 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                                   CDM Data:
                                 </p>
-                                <pre className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-200 max-h-48 overflow-y-auto">
+                                <pre className={`text-xs p-2 rounded border max-h-48 overflow-y-auto ${isDark ? 'text-slate-300 bg-slate-900/50 border-slate-700' : 'text-gray-600 bg-white border-gray-200'}`}>
                                   {JSON.stringify(data.cdmData, null, 2)}
                                 </pre>
                               </div>
@@ -322,15 +328,15 @@ export function ProcessingStatus({
 
       {/* Conflicts */}
       {conflicts.length > 0 && (
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className={isDark ? 'border-yellow-500/20 bg-yellow-500/10' : 'border-yellow-200 bg-yellow-50'}>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-600" />
-              <CardTitle className="text-lg text-yellow-900">
+              <AlertTriangle className={`w-5 h-5 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
+              <CardTitle className={`text-lg ${isDark ? 'text-yellow-300' : 'text-yellow-900'}`}>
                 Data Conflicts ({conflicts.length})
               </CardTitle>
             </div>
-            <CardDescription className="text-yellow-700">
+            <CardDescription className={isDark ? 'text-yellow-400' : 'text-yellow-700'}>
               Conflicting values detected across sources. Review and resolve before fusion.
             </CardDescription>
           </CardHeader>
@@ -342,20 +348,20 @@ export function ProcessingStatus({
                 return (
                   <div
                     key={conflict.field_path}
-                    className="border border-yellow-300 rounded-lg p-3 bg-white"
+                    className={`border rounded-lg p-3 ${isDark ? 'border-yellow-500/30 bg-slate-900/50' : 'border-yellow-300 bg-white'}`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
                           {conflict.field_path}
                         </p>
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
                           {conflict.values.length} conflicting value(s)
                         </p>
                       </div>
                       <button
                         onClick={() => toggleConflictExpansion(conflict.field_path)}
-                        className="p-1 text-gray-600 hover:text-gray-900"
+                        className={`p-1 ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
                       >
                         {isExpanded ? (
                           <ChevronUp className="w-4 h-4" />
@@ -366,15 +372,15 @@ export function ProcessingStatus({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-3 pt-3 border-t border-yellow-200 space-y-2">
+                      <div className={`mt-3 pt-3 border-t space-y-2 ${isDark ? 'border-yellow-500/20' : 'border-yellow-200'}`}>
                         {conflict.values.map((val, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                            className={`flex items-center justify-between p-2 rounded ${isDark ? 'bg-slate-800/50' : 'bg-gray-50'}`}
                           >
                             <div>
-                              <p className="text-sm text-gray-900">{val.value}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className={`text-sm ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{val.value}</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                                 Source: {val.source.source_type}
                                 {val.source.confidence && ` • ${Math.round(val.source.confidence * 100)}% confidence`}
                               </p>
@@ -382,11 +388,11 @@ export function ProcessingStatus({
                           </div>
                         ))}
                         {conflict.resolved_value && (
-                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                            <p className="text-xs font-medium text-green-900 mb-1">
+                          <div className={`mt-2 p-2 border rounded ${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-green-50 border-green-200'}`}>
+                            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-emerald-300' : 'text-green-900'}`}>
                               Resolved Value:
                             </p>
-                            <p className="text-sm text-green-800">
+                            <p className={`text-sm ${isDark ? 'text-emerald-300' : 'text-green-800'}`}>
                               {conflict.resolved_value}
                             </p>
                           </div>
@@ -403,6 +409,9 @@ export function ProcessingStatus({
     </div>
   );
 }
+
+
+
 
 
 

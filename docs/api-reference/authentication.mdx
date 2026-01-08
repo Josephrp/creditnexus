@@ -1,0 +1,60 @@
+---
+title: Authentication
+description: API authentication and authorization
+---
+
+<Info>
+All API endpoints require authentication via JWT tokens.
+</Info>
+
+## Authentication Methods
+
+CreditNexus supports two authentication methods:
+
+1. **Traditional Login**: Email and password
+2. **Wallet Authentication**: MetaMask wallet signature
+
+## JWT Tokens
+
+After successful authentication, you receive:
+
+- **Access Token**: Short-lived token for API requests
+- **Refresh Token**: Long-lived token for token renewal
+
+## Using Access Tokens
+
+Include the access token in the Authorization header:
+
+```bash
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+## Token Refresh
+
+When the access token expires, use the refresh token:
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "your_refresh_token"
+}
+```
+
+## Wallet Authentication
+
+For wallet-based authentication:
+
+```http
+POST /api/auth/wallet
+Content-Type: application/json
+
+{
+  "wallet_address": "0x...",
+  "signature": "0x...",
+  "message": "signed_message"
+}
+```
+
+The signature is cryptographically verified before authentication.
