@@ -71,6 +71,8 @@ class FieldPathParser:
                     current_segment = ""
             elif char == '[':
                 # Start of filter or index
+                # Preserve attribute name before bracket for pattern matching
+                attr_name_before_bracket = current_segment if current_segment else None
                 if current_segment:
                     segments.append(current_segment)
                     current_segment = ""
@@ -91,12 +93,10 @@ class FieldPathParser:
                     i += 1
                 
                 # Parse bracket content
-                filter_match = FieldPathParser.LIST_FILTER_PATTERN.match(
-                    current_segment + "[" + bracket_content + "]" if current_segment else "[" + bracket_content + "]"
-                )
-                index_match = FieldPathParser.ARRAY_INDEX_PATTERN.match(
-                    current_segment + "[" + bracket_content + "]" if current_segment else "[" + bracket_content + "]"
-                )
+                # Reconstruct full segment for pattern matching using preserved attribute name
+                full_segment = (attr_name_before_bracket + "[" + bracket_content + "]") if attr_name_before_bracket else ("[" + bracket_content + "]")
+                filter_match = FieldPathParser.LIST_FILTER_PATTERN.match(full_segment)
+                index_match = FieldPathParser.ARRAY_INDEX_PATTERN.match(full_segment)
                 
                 if filter_match:
                     # List filter: parties[role='Borrower']
@@ -121,13 +121,14 @@ class FieldPathParser:
                     # Try to parse as simple index
                     try:
                         index = int(bracket_content)
-                        attr_name = current_segment if current_segment else segments[-1] if segments else None
+                        attr_name = attr_name_before_bracket if attr_name_before_bracket else (segments[-1] if segments else None)
                         if attr_name and segments and segments[-1] == attr_name:
                             segments.pop()
-                        segments.append(attr_name)
+                        if attr_name:
+                            segments.append(attr_name)
                         segments.append({"index": index})
                     except ValueError:
-                        logger.warning(f"Could not parse bracket content: {bracket_content}")
+                        logger.warning(f"Could not parse bracket content: {bracket_content} in path: {path}")
                 
                 current_segment = ""
                 continue

@@ -20,6 +20,7 @@ env/
 *.tar
 storage/
 project-site/dist/
+*.cursor.tar
 
 # uv
 uv.lock

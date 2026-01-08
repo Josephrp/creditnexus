@@ -2800,6 +2800,44 @@ def get_workflow_or_404(db: Session, document_id: int) -> Workflow:
     return workflow
 
 
+def _get_transaction_id_from_document(db: Session, document_id: int) -> Optional[str]:
+    """
+    Extract transaction ID (deal_id or loan_identification_number) from document.
+    
+    Checks source_cdm_data first, then falls back to DocumentVersion.extracted_data.
+    
+    Args:
+        db: Database session
+        document_id: Document ID
+        
+    Returns:
+        Transaction ID string or None if not found
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        return None
+    
+    # Try source_cdm_data first
+    if doc.source_cdm_data:
+        if doc.source_cdm_data.get("deal_id"):
+            return doc.source_cdm_data.get("deal_id")
+        if doc.source_cdm_data.get("loan_identification_number"):
+            return doc.source_cdm_data.get("loan_identification_number")
+    
+    # Fallback to latest version's extracted_data
+    if doc.current_version_id:
+        version = db.query(DocumentVersion).filter(
+            DocumentVersion.id == doc.current_version_id
+        ).first()
+        if version and version.extracted_data:
+            if version.extracted_data.get("deal_id"):
+                return version.extracted_data.get("deal_id")
+            if version.extracted_data.get("loan_identification_number"):
+                return version.extracted_data.get("loan_identification_number")
+    
+    return None
+
+
 @router.post("/documents/{document_id}/workflow/submit")
 async def submit_for_review(
     document_id: int,
@@ -2835,16 +2873,9 @@ async def submit_for_review(
         
         # Check for policy decisions that might affect workflow priority
         # Query for recent policy decision for this document's transaction
-        doc = db.query(Document).filter(Document.id == document_id).first()
-        if doc:
-            # Try to get transaction ID from document metadata
-            transaction_id = None
-            if doc.deal_id:
-                transaction_id = doc.deal_id
-            elif doc.loan_identification_number:
-                transaction_id = doc.loan_identification_number
-            
-            if transaction_id:
+        transaction_id = _get_transaction_id_from_document(db, document_id)
+        
+        if transaction_id:
                 recent_policy_decision = db.query(PolicyDecisionModel).filter(
                     PolicyDecisionModel.transaction_id == transaction_id,
                     PolicyDecisionModel.transaction_type == "facility_creation"

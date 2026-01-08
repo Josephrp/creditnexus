@@ -24,8 +24,16 @@ class PromptLoader:
         "Facility Agreement": "app.prompts.templates.facility_agreement",
         "Term Sheet": "app.prompts.templates.term_sheet",
         "Confidentiality Agreement": "app.prompts.templates.confidentiality",
-        # Add more mappings as needed
+        "Secondary Trading": "app.prompts.templates.secondary_trading",
+        "Security & Intercreditor": "app.prompts.templates.security_intercreditor",
+        "Origination Documents": "app.prompts.templates.origination",
+        "Sustainable Finance": "app.prompts.templates.sustainable_finance",
+        "Regional Documents": "app.prompts.templates.regional",
+        "Regulatory": "app.prompts.templates.regulatory",
+        "Restructuring": "app.prompts.templates.restructuring",
+        "Supporting Documents": "app.prompts.templates.supporting",
     }
+    
     
     # Mapping of section names to prompt variable names
     SECTION_PROMPT_MAP = {
@@ -35,12 +43,69 @@ class PromptLoader:
             "covenants": "COVENANTS_PROMPT",
             "esg_spt": "ESG_SPT_PROMPT",
             "events_of_default": "EVENTS_OF_DEFAULT_PROMPT",
+            "governing_law_clause": "GOVERNING_LAW_PROMPT",
+            # REF (Real Estate Finance) prompts
+            "property_description": "PROPERTY_DESCRIPTION_PROMPT",
+            "security_package": "SECURITY_PACKAGE_PROMPT",
+            "valuation_requirements": "VALUATION_REQUIREMENTS_PROMPT",
+            # SLL (Sustainability-Linked Loan) prompts
+            "spt_measurement_methodology": "SPT_MEASUREMENT_METHODOLOGY_PROMPT",
+            "margin_adjustment_mechanism": "MARGIN_ADJUSTMENT_MECHANISM_PROMPT",
+            "reporting_requirements": "REPORTING_REQUIREMENTS_PROMPT",
+            "verification_process": "VERIFICATION_PROCESS_PROMPT",
         },
         "Term Sheet": {
             "purpose": "PURPOSE_PROMPT",
             "conditions_precedent": "CONDITIONS_PRECEDENT_PROMPT",
             "representations": "REPRESENTATIONS_PROMPT",
             "fees": "FEES_PROMPT",
+        },
+        "Confidentiality Agreement": {
+            "confidentiality_obligations": "CONFIDENTIALITY_OBLIGATIONS_PROMPT",
+            "no_front_running_undertaking": "NO_FRONT_RUNNING_UNDERTAKING_PROMPT",
+            "permitted_disclosures": "PERMITTED_DISCLOSURES_PROMPT",
+        },
+        "Secondary Trading": {
+            "assignment_clause": "ASSIGNMENT_CLAUSE_PROMPT",
+            "transfer_restrictions": "TRANSFER_RESTRICTIONS_PROMPT",
+            "participation_agreement": "PARTICIPATION_AGREEMENT_PROMPT",
+        },
+        "Security & Intercreditor": {
+            "security_package_description": "SECURITY_PACKAGE_DESCRIPTION_PROMPT",
+            "intercreditor_arrangements": "INTERCREDITOR_ARRANGEMENTS_PROMPT",
+            "subordination_provisions": "SUBORDINATION_PROVISIONS_PROMPT",
+            "enforcement_rights": "ENFORCEMENT_RIGHTS_PROMPT",
+        },
+        "Origination Documents": {
+            "commitment_letter": "COMMITMENT_LETTER_PROMPT",
+            "underwriting_terms": "UNDERWRITING_TERMS_PROMPT",
+            "syndication_terms": "SYNDICATION_TERMS_PROMPT",
+        },
+        "Sustainable Finance": {
+            "green_loan_framework": "GREEN_LOAN_FRAMEWORK_PROMPT",
+            "esg_reporting_framework": "ESG_REPORTING_FRAMEWORK_PROMPT",
+            "sustainability_certification": "SUSTAINABILITY_CERTIFICATION_PROMPT",
+        },
+        "Regional Documents": {
+            "regional_compliance": "REGIONAL_COMPLIANCE_PROMPT",
+            "jurisdiction_specific_provisions": "JURISDICTION_SPECIFIC_PROVISIONS_PROMPT",
+        },
+        "Regulatory": {
+            "regulatory_compliance": "REGULATORY_COMPLIANCE_PROMPT",
+            "mica_compliance": "MICA_COMPLIANCE_PROMPT",
+            "basel_iii_compliance": "BASEL_III_COMPLIANCE_PROMPT",
+            "fatf_compliance": "FATF_COMPLIANCE_PROMPT",
+        },
+        "Restructuring": {
+            "restructuring_terms": "RESTRUCTURING_TERMS_PROMPT",
+            "workout_agreement": "WORKOUT_AGREEMENT_PROMPT",
+            "forbearance_provisions": "FORBEARANCE_PROVISIONS_PROMPT",
+            "debt_compromise": "DEBT_COMPROMISE_PROMPT",
+        },
+        "Supporting Documents": {
+            "legal_opinion": "LEGAL_OPINION_PROMPT",
+            "compliance_certificate": "COMPLIANCE_CERTIFICATE_PROMPT",
+            "authorization_resolution": "AUTHORIZATION_RESOLUTION_PROMPT",
         },
     }
     
@@ -69,15 +134,34 @@ class PromptLoader:
             module = __import__(module_path, fromlist=[""])
             
             # Get prompts dictionary from module
-            # Most modules export a PROMPTS dict or similar
-            if hasattr(module, f"{template_category.upper().replace(' ', '_')}_PROMPTS"):
-                prompts_dict = getattr(module, f"{template_category.upper().replace(' ', '_')}_PROMPTS")
-            elif hasattr(module, "PROMPTS"):
-                prompts_dict = getattr(module, "PROMPTS")
+            # Try category-specific dictionary names
+            category_prompts_name = template_category.upper().replace(' ', '_').replace('&', '').replace('-', '_') + "_PROMPTS"
+            if hasattr(module, category_prompts_name):
+                prompts_dict = getattr(module, category_prompts_name)
             elif hasattr(module, "FACILITY_AGREEMENT_PROMPTS"):
                 prompts_dict = getattr(module, "FACILITY_AGREEMENT_PROMPTS")
             elif hasattr(module, "TERM_SHEET_PROMPTS"):
-                prompts_dict = getattr(module, "TERM_SHEET_PROMPTS")
+                prompts_dict = getattr(module, "TERM_SHEET_PROMPT")
+            elif hasattr(module, "CONFIDENTIALITY_AGREEMENT_PROMPTS"):
+                prompts_dict = getattr(module, "CONFIDENTIALITY_AGREEMENT_PROMPTS")
+            elif hasattr(module, "SECONDARY_TRADING_PROMPTS"):
+                prompts_dict = getattr(module, "SECONDARY_TRADING_PROMPTS")
+            elif hasattr(module, "SECURITY_INTERCREDITOR_PROMPTS"):
+                prompts_dict = getattr(module, "SECURITY_INTERCREDITOR_PROMPTS")
+            elif hasattr(module, "ORIGINATION_PROMPTS"):
+                prompts_dict = getattr(module, "ORIGINATION_PROMPTS")
+            elif hasattr(module, "SUSTAINABLE_FINANCE_PROMPTS"):
+                prompts_dict = getattr(module, "SUSTAINABLE_FINANCE_PROMPTS")
+            elif hasattr(module, "REGIONAL_PROMPTS"):
+                prompts_dict = getattr(module, "REGIONAL_PROMPTS")
+            elif hasattr(module, "REGULATORY_PROMPTS"):
+                prompts_dict = getattr(module, "REGULATORY_PROMPTS")
+            elif hasattr(module, "RESTRUCTURING_PROMPTS"):
+                prompts_dict = getattr(module, "RESTRUCTURING_PROMPTS")
+            elif hasattr(module, "SUPPORTING_PROMPTS"):
+                prompts_dict = getattr(module, "SUPPORTING_PROMPTS")
+            elif hasattr(module, "PROMPTS"):
+                prompts_dict = getattr(module, "PROMPTS")
             else:
                 # Try to find all ChatPromptTemplate instances
                 prompts_dict = {

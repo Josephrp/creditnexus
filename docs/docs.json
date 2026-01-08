@@ -10,11 +10,7 @@
   "colors": {
     "primary": "#10b981",
     "light": "#34d399",
-    "dark": "#059669",
-    "anchors": {
-      "from": "#10b981",
-      "to": "#34d399"
-    }
+    "dark": "#059669"
   },
   "topbarLinks": [
     {
@@ -38,40 +34,42 @@
       "url": "https://github.com/yourusername/creditnexus"
     }
   ],
-  "navigation": [
-    {
-      "group": "Get Started",
-      "pages": [
-        "getting-started/introduction",
-        "getting-started/how-to-use",
-        "getting-started/quickstart",
-        "getting-started/installation"
-      ]
-    },
-    {
-      "group": "Architecture",
-      "pages": [
-        "architecture/overview",
-        "architecture/cdm-compliance"
-      ]
-    },
-    {
-      "group": "API Reference",
-      "pages": [
-        "api-reference/authentication",
-        "api-reference/documents"
-      ]
-    },
-    {
-      "group": "Guides",
-      "pages": [
-        "guides/document-extraction",
-        "guides/document-generation",
-        "guides/trade-execution",
-        "guides/verification"
-      ]
-    }
-  ],
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "getting-started/introduction",
+          "getting-started/how-to-use",
+          "getting-started/quickstart",
+          "getting-started/installation"
+        ]
+      },
+      {
+        "group": "Architecture",
+        "pages": [
+          "architecture/overview",
+          "architecture/cdm-compliance"
+        ]
+      },
+      {
+        "group": "API Reference",
+        "pages": [
+          "api-reference/authentication",
+          "api-reference/documents"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/document-extraction",
+          "guides/document-generation",
+          "guides/trade-execution",
+          "guides/verification"
+        ]
+      }
+    ]
+  },
   "footerSocials": {
     "github": "https://github.com/yourusername/creditnexus",
     "linkedin": "https://linkedin.com/company/creditnexus"
