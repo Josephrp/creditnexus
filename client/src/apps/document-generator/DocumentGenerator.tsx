@@ -13,10 +13,14 @@ import { fetchWithAuth, useAuth } from '../../context/AuthContext';
 import { useFDC3 } from '../../context/FDC3Context';
 import type { GeneratedDocumentContext, CreditAgreementData as FDC3CreditAgreementData } from '../../context/FDC3Context';
 import { Loader2, FileText, Sparkles, AlertCircle, CheckCircle2, Merge } from 'lucide-react';
-import { MultimodalInputPanel } from './MultimodalInputPanel';
 import { ChatbotPanel } from './ChatbotPanel';
 import { ProcessingStatus } from './ProcessingStatus';
+import { DocumentCdmSelector } from './DocumentCdmSelector';
+import { FloatingChatbotButton } from './FloatingChatbotButton';
+import { CdmDataPreview } from './CdmDataPreview';
+import { Dialog, DialogContent } from '../../components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
+import { Info } from 'lucide-react';
 
 // Types
 interface LMATemplate {
@@ -67,30 +71,13 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
   const [error, setError] = useState<string | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
-  const [inputMode, setInputMode] = useState<'multimodal' | 'manual'>('multimodal');
-  const [processingStep, setProcessingStep] = useState<string | null>(null);
-  const [extractedDataSources, setExtractedDataSources] = useState<Array<{
-    source: 'audio' | 'image' | 'document' | 'text';
-    sourceId?: string;
-    rawText?: string;
-    cdmData?: Record<string, unknown>;
-    extractionStatus?: string;
-    confidence?: number;
-    timestamp: Date;
-  }>>([]);
-  const [fusionConflicts, setFusionConflicts] = useState<Array<{
-    field_path: string;
-    values: Array<{
-      value: string;
-      source: {
-        source_type: string;
-        source_id?: string;
-        confidence: number;
-      };
-    }>;
-    resolution?: string;
-    resolved_value?: string;
-  }>>([]);
+  const [inputMode, setInputMode] = useState<'library' | 'manual'>('library');
+  const [sourceDocumentId, setSourceDocumentId] = useState<number | null>(null);
+  const [selectedDocumentTitle, setSelectedDocumentTitle] = useState<string | null>(null);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [previewCdmData, setPreviewCdmData] = useState<CreditAgreementData | null>(null);
+  const [previewDocumentTitle, setPreviewDocumentTitle] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Load templates on mount
   useEffect(() => {
@@ -104,36 +91,33 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
     }
   }, [initialCdmData]);
 
-  // Handle fusion complete from multimodal input
-  const handleFusionComplete = useCallback((result: {
-    agreement: Record<string, unknown>;
-    conflicts: unknown[];
-    fusion_method: string;
-    source_tracking?: Record<string, unknown>;
-  }) => {
-    // Update CDM data with fused result
-    // Ensure parties have 'id' field if missing
-    const fusedData = result.agreement as CreditAgreementData;
-    if (fusedData.parties) {
-      fusedData.parties = fusedData.parties.map((party, idx) => ({
+  // Handle CDM data selection from library
+  const handleCdmDataSelect = useCallback((
+    cdmData: CreditAgreementData,
+    documentId: number
+  ) => {
+    // Ensure parties have 'id' field
+    if (cdmData.parties) {
+      cdmData.parties = cdmData.parties.map((party, idx) => ({
         ...party,
         id: party.id || `party_${idx}`,
       }));
     }
-    setCdmData(fusedData);
+    setCdmData(cdmData);
+    setSourceDocumentId(documentId);
     setError(null);
-    setProcessingStep(null);
     
-    // Update conflicts
-    if (Array.isArray(result.conflicts)) {
-      setFusionConflicts(result.conflicts as typeof fusionConflicts);
-    }
-    
-    // Show success message
-    console.log('Fusion complete:', {
-      method: result.fusion_method,
-      conflicts: result.conflicts.length,
-    });
+    // Fetch document title for display
+    fetchWithAuth(`/api/documents/${documentId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.document) {
+          setSelectedDocumentTitle(data.document.title);
+        }
+      })
+      .catch(() => {
+        // Ignore errors fetching title
+      });
   }, []);
 
   // Handle CDM data update from chatbot
@@ -233,7 +217,7 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
         body: JSON.stringify({
           template_id: selectedTemplate.id,
           cdm_data: cdmData,
-          source_document_id: null,
+          source_document_id: sourceDocumentId,
         }),
       });
 
@@ -336,13 +320,42 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <Sparkles className="w-6 h-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">LMA Document Generator</h1>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-6 h-6 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900">LMA Document Generator</h1>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              Generate LMA-compliant documents from templates using CDM data
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative group">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-gray-600 hover:text-gray-900"
+                title="Workflow guidance"
+              >
+                <Info className="w-4 h-4" />
+              </Button>
+              <div className="absolute right-0 top-full mt-2 w-80 p-4 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <h4 className="font-semibold text-gray-900 mb-2">Workflow Guide</h4>
+                <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                  <li>Select a template from the sidebar</li>
+                  <li>Choose CDM data from your library or enter manually</li>
+                  <li>Review the data summary and completeness</li>
+                  <li>Click "Generate Document" to create your document</li>
+                  <li>Preview and export the generated document</li>
+                </ol>
+                <p className="text-xs text-gray-500 mt-3">
+                  💡 Tip: Use the floating chatbot button for AI assistance with template selection and field filling.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-gray-600 mt-1">
-          Generate LMA-compliant documents from templates using CDM data
-        </p>
       </div>
 
       {/* Main Content */}
@@ -458,9 +471,9 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex gap-4 p-6">
+            <div className="flex-1 flex flex-col p-6">
               {/* Main Content */}
-              <div className="flex-1 flex flex-col">
+              <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full">
                 <div className="bg-white rounded-lg border border-gray-200 p-6 mb-4">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
                     Template: {selectedTemplate.name}
@@ -492,42 +505,23 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="multimodal" className="mt-4">
-                      <MultimodalInputPanel
-                        onFusionComplete={handleFusionComplete}
-                        onError={(err) => {
-                          setError(err);
-                          setProcessingStep(null);
+                    <TabsContent value="library" className="mt-4">
+                      <DocumentCdmSelector
+                        onCdmDataSelect={handleCdmDataSelect}
+                        onPreview={(cdmData, documentId) => {
+                          setPreviewCdmData(cdmData);
+                          // Fetch document title for preview
+                          fetchWithAuth(`/api/documents/${documentId}`)
+                            .then(res => res.json())
+                            .then(data => {
+                              if (data.document) {
+                                setPreviewDocumentTitle(data.document.title);
+                              }
+                            })
+                            .catch(() => {});
+                          setIsPreviewOpen(true);
                         }}
                       />
-                      {extractedDataSources.length > 0 && (
-                        <div className="mt-4">
-                          <ProcessingStatus
-                            extractedData={extractedDataSources}
-                            conflicts={fusionConflicts}
-                            isProcessing={!!processingStep}
-                            processingStep={processingStep || undefined}
-                            onRemove={(sourceId) => {
-                              setExtractedDataSources((prev) =>
-                                prev.filter((d, idx) => `${d.source}_${idx}` !== sourceId)
-                              );
-                            }}
-                            onEdit={(sourceId, data) => {
-                              setExtractedDataSources((prev) =>
-                                prev.map((d, idx) =>
-                                  `${d.source}_${idx}` === sourceId
-                                    ? { ...d, cdmData: data }
-                                    : d
-                                )
-                              );
-                            }}
-                            canFuse={extractedDataSources.length > 0}
-                            onFuse={() => {
-                              // Fusion is handled by MultimodalInputPanel
-                            }}
-                          />
-                        </div>
-                      )}
                     </TabsContent>
 
                     <TabsContent value="manual" className="mt-4">
@@ -553,7 +547,7 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                           placeholder='{"parties": [...], "facilities": [...]}'
                         />
                         <p className="text-xs text-gray-500">
-                          Enter CDM data in JSON format. Use the Multimodal tab to extract from audio, images, documents, or text.
+                          Enter CDM data in JSON format. Use the "Select from Library" tab to choose from previously extracted documents.
                         </p>
                       </div>
                     </TabsContent>
@@ -567,6 +561,11 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                       <CheckCircle2 className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-medium text-blue-900">CDM Data Ready</span>
                     </div>
+                    {selectedDocumentTitle && (
+                      <div className="text-xs text-blue-800 mb-2 font-medium">
+                        Source: {selectedDocumentTitle}
+                      </div>
+                    )}
                     <div className="text-xs text-blue-700 space-y-1">
                       {cdmData.parties && (
                         <p>• {cdmData.parties.length} party(ies)</p>
@@ -594,7 +593,7 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                 </button>
                 <button
                   onClick={handleGenerate}
-                  disabled={loading || !cdmData || !hasValidCdmData() || !!processingStep || !isAuthenticated}
+                  disabled={loading || !cdmData || !hasValidCdmData() || !isAuthenticated}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   title={
                     !isAuthenticated
@@ -603,8 +602,6 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                       ? 'Please provide CDM data'
                       : !hasValidCdmData()
                       ? 'CDM data is incomplete. Please ensure parties and facilities are provided.'
-                      : processingStep
-                      ? 'Processing in progress...'
                       : 'Generate document'
                   }
                 >
@@ -623,19 +620,44 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
                 </div>
               </div>
 
-              {/* Chatbot Panel Sidebar */}
-              <div className="w-96 flex-shrink-0">
-                <ChatbotPanel
-                  cdmData={cdmData as Record<string, unknown>}
-                  onCdmDataUpdate={handleCdmDataUpdate}
-                  onTemplateSelect={handleChatbotTemplateSelect}
-                  className="h-full"
-                />
-              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Floating Chatbot Button */}
+      <FloatingChatbotButton
+        isOpen={isChatbotOpen}
+        onClick={() => setIsChatbotOpen(!isChatbotOpen)}
+      />
+
+      {/* Chatbot Modal */}
+      <Dialog open={isChatbotOpen} onOpenChange={setIsChatbotOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] p-0 overflow-hidden bg-slate-800 border-slate-700">
+          <div className="h-[85vh]">
+            <ChatbotPanel
+              cdmData={cdmData as Record<string, unknown>}
+              onCdmDataUpdate={handleCdmDataUpdate}
+              onTemplateSelect={handleChatbotTemplateSelect}
+              onClose={() => setIsChatbotOpen(false)}
+              className="h-full"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CDM Data Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto bg-slate-800 border-slate-700">
+          {previewCdmData && (
+            <CdmDataPreview
+              cdmData={previewCdmData}
+              documentTitle={previewDocumentTitle || undefined}
+              onClose={() => setIsPreviewOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

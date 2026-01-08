@@ -36,6 +36,7 @@ interface ImageUploaderProps {
   onError?: (error: string) => void;
   extractCdm?: boolean;
   className?: string;
+  theme?: 'light' | 'dark';
 }
 
 export function ImageUploader({
@@ -43,7 +44,9 @@ export function ImageUploader({
   onError,
   extractCdm = true,
   className = '',
+  theme = 'light',
 }: ImageUploaderProps) {
+  const isDark = theme === 'dark';
   const [images, setImages] = useState<ImageFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -246,18 +249,18 @@ export function ImageUploader({
   }, [images, extractCdm, onExtractionComplete, onError]);
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 p-6 ${className}`}>
+    <div className={`${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-gray-200'} rounded-lg border p-6 ${className}`}>
       <div className="flex items-center gap-3 mb-4">
-        <ImageIcon className="w-5 h-5 text-gray-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Image Upload</h3>
+        <ImageIcon className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-600'}`} />
+        <h3 className={`text-lg font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Image Upload</h3>
       </div>
 
       {/* Error Display */}
       {(error || webcamError) && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+        <div className={`mb-4 ${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'} rounded-lg p-3`}>
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600" />
-            <p className="text-sm text-red-700">{error || webcamError}</p>
+            <AlertCircle className={`w-4 h-4 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+            <p className={`text-sm ${isDark ? 'text-red-400' : 'text-red-700'}`}>{error || webcamError}</p>
           </div>
         </div>
       )}
@@ -266,7 +269,10 @@ export function ImageUploader({
       <div
         className={`
           border-2 border-dashed rounded-lg p-8 text-center transition-all
-          ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          ${isDragOver 
+            ? (isDark ? 'border-emerald-500 bg-emerald-500/10' : 'border-blue-500 bg-blue-50')
+            : (isDark ? 'border-slate-600 hover:border-emerald-500/50' : 'border-gray-300 hover:border-gray-400')
+          }
           ${isProcessing ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}
         `}
         onDragOver={handleDragOver}
@@ -285,19 +291,25 @@ export function ImageUploader({
 
         <div className="flex flex-col items-center gap-4">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-            isDragOver ? 'bg-blue-100' : 'bg-gray-100'
+            isDragOver 
+              ? (isDark ? 'bg-emerald-500/20' : 'bg-blue-100')
+              : (isDark ? 'bg-slate-700' : 'bg-gray-100')
           }`}>
-            <Upload className={`w-8 h-8 ${isDragOver ? 'text-blue-600' : 'text-gray-600'}`} />
+            <Upload className={`w-8 h-8 ${
+              isDragOver 
+                ? (isDark ? 'text-emerald-400' : 'text-blue-600')
+                : (isDark ? 'text-slate-400' : 'text-gray-600')
+            }`} />
           </div>
 
           <div className="space-y-1">
-            <p className="text-lg font-medium text-gray-900">
+            <p className={`text-lg font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               {images.length > 0 
                 ? `${images.length} image${images.length > 1 ? 's' : ''} selected`
                 : 'Drop images here or click to upload'
               }
             </p>
-            <p className="text-sm text-gray-500">
+            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
               Supports PNG, JPEG, WEBP, GIF, BMP, TIFF
             </p>
           </div>
@@ -308,13 +320,13 @@ export function ImageUploader({
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-gray-600" />
-            <span className="text-sm font-medium text-gray-900">Webcam Capture</span>
+            <Camera className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-600'}`} />
+            <span className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Webcam Capture</span>
           </div>
           {!isWebcamActive ? (
             <button
               onClick={startWebcam}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium text-sm transition-colors"
+              className={`px-4 py-2 ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} rounded-lg font-medium text-sm transition-colors`}
             >
               Start Webcam
             </button>
@@ -354,13 +366,13 @@ export function ImageUploader({
       {images.length > 0 && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-gray-900">
+            <h4 className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               Selected Images ({images.length})
             </h4>
             <button
               onClick={handleExtract}
               disabled={isProcessing}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className={`px-4 py-2 ${isDark ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
             >
               {isProcessing ? (
                 <>
@@ -379,7 +391,7 @@ export function ImageUploader({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {images.map((image) => (
               <div key={image.id} className="relative group">
-                <div className="aspect-square rounded-lg overflow-hidden border-2 border-gray-200 bg-gray-100">
+                <div className={`aspect-square rounded-lg overflow-hidden border-2 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-gray-100'}`}>
                   <img
                     src={image.preview}
                     alt={image.file.name}
@@ -405,31 +417,31 @@ export function ImageUploader({
       {/* Extraction Result */}
       {extractionResult && (
         <div className="mt-4 space-y-3">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className={`${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-green-50 border-green-200'} rounded-lg p-3`}>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-800">Extraction Complete</span>
+              <CheckCircle2 className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-green-600'}`} />
+              <span className={`text-sm font-medium ${isDark ? 'text-emerald-300' : 'text-green-800'}`}>Extraction Complete</span>
             </div>
-            <p className="text-xs text-green-700">
+            <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-green-700'}`}>
               {extractionResult.ocr_text_length} characters extracted from {extractionResult.images_processed} image(s)
             </p>
           </div>
 
           {/* OCR Text Preview */}
-          <div className="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto">
-            <p className="text-xs font-medium text-gray-700 mb-2">OCR Text:</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+          <div className={`${isDark ? 'bg-slate-900/50' : 'bg-gray-50'} rounded-lg p-3 max-h-48 overflow-y-auto`}>
+            <p className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'} mb-2`}>OCR Text:</p>
+            <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'} whitespace-pre-wrap`}>
               {extractionResult.ocr_text}
             </p>
           </div>
 
           {/* Per-Image OCR Results */}
           {extractionResult.ocr_texts_per_image && extractionResult.ocr_texts_per_image.length > 1 && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-gray-700 mb-2">Per-Image Results:</p>
+            <div className={`${isDark ? 'bg-slate-900/50' : 'bg-gray-50'} rounded-lg p-3`}>
+              <p className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'} mb-2`}>Per-Image Results:</p>
               <div className="space-y-2">
                 {extractionResult.ocr_texts_per_image.map((item, idx) => (
-                  <div key={idx} className="text-xs text-gray-600">
+                  <div key={idx} className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
                     <span className="font-medium">{item.filename}:</span> {item.length} characters
                   </div>
                 ))}
@@ -439,16 +451,16 @@ export function ImageUploader({
 
           {/* CDM Data Result */}
           {extractionResult.agreement && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className={`${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-blue-50 border-blue-200'} rounded-lg p-3`}>
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-800">CDM Data Extracted</span>
+                <CheckCircle2 className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-blue-600'}`} />
+                <span className={`text-sm font-medium ${isDark ? 'text-emerald-300' : 'text-blue-800'}`}>CDM Data Extracted</span>
               </div>
-              <p className="text-xs text-blue-700">
+              <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-blue-700'}`}>
                 Status: {extractionResult.extraction_status || 'success'}
               </p>
               {extractionResult.extraction_message && (
-                <p className="text-xs text-blue-600 mt-1">
+                <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-blue-600'} mt-1`}>
                   {extractionResult.extraction_message}
                 </p>
               )}
@@ -456,8 +468,8 @@ export function ImageUploader({
           )}
 
           {extractionResult.extraction_status === 'error' && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-xs text-yellow-700">
+            <div className={`${isDark ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-yellow-50 border-yellow-200'} rounded-lg p-3`}>
+              <p className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`}>
                 CDM extraction failed: {extractionResult.extraction_message}
               </p>
             </div>
@@ -467,6 +479,9 @@ export function ImageUploader({
     </div>
   );
 }
+
+
+
 
 
 

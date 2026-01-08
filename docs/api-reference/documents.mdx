@@ -1,0 +1,67 @@
+---
+title: Documents API
+description: Document management and extraction endpoints
+---
+
+## Extract Document
+
+<Endpoint method="POST" path="/api/extract" />
+
+Extract structured CDM data from a credit agreement document.
+
+<ParamField body="text" type="string" required>
+  The document text to extract from
+</ParamField>
+
+<ResponseField name="agreement" type="object">
+  The extracted CreditAgreement in CDM format
+</ResponseField>
+
+<ResponseField name="cdm_events" type="array">
+  Array of CDM events generated during extraction
+</ResponseField>
+
+<CodeGroup>
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.creditnexus.com/api/extract",
+    headers={"Authorization": "Bearer YOUR_TOKEN"},
+    json={"text": document_text}
+)
+data = response.json()
+agreement = data["agreement"]
+```
+
+```bash cURL
+curl -X POST https://api.creditnexus.com/api/extract \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "..."}'
+```
+</CodeGroup>
+
+## List Documents
+
+<Endpoint method="GET" path="/api/documents" />
+
+Retrieve a list of documents with pagination.
+
+<ParamField query="page" type="integer">
+  Page number (default: 1)
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Items per page (default: 50)
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search term for filtering
+</ParamField>
+
+## Get Document
+
+<Endpoint method="GET" path="/api/documents/{document_id}" />
+
+Retrieve a specific document with all versions and workflow data.

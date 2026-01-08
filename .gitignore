@@ -19,6 +19,7 @@ ENV/
 env/
 *.tar
 storage/
+project-site/dist/
 
 # uv
 uv.lock

@@ -1,0 +1,47 @@
+---
+title: CDM Compliance
+description: FINOS Common Domain Model compliance in CreditNexus
+---
+
+## CDM Overview
+
+CreditNexus is fully compliant with the FINOS Common Domain Model (CDM), ensuring interoperability with other financial systems and adherence to industry standards.
+
+## CDM Models
+
+All financial data is represented using CDM models:
+
+- **CreditAgreement**: Represents credit facility agreements
+- **Party**: Represents counterparties (borrowers, lenders)
+- **LoanFacility**: Represents individual loan facilities
+- **TradeExecution**: Represents trade execution events
+- **PolicyEvaluation**: Represents policy decision events
+
+## Policy Validation
+
+Policy validation is embedded at the point of data creation using Pydantic model validators:
+
+```python
+@model_validator(mode='after')
+def validate_policy_compliance(self) -> 'CreditAgreement':
+    """CDM-compliant validation at point of creation."""
+    # Policy checks here
+    return self
+```
+
+## CDM Events
+
+All state changes and policy decisions are stored as CDM events:
+
+- **TradeExecution Events**: Record trade executions
+- **PolicyEvaluation Events**: Record policy decisions
+- **Observation Events**: Record observations and verifications
+
+## Event Structure
+
+CDM events include:
+
+- `eventType`: Type of event
+- `eventDate`: ISO 8601 timestamp
+- `meta.globalKey`: Unique identifier
+- `relatedEventIdentifier`: Links to related events

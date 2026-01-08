@@ -24,10 +24,15 @@ import {
   Sparkles,
   Zap,
   Target,
-  ArrowRight
+  ArrowRight,
+  Mail,
+  Bell,
+  User,
+  ArrowRightCircle
 } from 'lucide-react';
 import { fetchWithAuth } from '@/context/AuthContext';
 import { SkeletonDashboard, EmptyState } from '@/components/ui/skeleton';
+import { useNavigate } from 'react-router-dom';
 
 interface PortfolioAnalytics {
   summary: {
@@ -235,8 +240,12 @@ function ActivityItem({ activity }: ActivityItemProps) {
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,9 +257,12 @@ export function Dashboard() {
       else setIsRefreshing(true);
       setError(null);
       
-      const [portfolioRes, dashboardRes] = await Promise.all([
+      const [portfolioRes, dashboardRes, applicationsRes, inquiriesRes, meetingsRes] = await Promise.all([
         fetchWithAuth('/api/analytics/portfolio'),
-        fetchWithAuth('/api/analytics/dashboard')
+        fetchWithAuth('/api/analytics/dashboard'),
+        fetchWithAuth('/api/applications?limit=5&sort=created_at&order=desc').catch(() => null),
+        fetchWithAuth('/api/inquiries?limit=5&sort=created_at&order=desc').catch(() => null),
+        fetchWithAuth('/api/meetings?limit=5&sort=scheduled_at&order=asc').catch(() => null)
       ]);
       
       const portfolioData = await portfolioRes.json();
@@ -280,6 +292,24 @@ export function Dashboard() {
         }
         
         setDashboardMetrics(dashboard);
+      }
+
+      // Fetch applications
+      if (applicationsRes && applicationsRes.ok) {
+        const appsData = await applicationsRes.json();
+        setApplications(Array.isArray(appsData) ? appsData : appsData.applications || []);
+      }
+
+      // Fetch inquiries
+      if (inquiriesRes && inquiriesRes.ok) {
+        const inqData = await inquiriesRes.json();
+        setInquiries(Array.isArray(inqData) ? inqData : inqData.inquiries || []);
+      }
+
+      // Fetch upcoming meetings
+      if (meetingsRes && meetingsRes.ok) {
+        const meetData = await meetingsRes.json();
+        setMeetings(Array.isArray(meetData) ? meetData : meetData.meetings || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');

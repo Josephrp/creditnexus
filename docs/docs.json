@@ -1,0 +1,93 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "CreditNexus Documentation",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#10b981",
+    "light": "#34d399",
+    "dark": "#059669",
+    "anchors": {
+      "from": "#10b981",
+      "to": "#34d399"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/yourusername/creditnexus"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/getting-started"
+  },
+  "anchors": [
+    {
+      "name": "Documentation",
+      "icon": "book-open-cover",
+      "url": "https://docs.creditnexus.com"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/yourusername/creditnexus"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "getting-started/introduction",
+        "getting-started/how-to-use",
+        "getting-started/quickstart",
+        "getting-started/installation"
+      ]
+    },
+    {
+      "group": "Architecture",
+      "pages": [
+        "architecture/overview",
+        "architecture/cdm-compliance",
+        "architecture/policy-engine",
+        "architecture/data-flow"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/authentication",
+        "api-reference/documents",
+        "api-reference/extraction",
+        "api-reference/templates",
+        "api-reference/policy"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/document-extraction",
+        "guides/document-generation",
+        "guides/trade-execution",
+        "guides/verification"
+      ]
+    },
+    {
+      "group": "Deployment",
+      "pages": [
+        "deployment/overview",
+        "deployment/backend",
+        "deployment/frontend",
+        "deployment/database",
+        "deployment/environment-variables"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/yourusername/creditnexus",
+    "linkedin": "https://linkedin.com/company/creditnexus"
+  }
+}

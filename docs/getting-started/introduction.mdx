@@ -1,0 +1,51 @@
+---
+title: Introduction
+description: Welcome to CreditNexus documentation
+---
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/getting-started/quickstart"
+  >
+    Get up and running in minutes
+  </Card>
+  <Card
+    title="Architecture"
+    icon="building"
+    href="/architecture/overview"
+  >
+    Understand the system design
+  </Card>
+</CardGroup>
+
+## What is CreditNexus?
+
+CreditNexus is a next-generation financial operating system that bridges the gap between legal text and structured financial data. It leverages advanced AI technologies to extract, validate, and manage credit agreement data while ensuring full compliance with financial industry standards.
+
+## Key Capabilities
+
+### AI-Powered Document Extraction
+
+CreditNexus uses state-of-the-art Large Language Models (LLMs) including OpenAI GPT-4o, vLLM, and HuggingFace models to extract structured data from credit agreements. The system supports both simple extraction for documents under 50k characters and map-reduce extraction for larger documents.
+
+### CDM Compliance
+
+All data is converted to the FINOS Common Domain Model (CDM) format, ensuring interoperability with other financial systems. Policy validation is embedded at the point of data creation, following CDM principles.
+
+### Policy Engine Integration
+
+Real-time policy enforcement using deterministic policy-as-code rules. The system enforces financial regulations including MiCA, Basel III, and FATF compliance.
+
+### Satellite Verification
+
+For sustainability-linked loans, CreditNexus verifies ground truth using satellite imagery and NDVI (Normalized Difference Vegetation Index) analysis powered by TorchGeo ResNet-50.
+
+### Desktop Interoperability
+
+Full FDC3 2.0 integration enables seamless interoperability with financial desktop applications, allowing data sharing and context broadcasting across platforms.
+
+## Getting Started
+
+To get started with CreditNexus, follow our [Quick Start Guide](/getting-started/quickstart) or explore the [Architecture Overview](/architecture/overview) to understand the system design.

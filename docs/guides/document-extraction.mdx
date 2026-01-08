@@ -1,0 +1,94 @@
+---
+title: Document Extraction Guide
+description: Complete guide to extracting and processing credit agreements
+---
+
+## Overview
+
+The Document Extraction workflow allows you to upload credit agreements and automatically extract structured CDM (Common Domain Model) data using AI-powered analysis.
+
+## Step-by-Step Process
+
+### 1. Access Document Parser
+
+Navigate to the **Document Parser** tab in the main application interface.
+
+### 2. Upload Document
+
+Click the upload button and select your credit agreement file. Supported formats:
+- PDF (.pdf)
+- Word documents (.docx)
+- Plain text (.txt)
+
+### 3. Extraction Process
+
+The system automatically:
+- Extracts text from the document
+- Analyzes content using AI (GPT-4o, vLLM, or HuggingFace)
+- Identifies key entities (parties, facilities, terms)
+- Structures data according to CDM format
+- Validates policy compliance
+
+### 4. Review Extracted Data
+
+Review the extracted information:
+- **Credit Agreement**: Main agreement details
+- **Parties**: Borrowers, lenders, guarantors
+- **Facilities**: Loan facilities and terms
+- **Policy Evaluation**: Compliance check results
+
+### 5. Save to Library
+
+Once validated, save the document to your library for future use in document generation or trade execution.
+
+## Extraction Features
+
+### AI-Powered Analysis
+
+CreditNexus uses advanced Large Language Models to understand complex legal text:
+- Entity extraction (names, amounts, dates)
+- Relationship mapping (party roles, facility structures)
+- Term identification (interest rates, payment schedules)
+
+### CDM Compliance
+
+All extracted data follows FINOS Common Domain Model standards:
+- Standardized data structures
+- Interoperable with other financial systems
+- Policy validation at creation point
+
+### Policy Enforcement
+
+Real-time policy evaluation ensures:
+- Regulatory compliance (MiCA, Basel III, FATF)
+- Sanctioned party checking
+- Risk assessment
+- Automated flagging of issues
+
+## Tips for Best Results
+
+1. **Document Quality**: Ensure documents are clear and readable
+2. **Complete Information**: Include all relevant pages
+3. **Standard Formats**: Use standard credit agreement formats when possible
+4. **Review Carefully**: Always review extracted data before saving
+
+## Troubleshooting
+
+**Extraction fails or returns incomplete data:**
+- Check document format and quality
+- Ensure document is not corrupted
+- Try re-uploading the document
+- Contact support if issues persist
+
+**Policy evaluation blocks extraction:**
+- Review policy evaluation details
+- Address flagged compliance issues
+- Consult compliance team if needed
+
+## Next Steps
+
+After extraction, you can:
+- Use data in [Document Generation](/guides/document-generation)
+- Create trades from extracted facilities
+- Export data for external systems
+- Share data via FDC3 context

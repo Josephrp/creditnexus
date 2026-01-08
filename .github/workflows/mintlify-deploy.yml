@@ -1,0 +1,26 @@
+name: Deploy Documentation to Mintlify
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/mintlify-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy to Mintlify
+        uses: mintlify/action@v1
+        with:
+          mintlify-path: ./docs
+          # Mintlify will automatically detect and deploy changes
+          # This workflow is optional as Mintlify GitHub App can handle deployments automatically

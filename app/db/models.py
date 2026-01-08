@@ -78,6 +78,38 @@ class MappingType(str, enum.Enum):
     AI_GENERATED = "ai_generated"
 
 
+class ApplicationType(str, enum.Enum):
+    """Types of applications."""
+    INDIVIDUAL = "individual"
+    BUSINESS = "business"
+
+
+class ApplicationStatus(str, enum.Enum):
+    """Status of applications."""
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
+
+
+class InquiryType(str, enum.Enum):
+    """Types of inquiries."""
+    GENERAL = "general"
+    APPLICATION_STATUS = "application_status"
+    TECHNICAL_SUPPORT = "technical_support"
+    SALES = "sales"
+
+
+class InquiryStatus(str, enum.Enum):
+    """Status of inquiries."""
+    NEW = "new"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
 class User(Base):
     """User model for authentication and authorization."""
     
@@ -109,12 +141,17 @@ class User(Base):
     
     last_login = Column(DateTime, nullable=True)
     
+    wallet_address = Column(String(255), nullable=True, unique=True, index=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     documents = relationship("Document", back_populates="uploaded_by_user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    applications = relationship("Application", back_populates="user")
+    inquiries = relationship("Inquiry", back_populates="user")
+    organized_meetings = relationship("Meeting", back_populates="organizer", foreign_keys="Meeting.organizer_id")
     
     def to_dict(self):
         """Convert model to dictionary."""
@@ -126,6 +163,7 @@ class User(Base):
             "role": self.role,
             "is_active": self.is_active,
             "last_login": self.last_login.isoformat() if self.last_login else None,
+            "wallet_address": self.wallet_address,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -740,4 +778,180 @@ class TemplateFieldMapping(Base):
             "transformation_rule": self.transformation_rule,
             "is_required": self.is_required,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Application(Base):
+    """Application model for individual and business applications."""
+    
+    __tablename__ = "applications"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    application_type = Column(String(20), nullable=False, index=True)
+    
+    status = Column(String(20), default=ApplicationStatus.DRAFT.value, nullable=False, index=True)
+    
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    submitted_at = Column(DateTime, nullable=True)
+    
+    reviewed_at = Column(DateTime, nullable=True)
+    
+    approved_at = Column(DateTime, nullable=True)
+    
+    rejected_at = Column(DateTime, nullable=True)
+    
+    rejection_reason = Column(Text, nullable=True)
+    
+    application_data = Column(JSONB, nullable=True)  # Stores form data
+    
+    business_data = Column(JSONB, nullable=True)  # For business applications (debt selling, loan buying)
+    
+    individual_data = Column(JSONB, nullable=True)  # For individual applications
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user = relationship("User", back_populates="applications")
+    inquiries = relationship("Inquiry", back_populates="application")
+    meetings = relationship("Meeting", back_populates="application")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "application_type": self.application_type,
+            "status": self.status,
+            "user_id": self.user_id,
+            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
+            "rejected_at": self.rejected_at.isoformat() if self.rejected_at else None,
+            "rejection_reason": self.rejection_reason,
+            "application_data": self.application_data,
+            "business_data": self.business_data,
+            "individual_data": self.individual_data,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Inquiry(Base):
+    """Inquiry model for customer support and inquiries."""
+    
+    __tablename__ = "inquiries"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    inquiry_type = Column(String(50), nullable=False, index=True)
+    
+    status = Column(String(20), default=InquiryStatus.NEW.value, nullable=False, index=True)
+    
+    priority = Column(String(20), default="normal")  # low, normal, high, urgent
+    
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
+    
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    email = Column(String(255), nullable=False)
+    
+    name = Column(String(255), nullable=False)
+    
+    subject = Column(String(500), nullable=False)
+    
+    message = Column(Text, nullable=False)
+    
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    resolved_at = Column(DateTime, nullable=True)
+    
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    response_message = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    application = relationship("Application", back_populates="inquiries")
+    user = relationship("User", back_populates="inquiries", foreign_keys=[user_id])
+    assigned_user = relationship("User", foreign_keys=[assigned_to])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "inquiry_type": self.inquiry_type,
+            "status": self.status,
+            "priority": self.priority,
+            "application_id": self.application_id,
+            "user_id": self.user_id,
+            "email": self.email,
+            "name": self.name,
+            "subject": self.subject,
+            "message": self.message,
+            "assigned_to": self.assigned_to,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolved_by": self.resolved_by,
+            "response_message": self.response_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Meeting(Base):
+    """Meeting model for calendar and meeting management."""
+    
+    __tablename__ = "meetings"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    title = Column(String(255), nullable=False)
+    
+    description = Column(Text, nullable=True)
+    
+    scheduled_at = Column(DateTime, nullable=False, index=True)
+    
+    duration_minutes = Column(Integer, default=30, nullable=False)
+    
+    meeting_type = Column(String(50), nullable=True)  # consultation, review, onboarding, etc.
+    
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
+    
+    organizer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    attendees = Column(JSONB, nullable=True)  # Array of {email, name, status}
+    
+    meeting_link = Column(String(500), nullable=True)  # Zoom/Teams link
+    
+    ics_file_path = Column(String(500), nullable=True)  # Path to generated .ics file
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    application = relationship("Application", back_populates="meetings")
+    organizer = relationship("User", back_populates="organized_meetings", foreign_keys=[organizer_id])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "duration_minutes": self.duration_minutes,
+            "meeting_type": self.meeting_type,
+            "application_id": self.application_id,
+            "organizer_id": self.organizer_id,
+            "attendees": self.attendees,
+            "meeting_link": self.meeting_link,
+            "ics_file_path": self.ics_file_path,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -1,0 +1,79 @@
+---
+title: Quick Start
+description: Get up and running with CreditNexus in minutes
+---
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Python 3.11+ installed
+- Node.js 20+ installed
+- PostgreSQL database
+- OpenAI API key (or access to vLLM/HuggingFace)
+
+## Installation
+
+### Backend Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/creditnexus.git
+cd creditnexus
+```
+
+2. Install dependencies using `uv`:
+```bash
+uv sync
+```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+4. Run database migrations:
+```bash
+uv run alembic upgrade head
+```
+
+5. Start the backend server:
+```bash
+uv run python server.py
+```
+
+### Frontend Setup
+
+1. Navigate to the client directory:
+```bash
+cd client
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Start the development server:
+```bash
+npm run dev
+```
+
+## First Steps
+
+1. **Access the application**: Open `http://localhost:5173` in your browser
+
+2. **Login or Register**: Create an account or login with existing credentials
+
+3. **Upload a Document**: Navigate to the Document Parser and upload a credit agreement
+
+4. **View Extracted Data**: Review the extracted CDM data in the library
+
+5. **Generate Documents**: Use the Document Generator to create LMA templates from your data
+
+## Next Steps
+
+- Read the [Architecture Overview](/architecture/overview) to understand the system design
+- Explore [API Reference](/api-reference/authentication) for integration options
+- Check out [Guides](/guides/document-extraction) for detailed workflows

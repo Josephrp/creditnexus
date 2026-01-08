@@ -21,7 +21,6 @@ import {
   X,
 } from 'lucide-react';
 import { fetchWithAuth } from '../../context/AuthContext';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 
 interface ChatMessage {
@@ -57,6 +56,7 @@ interface ChatbotPanelProps {
   cdmData?: Record<string, unknown>;
   onCdmDataUpdate?: (updatedCdmData: Record<string, unknown>) => void;
   onTemplateSelect?: (templateId: number) => void;
+  onClose?: () => void;
   className?: string;
 }
 
@@ -64,6 +64,7 @@ export function ChatbotPanel({
   cdmData = {},
   onCdmDataUpdate,
   onTemplateSelect,
+  onClose,
   className = '',
 }: ChatbotPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -306,32 +307,46 @@ export function ChatbotPanel({
   };
 
   return (
-    <Card className={`flex flex-col h-full ${className}`}>
-      <CardHeader className="border-b">
+    <div className={`flex flex-col h-full bg-slate-800 ${className}`}>
+      {/* Header */}
+      <div className="border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-blue-600" />
-            <CardTitle className="text-lg">AI Assistant</CardTitle>
+            <Sparkles className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-slate-100">AI Assistant</h2>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleSuggestTemplates}
               disabled={isLoading || Object.keys(cdmData).length === 0}
               title="Get template suggestions"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               <FileText className="w-4 h-4 mr-1" />
               Suggest Templates
             </Button>
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-slate-400 hover:text-slate-100"
+                aria-label="Close chatbot"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
-        <CardDescription>
+        <p className="text-sm text-slate-400 mt-1">
           Get help with template selection, field filling, and CDM structure
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
-      <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+      {/* Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message) => (
@@ -342,14 +357,14 @@ export function ChatbotPanel({
               <div
                 className={`max-w-[80%] rounded-lg px-4 py-2 ${
                   message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-700 text-slate-100'
                 }`}
               >
                 <div className="whitespace-pre-wrap text-sm">{message.content}</div>
                 <div
                   className={`text-xs mt-1 ${
-                    message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                    message.role === 'user' ? 'text-emerald-100' : 'text-slate-400'
                   }`}
                 >
                   {formatTimestamp(message.timestamp)}
@@ -357,21 +372,21 @@ export function ChatbotPanel({
 
                 {/* Template Suggestions */}
                 {message.suggestions && message.suggestions.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-300">
-                    <div className="text-xs font-semibold mb-2">Template Suggestions:</div>
+                  <div className="mt-3 pt-3 border-t border-slate-600">
+                    <div className="text-xs font-semibold mb-2 text-slate-200">Template Suggestions:</div>
                     <div className="space-y-2">
                       {message.suggestions.map((suggestion) => (
                         <button
                           key={suggestion.template_id}
                           onClick={() => handleSelectTemplate(suggestion.template_id)}
-                          className="w-full text-left p-2 bg-white rounded border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                          className="w-full text-left p-2 bg-slate-800 rounded border border-slate-600 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors"
                         >
-                          <div className="font-medium text-sm">{suggestion.name}</div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="font-medium text-sm text-slate-100">{suggestion.name}</div>
+                          <div className="text-xs text-slate-400 mt-1">
                             {suggestion.category} • {suggestion.template_code}
                           </div>
                           {suggestion.reasoning && (
-                            <div className="text-xs text-gray-600 mt-1">{suggestion.reasoning}</div>
+                            <div className="text-xs text-slate-300 mt-1">{suggestion.reasoning}</div>
                           )}
                         </button>
                       ))}
@@ -381,19 +396,19 @@ export function ChatbotPanel({
 
                 {/* Field Guidance */}
                 {message.fieldGuidance && (
-                  <div className="mt-3 pt-3 border-t border-gray-300">
-                    <div className="text-xs font-semibold mb-2">Field Guidance:</div>
+                  <div className="mt-3 pt-3 border-t border-slate-600">
+                    <div className="text-xs font-semibold mb-2 text-slate-200">Field Guidance:</div>
                     {message.fieldGuidance.missing_fields.length > 0 && (
                       <div className="mb-2">
-                        <div className="text-xs text-orange-600 font-medium">
+                        <div className="text-xs text-yellow-400 font-medium">
                           Missing Fields: {message.fieldGuidance.missing_fields.join(', ')}
                         </div>
                       </div>
                     )}
                     {message.fieldGuidance.questions.length > 0 && (
                       <div className="mb-2">
-                        <div className="text-xs font-medium mb-1">Questions:</div>
-                        <ul className="text-xs space-y-1 list-disc list-inside">
+                        <div className="text-xs font-medium mb-1 text-slate-200">Questions:</div>
+                        <ul className="text-xs space-y-1 list-disc list-inside text-slate-300">
                           {message.fieldGuidance.questions.map((q, idx) => (
                             <li key={idx}>{q}</li>
                           ))}
@@ -402,15 +417,15 @@ export function ChatbotPanel({
                     )}
                     {Object.keys(message.fieldGuidance.suggestions).length > 0 && (
                       <div className="mt-2">
-                        <div className="text-xs font-medium mb-1">Suggestions:</div>
+                        <div className="text-xs font-medium mb-1 text-slate-200">Suggestions:</div>
                         <div className="space-y-1">
                           {Object.entries(message.fieldGuidance.suggestions).map(([field, guidance]) => (
-                            <div key={field} className="text-xs">
+                            <div key={field} className="text-xs text-slate-300">
                               <span className="font-medium">{field}:</span>{' '}
                               {guidance.suggested_value !== undefined && (
-                                <span className="text-blue-600">{String(guidance.suggested_value)}</span>
+                                <span className="text-emerald-400">{String(guidance.suggested_value)}</span>
                               )}
-                              {guidance.question && <span className="text-gray-600"> - {guidance.question}</span>}
+                              {guidance.question && <span className="text-slate-400"> - {guidance.question}</span>}
                             </div>
                           ))}
                         </div>
@@ -424,9 +439,9 @@ export function ChatbotPanel({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-4 py-2">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="bg-slate-700 rounded-lg px-4 py-2">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
                   Thinking...
                 </div>
               </div>
@@ -438,13 +453,13 @@ export function ChatbotPanel({
 
         {/* Error Display */}
         {error && (
-          <div className="mx-4 mb-2 bg-red-50 border border-red-200 rounded-lg p-3">
+          <div className="mx-4 mb-2 bg-red-500/10 border border-red-500/50 rounded-lg p-3">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600" />
-              <p className="text-sm text-red-700">{error}</p>
+              <AlertCircle className="w-4 h-4 text-red-400" />
+              <p className="text-sm text-red-400">{error}</p>
               <button
                 onClick={() => setError(null)}
-                className="ml-auto text-red-600 hover:text-red-800"
+                className="ml-auto text-red-400 hover:text-red-300"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -453,7 +468,7 @@ export function ChatbotPanel({
         )}
 
         {/* Input Area */}
-        <div className="border-t p-4">
+        <div className="border-t border-slate-700 p-4">
           <div className="flex gap-2">
             <textarea
               ref={inputRef}
@@ -461,14 +476,14 @@ export function ChatbotPanel({
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ask a question or request help..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              className="flex-1 px-4 py-2 border border-slate-600 rounded-lg bg-slate-900/50 text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
               rows={2}
               disabled={isLoading}
             />
             <Button
               onClick={handleSendMessage}
               disabled={isLoading || !input.trim()}
-              className="px-6"
+              className="px-6 bg-emerald-600 hover:bg-emerald-700"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -477,14 +492,17 @@ export function ChatbotPanel({
               )}
             </Button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-slate-400 mt-2">
             Press Enter to send, Shift+Enter for new line
           </p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
+
+
+
 
 
 
