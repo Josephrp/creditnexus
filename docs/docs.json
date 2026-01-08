@@ -1,6 +1,7 @@
 {
   "$schema": "https://mintlify.com/schema.json",
   "name": "CreditNexus Documentation",
+  "theme": "mint",
   "logo": {
     "dark": "/logo/dark.svg",
     "light": "/logo/light.svg"
@@ -51,19 +52,14 @@
       "group": "Architecture",
       "pages": [
         "architecture/overview",
-        "architecture/cdm-compliance",
-        "architecture/policy-engine",
-        "architecture/data-flow"
+        "architecture/cdm-compliance"
       ]
     },
     {
       "group": "API Reference",
       "pages": [
         "api-reference/authentication",
-        "api-reference/documents",
-        "api-reference/extraction",
-        "api-reference/templates",
-        "api-reference/policy"
+        "api-reference/documents"
       ]
     },
     {
@@ -73,16 +69,6 @@
         "guides/document-generation",
         "guides/trade-execution",
         "guides/verification"
-      ]
-    },
-    {
-      "group": "Deployment",
-      "pages": [
-        "deployment/overview",
-        "deployment/backend",
-        "deployment/frontend",
-        "deployment/database",
-        "deployment/environment-variables"
       ]
     }
   ],

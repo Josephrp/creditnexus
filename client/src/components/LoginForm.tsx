@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { X, Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
@@ -17,7 +18,15 @@ export function LoginForm({ isOpen, onClose }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { login, register, authError, clearError } = useAuth();
+  const navigate = useNavigate();
+  const { login, register, authError, clearError, user } = useAuth();
+
+  // Navigate to dashboard when user is authenticated
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const passwordRequirements = [
     { label: 'At least 12 characters', test: (p: string) => p.length >= 12 },
@@ -41,7 +50,7 @@ export function LoginForm({ isOpen, onClose }: LoginFormProps) {
       }
       
       if (success) {
-        onClose();
+        // Navigation will happen via useEffect when user state updates
         setEmail('');
         setPassword('');
         setDisplayName('');

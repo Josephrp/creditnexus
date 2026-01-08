@@ -150,7 +150,7 @@ class User(Base):
     documents = relationship("Document", back_populates="uploaded_by_user")
     audit_logs = relationship("AuditLog", back_populates="user")
     applications = relationship("Application", back_populates="user")
-    inquiries = relationship("Inquiry", back_populates="user")
+    inquiries = relationship("Inquiry", back_populates="user", foreign_keys="Inquiry.user_id")
     organized_meetings = relationship("Meeting", back_populates="organizer", foreign_keys="Meeting.organizer_id")
     
     def to_dict(self):

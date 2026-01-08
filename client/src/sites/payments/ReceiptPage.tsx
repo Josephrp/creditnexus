@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -161,151 +161,153 @@ export function ReceiptPage() {
         </div>
 
         {receiptData && (
-          <Card className="bg-slate-800 border-slate-700 print:bg-white print:border-gray-300">
-            <CardHeader className="print:border-b print:border-gray-300">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-emerald-400" />
-                  Receipt
-                </CardTitle>
-                <div className="flex gap-2 print:hidden">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={downloadPDF}
-                    disabled={downloading}
-                  >
-                    {downloading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4 mr-2" />
-                    )}
-                    PDF
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePrint}
-                  >
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleShare}
-                  >
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-8 print:p-6">
-              {/* Receipt Details */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-6 print:grid-cols-2">
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Loan ID</p>
-                    <p className="text-lg font-semibold">#{receiptData.loan_id}</p>
+          <Fragment>
+            <Card className="bg-slate-800 border-slate-700 print:bg-white print:border-gray-300">
+              <CardHeader className="print:border-b print:border-gray-300">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-emerald-400" />
+                    Receipt
+                  </CardTitle>
+                  <div className="flex gap-2 print:hidden">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadPDF}
+                      disabled={downloading}
+                    >
+                      {downloading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
+                      )}
+                      PDF
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePrint}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShare}
+                    >
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share
+                    </Button>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Transaction Hash</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-lg font-semibold font-mono text-sm break-all">
-                        {receiptData.transaction_hash}
+                </div>
+              </CardHeader>
+              <CardContent className="p-8 print:p-6">
+                {/* Receipt Details */}
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-6 print:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Loan ID</p>
+                      <p className="text-lg font-semibold">#{receiptData.loan_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Transaction Hash</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg font-semibold font-mono text-sm break-all">
+                          {receiptData.transaction_hash}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyToClipboard(receiptData.transaction_hash)}
+                          className="print:hidden"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Borrower</p>
+                      <p className="text-lg font-semibold">{receiptData.borrower}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Disbursement Date</p>
+                      <p className="text-lg font-semibold">
+                        {new Date(receiptData.disbursement_date).toLocaleDateString()}
                       </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard(receiptData.transaction_hash)}
-                        className="print:hidden"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Amount</p>
+                      <p className="text-2xl font-bold text-emerald-400 print:text-black">
+                        {receiptData.currency} {receiptData.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Interest Rate</p>
+                      <p className="text-lg font-semibold">{receiptData.interest_rate}%</p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Borrower</p>
-                    <p className="text-lg font-semibold">{receiptData.borrower}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Disbursement Date</p>
-                    <p className="text-lg font-semibold">
-                      {new Date(receiptData.disbursement_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Amount</p>
-                    <p className="text-2xl font-bold text-emerald-400 print:text-black">
-                      {receiptData.currency} {receiptData.amount.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Interest Rate</p>
-                    <p className="text-lg font-semibold">{receiptData.interest_rate}%</p>
-                  </div>
-                </div>
 
-                {/* Repayment Schedule */}
-                {receiptData.repayment_schedule && receiptData.repayment_schedule.length > 0 && (
-                  <div className="border-t border-slate-700 print:border-gray-300 pt-6">
-                    <h3 className="text-lg font-semibold mb-4">Repayment Schedule</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-slate-700 print:border-gray-300">
-                            <th className="text-left py-2 text-sm text-slate-400 print:text-gray-600">Date</th>
-                            <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Principal</th>
-                            <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Interest</th>
-                            <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {receiptData.repayment_schedule.map((payment, index) => (
-                            <tr 
-                              key={index}
-                              className="border-b border-slate-800 print:border-gray-200"
-                            >
-                              <td className="py-2 text-sm">
-                                {new Date(payment.date).toLocaleDateString()}
-                              </td>
-                              <td className="text-right py-2 text-sm">
-                                {receiptData.currency} {payment.principal.toLocaleString()}
-                              </td>
-                              <td className="text-right py-2 text-sm">
-                                {receiptData.currency} {payment.interest.toLocaleString()}
-                              </td>
-                              <td className="text-right py-2 text-sm font-semibold">
-                                {receiptData.currency} {payment.amount.toLocaleString()}
-                              </td>
+                  {/* Repayment Schedule */}
+                  {receiptData.repayment_schedule && receiptData.repayment_schedule.length > 0 && (
+                    <div className="border-t border-slate-700 print:border-gray-300 pt-6">
+                      <h3 className="text-lg font-semibold mb-4">Repayment Schedule</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-700 print:border-gray-300">
+                              <th className="text-left py-2 text-sm text-slate-400 print:text-gray-600">Date</th>
+                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Principal</th>
+                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Interest</th>
+                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Total</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {receiptData.repayment_schedule.map((payment, index) => (
+                              <tr 
+                                key={index}
+                                className="border-b border-slate-800 print:border-gray-200"
+                              >
+                                <td className="py-2 text-sm">
+                                  {new Date(payment.date).toLocaleDateString()}
+                                </td>
+                                <td className="text-right py-2 text-sm">
+                                  {receiptData.currency} {payment.principal.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2 text-sm">
+                                  {receiptData.currency} {payment.interest.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2 text-sm font-semibold">
+                                  {receiptData.currency} {payment.amount.toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-4 mt-6 print:hidden">
-            <Button
-              onClick={() => navigate('/dashboard')}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white"
-            >
-              Go to Dashboard
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate(`/dashboard/applications`)}
-              className="border-slate-600 text-slate-300 hover:bg-slate-800"
-            >
-              View Applications
-            </Button>
-          </div>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-4 mt-6 print:hidden">
+              <Button
+                onClick={() => navigate('/dashboard')}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                Go to Dashboard
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/dashboard/applications`)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+              >
+                View Applications
+              </Button>
+            </div>
+          </Fragment>
         )}
       </div>
     </div>

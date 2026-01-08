@@ -8,6 +8,7 @@ import { useFDC3 } from '@/context/FDC3Context';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
 import { MultimodalInputTabs } from './MultimodalInputTabs';
+import type { TranscriptionResult, ExtractionResult, DocumentResult } from './MultimodalInputTabs';
 
 interface DocumentParserProps {
   onBroadcast?: () => void;
@@ -305,6 +306,152 @@ export function DocumentParser({
     setIsEditing(false);
     setSourceFilename(null);
     setMultimodalSources({});
+  };
+
+  const handleAudioComplete = (result: TranscriptionResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleAudioComplete',
+          message: 'Audio transcription complete',
+          data: { hasTranscription: !!result.transcription, hasAgreement: !!result.agreement },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      audio: {
+        text: result.transcription,
+        cdm: result.agreement as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (result.agreement) {
+      const agreementData = result.agreement as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleImageComplete = (result: ExtractionResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleImageComplete',
+          message: 'Image OCR complete',
+          data: { hasOcrText: !!result.ocr_text, hasAgreement: !!result.agreement },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      image: {
+        text: result.ocr_text,
+        cdm: result.agreement as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (result.agreement) {
+      const agreementData = result.agreement as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleDocumentSelect = (document: DocumentResult) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleDocumentSelect',
+          message: 'Document selected',
+          data: { documentId: document.document_id, hasCdmData: !!document.cdm_data },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      document: {
+        documentId: document.document_id,
+        cdm: document.cdm_data as Record<string, unknown> | undefined
+      }
+    }));
+    
+    if (document.cdm_data) {
+      const agreementData = document.cdm_data as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
+  };
+
+  const handleTextInput = (text: string, cdmData?: Record<string, unknown>) => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'DocumentParser:handleTextInput',
+          message: 'Text input received',
+          data: { textLength: text.length, hasCdmData: !!cdmData },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial',
+          hypothesisId: 'A'
+        })
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore logging errors
+    }
+    // #endregion
+
+    setMultimodalSources(prev => ({
+      ...prev,
+      text: {
+        text,
+        cdm: cdmData
+      }
+    }));
+    
+    setDocumentText(text);
+    
+    if (cdmData) {
+      const agreementData = cdmData as CreditAgreementData;
+      setExtractedData(agreementData);
+      setEditableData(agreementData);
+    }
   };
 
   const borrower = editableData?.parties?.find(p => p.role.toLowerCase().includes('borrower'));

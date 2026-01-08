@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentParser } from '@/apps/docu-digitizer/DocumentParser';
 import { TradeBlotter } from '@/apps/trade-blotter/TradeBlotter';
@@ -115,7 +115,26 @@ interface TradeBlotterState {
 export function DesktopAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeApp, setActiveApp] = useState<AppView>('document-parser');
+  
+  // Initialize activeApp from current route to avoid mismatches
+  const getInitialApp = (): AppView => {
+    const pathToApp: Record<string, AppView> = {
+      '/dashboard': 'dashboard',
+      '/dashboard/applications': 'applications',
+      '/dashboard/calendar': 'calendar',
+      '/app/document-parser': 'document-parser',
+      '/app/document-generator': 'document-generator',
+      '/app/trade-blotter': 'trade-blotter',
+      '/app/green-lens': 'green-lens',
+      '/app/ground-truth': 'ground-truth',
+      '/app/verification-demo': 'verification-demo',
+      '/app/risk-war-room': 'risk-war-room',
+      '/library': 'library',
+    };
+    return pathToApp[location.pathname] || 'dashboard';
+  };
+  
+  const [activeApp, setActiveApp] = useState<AppView>(getInitialApp());
   const [hasBroadcast, setHasBroadcast] = useState(false);
   const [viewData, setViewData] = useState<CreditAgreementData | null>(null);
   const [extractionContent, setExtractionContent] = useState<string | null>(null);
@@ -138,9 +157,21 @@ export function DesktopAppLayout() {
   });
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { isAvailable, pendingIntent, clearPendingIntent, onIntentReceived } = useFDC3();
+  const isNavigatingRef = useRef(false);
+  const lastNavigatedPathRef = useRef<string | null>(null);
+
 
   // Sync activeApp with route
   useEffect(() => {
+    // Skip sync if we're in the middle of a navigation
+    if (isNavigatingRef.current) {
+      // Only sync if we've reached the target path
+      if (lastNavigatedPathRef.current && location.pathname !== lastNavigatedPathRef.current) {
+        return;
+      }
+      // If we've reached the target path, allow sync to proceed
+    }
+    
     const pathToApp: Record<string, AppView> = {
       '/dashboard': 'dashboard',
       '/dashboard/applications': 'applications',
@@ -156,16 +187,23 @@ export function DesktopAppLayout() {
     };
     
     const app = pathToApp[location.pathname];
-    if (app) {
+    
+    // Only sync if the pathname is actually in our mapping (not a route we don't handle)
+    if (!app) {
+      return; // Don't update activeApp if pathname doesn't map to an app
+    }
+    
+    if (app !== activeApp) {
       setActiveApp(app);
     }
-  }, [location.pathname]);
+  }, [location.pathname]); // Only depend on pathname to avoid loops
 
   // Update route when activeApp changes
   const handleAppChange = (app: AppView) => {
-    setActiveApp(app);
     const appToPath: Record<AppView, string> = {
       'dashboard': '/dashboard',
+      'applications': '/dashboard/applications',
+      'calendar': '/dashboard/calendar',
       'document-parser': '/app/document-parser',
       'document-generator': '/app/document-generator',
       'trade-blotter': '/app/trade-blotter',
@@ -176,8 +214,19 @@ export function DesktopAppLayout() {
       'library': '/library',
     };
     const path = appToPath[app];
-    if (path) {
-      navigate(path);
+    
+    if (path && path !== location.pathname) {
+      isNavigatingRef.current = true;
+      lastNavigatedPathRef.current = path;
+      navigate(path, { replace: false });
+      // Reset flag after navigation completes
+      setTimeout(() => {
+        isNavigatingRef.current = false;
+        // Clear the last navigated path if we've reached it
+        if (lastNavigatedPathRef.current === location.pathname) {
+          lastNavigatedPathRef.current = null;
+        }
+      }, 300);
     }
   };
 
@@ -316,7 +365,11 @@ export function DesktopAppLayout() {
             {mainApps.map((app) => (
               <button
                 key={app.id}
-                onClick={() => handleAppChange(app.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAppChange(app.id);
+                }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeApp === app.id
                   ? 'bg-emerald-600 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
@@ -416,7 +469,11 @@ export function DesktopAppLayout() {
             {sidebarApps.map((app) => (
               <button
                 key={app.id}
-                onClick={() => handleAppChange(app.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAppChange(app.id);
+                }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeApp === app.id
                   ? 'bg-emerald-600 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'

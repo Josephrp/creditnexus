@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth, useAuth } from '../../context/AuthContext';
 import { useFDC3 } from '../../context/FDC3Context';
 import type { GeneratedDocumentContext, CreditAgreementData as FDC3CreditAgreementData } from '../../context/FDC3Context';
-import { Loader2, FileText, Sparkles, AlertCircle, CheckCircle2, Merge } from 'lucide-react';
+import { Loader2, FileText, Sparkles, AlertCircle, CheckCircle2, Merge, Info } from 'lucide-react';
 import { ChatbotPanel } from './ChatbotPanel';
 import { ProcessingStatus } from './ProcessingStatus';
 import { DocumentCdmSelector } from './DocumentCdmSelector';
@@ -20,7 +20,7 @@ import { FloatingChatbotButton } from './FloatingChatbotButton';
 import { CdmDataPreview } from './CdmDataPreview';
 import { Dialog, DialogContent } from '../../components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
-import { Info } from 'lucide-react';
+import { Button } from '../../components/ui/button';
 
 // Types
 interface LMATemplate {
