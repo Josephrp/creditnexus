@@ -127,6 +127,17 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None  # PostgreSQL or SQLite connection string
     DATABASE_ENABLED: bool = True  # Feature flag to enable/disable database
     
+    # Seeding Configuration
+    SEED_PERMISSIONS: bool = False  # Seed permission definitions and role mappings on startup
+    SEED_PERMISSIONS_FORCE: bool = False  # Force update existing permissions (use with caution)
+    SEED_DEMO_USERS: bool = False  # Seed demo users on startup
+    SEED_DEMO_USERS_FORCE: bool = False  # Force update existing demo users (use with caution)
+    SEED_AUDITOR: bool = False  # Seed auditor demo user
+    SEED_BANKER: bool = False  # Seed banker demo user
+    SEED_LAW_OFFICER: bool = False  # Seed law officer demo user
+    SEED_ACCOUNTANT: bool = False  # Seed accountant demo user
+    SEED_APPLICANT: bool = False  # Seed applicant demo user
+    
     @field_validator('DATABASE_URL', mode='before')
     @classmethod
     def validate_database_url(cls, v):

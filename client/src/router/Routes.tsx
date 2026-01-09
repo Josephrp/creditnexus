@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { DesktopAppLayout } from '@/components/DesktopAppLayout';
 import { LoginPage } from '@/pages/LoginPage';
+import { SignupFlow } from '@/components/SignupFlow';
 import { useAuth } from '@/context/AuthContext';
 
 import { BusinessApplicationForm } from '@/apps/application/BusinessApplicationForm';
@@ -61,6 +62,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/signup',
+    element: <SignupFlow />,
   },
   
   // Application selection
@@ -147,6 +152,22 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/app/policy-editor',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/policy-editor/:policyId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/library',
     element: (
       <ProtectedRoute>
@@ -172,6 +193,14 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <DesktopAppLayout />
       </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/admin-signups',
+    element: (
+      <AdminRoute>
+        <DesktopAppLayout />
+      </AdminRoute>
     ),
   },
   {
