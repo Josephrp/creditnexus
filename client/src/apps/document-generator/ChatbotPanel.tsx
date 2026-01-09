@@ -836,6 +836,7 @@ export function ChatbotPanel({
             Press Enter to send, Shift+Enter for new line
           </p>
         </div>
+        </div>
       </div>
     </div>
   );

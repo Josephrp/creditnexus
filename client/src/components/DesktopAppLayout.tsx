@@ -11,6 +11,7 @@ import { GroundTruthDashboard } from '@/components/GroundTruthDashboard';
 import { ApplicationDashboard } from '@/components/ApplicationDashboard';
 import { AdminSignupDashboard } from '@/components/AdminSignupDashboard';
 import { CalendarView } from '@/components/CalendarView';
+import { DealDashboard } from '@/components/DealDashboard';
 import { LoginForm } from '@/components/LoginForm';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Breadcrumb, BreadcrumbContainer } from '@/components/ui/Breadcrumb';
@@ -32,7 +33,7 @@ import {
   PERMISSION_USER_VIEW,
 } from '@/utils/permissions';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals';
 
 interface AppConfig {
   id: AppView;
@@ -113,6 +114,13 @@ const sidebarApps: AppConfig[] = [
     requiredPermission: PERMISSION_DOCUMENT_VIEW,
   },
   {
+    id: 'policy-editor',
+    name: 'Policy Editor',
+    icon: <Shield className="h-5 w-5 text-purple-400" />,
+    description: 'Create and manage policy rules',
+    requiredPermission: PERMISSION_DOCUMENT_VIEW,
+  },
+  {
     id: 'admin-signups',
     name: 'User Signups',
     icon: <User className="h-5 w-5 text-blue-400" />,
@@ -163,6 +171,7 @@ export function DesktopAppLayout() {
       '/dashboard/applications': 'applications',
       '/dashboard/admin-signups': 'admin-signups',
       '/dashboard/calendar': 'calendar',
+      '/dashboard/deals': 'deals',
       '/app/document-parser': 'document-parser',
       '/app/document-generator': 'document-generator',
       '/app/trade-blotter': 'trade-blotter',
@@ -173,6 +182,14 @@ export function DesktopAppLayout() {
       '/app/policy-editor': 'policy-editor',
       '/library': 'library',
     };
+    // Handle policy-editor routes with policyId parameter
+    if (location.pathname.startsWith('/app/policy-editor')) {
+      return 'policy-editor';
+    }
+    // Handle deal detail routes
+    if (location.pathname.startsWith('/dashboard/deals/')) {
+      return 'deals';
+    }
     return pathToApp[location.pathname] || 'dashboard';
   };
   
@@ -272,10 +289,19 @@ export function DesktopAppLayout() {
       '/app/ground-truth': 'ground-truth',
       '/app/verification-demo': 'verification-demo',
       '/app/risk-war-room': 'risk-war-room',
+      '/app/policy-editor': 'policy-editor',
       '/library': 'library',
     };
     
-    const app = pathToApp[location.pathname];
+    // Handle policy-editor routes with policyId parameter
+    let app = pathToApp[location.pathname];
+    if (!app && location.pathname.startsWith('/app/policy-editor')) {
+      app = 'policy-editor';
+    }
+    // Handle deal detail routes
+    if (!app && location.pathname.startsWith('/dashboard/deals/')) {
+      app = 'deals';
+    }
     
     // Only sync if the pathname is actually in our mapping (not a route we don't handle)
     if (!app) {
@@ -294,6 +320,7 @@ export function DesktopAppLayout() {
       'applications': '/dashboard/applications',
       'admin-signups': '/dashboard/admin-signups',
       'calendar': '/dashboard/calendar',
+      'deals': '/dashboard/deals',
       'document-parser': '/app/document-parser',
       'document-generator': '/app/document-generator',
       'trade-blotter': '/app/trade-blotter',
@@ -301,6 +328,7 @@ export function DesktopAppLayout() {
       'ground-truth': '/app/ground-truth',
       'verification-demo': '/app/verification-demo',
       'risk-war-room': '/app/risk-war-room',
+      'policy-editor': '/app/policy-editor',
       'library': '/library',
     };
     const path = appToPath[app];
@@ -601,6 +629,7 @@ export function DesktopAppLayout() {
           {activeApp === 'applications' && <ApplicationDashboard />}
           {activeApp === 'admin-signups' && <AdminSignupDashboard />}
           {activeApp === 'calendar' && <CalendarView />}
+          {activeApp === 'deals' && <DealDashboard />}
           {activeApp === 'document-parser' && (
             <DocumentParser
               onBroadcast={handleBroadcast}

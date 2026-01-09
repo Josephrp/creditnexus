@@ -24,6 +24,7 @@ from app.services.file_storage_service import FileStorageService
 from app.services.deal_service import DealService
 from app.services.profile_extraction_service import ProfileExtractionService
 from app.chains.document_retrieval_chain import DocumentRetrievalService, add_user_profile, search_user_profiles
+from app.utils.audit import log_audit_action
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
@@ -37,53 +38,6 @@ import hashlib
 # Initialize TorchGeo Classifier (Loads ResNet50 Weights)
 # This might take a few seconds on first run
 GLOBAL_CLASSIFIER = LandUseClassifier()
-
-
-def log_audit_action(
-    db: Session,
-    action: AuditAction,
-    target_type: str,
-    target_id: Optional[int] = None,
-    user_id: Optional[int] = None,
-    metadata: Optional[dict] = None,
-    request: Optional[Request] = None
-) -> AuditLog:
-    """Log an audit action to the database.
-    
-    Args:
-        db: Database session.
-        action: The type of action being logged.
-        target_type: The type of entity being acted upon (e.g., 'document', 'workflow').
-        target_id: The ID of the target entity.
-        user_id: The ID of the user performing the action.
-        metadata: Additional context data for the action.
-        request: The HTTP request (to extract IP and user agent).
-        
-    Returns:
-        The created AuditLog record.
-    """
-    ip_address = None
-    user_agent = None
-    
-    if request:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            ip_address = forwarded.split(",")[0].strip()
-        else:
-            ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent", "")[:500]
-    
-    audit_log = AuditLog(
-        user_id=user_id,
-        action=action.value,
-        target_type=target_type,
-        target_id=target_id,
-        action_metadata=metadata,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-    db.add(audit_log)
-    return audit_log
 
 
 def get_policy_service(request: Request) -> Optional[PolicyService]:
@@ -2448,7 +2402,6 @@ async def chatbot_fill_fields(
     """
     from app.chains.decision_support_chain import DecisionSupportChatbot
     
-    try:
         # Validate required fields
         if not request.required_fields:
             raise HTTPException(
@@ -2496,14 +2449,23 @@ async def chatbot_fill_fields(
             )
         
         # Prepare response
+        # Frontend expects field_guidance.suggested_values format
+        suggestions = result.get("suggestions", {})
         response_data = {
             "status": "success",
             "all_fields_present": result.get("all_fields_present", False),
             "missing_fields": result.get("missing_fields", []),
-            "suggestions": result.get("suggestions", {}),
+            "suggestions": suggestions,
             "guidance": result.get("guidance", ""),
             "questions": result.get("questions", []),
+            # Add field_guidance format for frontend compatibility
+            "field_guidance": {
+                "suggested_values": suggestions,
+                "guidance": result.get("guidance", ""),
+                "questions": result.get("questions", [])
+            }
         }
+        
         
         if "error" in result:
             response_data["error"] = result["error"]
@@ -7115,7 +7077,7 @@ async def list_applications(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """List applications with filtering and pagination."""
     query = db.query(Application)
@@ -7447,7 +7409,7 @@ async def list_inquiries(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """List inquiries with filtering and pagination."""
     query = db.query(Inquiry)
@@ -7665,7 +7627,7 @@ async def list_meetings(
     start_date: Optional[str] = Query(None, description="Start date filter (ISO 8601)"),
     end_date: Optional[str] = Query(None, description="End date filter (ISO 8601)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """List meetings with filtering."""
     query = db.query(Meeting)
@@ -8166,7 +8128,7 @@ async def create_deal_note(
             user_id=current_user.id,
             content=note_request.content,
             note_type=note_request.note_type,
-            metadata=note_request.metadata,
+            note_metadata=note_request.metadata,
         )
         db.add(note)
         db.flush()
@@ -8397,7 +8359,7 @@ async def update_deal_note(
         if note_request.note_type is not None:
             note.note_type = note_request.note_type
         if note_request.metadata is not None:
-            note.metadata = note_request.metadata
+            note.note_metadata = note_request.metadata
         
         note.updated_at = datetime.utcnow()
         
@@ -8584,7 +8546,7 @@ async def extract_profile_from_documents(
         if existing_profile:
             try:
                 existing_profile_dict = json.loads(existing_profile)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 logger.warning(f"Invalid existing_profile JSON: {existing_profile}")
         
         # Initialize profile extraction service

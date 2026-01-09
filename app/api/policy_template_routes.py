@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.auth.dependencies import require_auth, get_current_user
+from app.auth.jwt_auth import require_auth, get_current_user
 from app.db.models import User, PolicyTemplate
 from app.services.policy_editor_service import PolicyEditorService
 

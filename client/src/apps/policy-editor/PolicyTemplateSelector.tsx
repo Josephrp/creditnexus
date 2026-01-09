@@ -96,32 +96,54 @@ export function PolicyTemplateSelector({
       setLoading(true);
       setError(null);
       
-      // For now, load active policies as templates
-      // In the future, this could be a dedicated template endpoint
-      const response = await fetchWithAuth('/api/policies?status=active&limit=100');
+      // Try to load from policy-templates endpoint first
+      let templates: PolicyTemplate[] = [];
       
-      if (!response.ok) {
-        throw new Error('Failed to load templates');
+      try {
+        const templateResponse = await fetchWithAuth('/api/policy-templates?limit=100');
+        if (templateResponse.ok) {
+          const templateData = await templateResponse.json();
+          templates = (templateData.templates || []).map((template: any) => ({
+            id: template.id,
+            name: template.name,
+            category: template.category || 'regulatory',
+            description: template.description,
+            rules_yaml: template.rules_yaml,
+            metadata: {
+              rules_count: template.metadata?.rules_count,
+              rule_names: template.metadata?.rule_names,
+              use_cases: template.metadata?.use_cases || [template.use_case].filter(Boolean)
+            }
+          }));
+        }
+      } catch (templateErr) {
+        console.warn('Failed to load from policy-templates endpoint, trying policies:', templateErr);
       }
       
-      const data = await response.json();
-      const policies = data.policies || [];
-      
-      // Convert policies to templates
-      const templateList: PolicyTemplate[] = policies.map((policy: any) => ({
-        id: policy.id,
-        name: policy.name,
-        category: policy.category || 'regulatory',
-        description: policy.description,
-        rules_yaml: policy.rules_yaml,
-        metadata: {
-          rules_count: policy.metadata?.rules_count,
-          rule_names: policy.metadata?.rule_names,
-          use_cases: policy.metadata?.use_cases
+      // If no templates found, fall back to active policies
+      if (templates.length === 0) {
+        const policyResponse = await fetchWithAuth('/api/policies?status=active&limit=100');
+        if (policyResponse.ok) {
+          const policyData = await policyResponse.json();
+          const policies = policyData.policies || [];
+          
+          // Convert policies to templates
+          templates = policies.map((policy: any) => ({
+            id: policy.id,
+            name: policy.name,
+            category: policy.category || 'regulatory',
+            description: policy.description,
+            rules_yaml: policy.rules_yaml,
+            metadata: {
+              rules_count: policy.metadata?.rules_count,
+              rule_names: policy.metadata?.rule_names,
+              use_cases: policy.metadata?.use_cases
+            }
+          }));
         }
-      }));
+      }
       
-      setTemplates(templateList);
+      setTemplates(templates);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load templates');

@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.auth.dependencies import require_auth, get_current_user
+from app.auth.dependencies import get_current_user
+from app.auth.jwt_auth import require_auth
 from app.db.models import User, Policy, PolicyVersion, PolicyApproval, PolicyStatus
 from app.services.policy_editor_service import PolicyEditorService
 from app.services.policy_approval_service import PolicyApprovalService
@@ -59,6 +60,11 @@ class ApprovePolicyRequest(BaseModel):
 class RejectPolicyRequest(BaseModel):
     """Request model for rejecting a policy."""
     rejection_comment: str = Field(..., min_length=1)
+
+
+class ValidatePolicyRequest(BaseModel):
+    """Request model for validating policy YAML."""
+    rules_yaml: str = Field(..., min_length=1)
 
 
 # API Endpoints
@@ -267,7 +273,7 @@ async def delete_policy(
 @router.post("/{policy_id}/validate", response_model=Dict[str, Any])
 async def validate_policy(
     policy_id: int,
-    rules_yaml: Optional[str] = None,
+    request: Optional[ValidatePolicyRequest] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth)
 ):
@@ -275,8 +281,8 @@ async def validate_policy(
     Validate policy YAML.
     
     Args:
-        policy_id: Policy ID (optional, can validate standalone YAML)
-        rules_yaml: Optional YAML to validate (uses policy's YAML if not provided)
+        policy_id: Policy ID
+        request: Optional ValidatePolicyRequest with rules_yaml (uses policy's YAML if not provided)
         db: Database session
         current_user: Authenticated user
         
@@ -287,8 +293,8 @@ async def validate_policy(
         validator = PolicyValidator()
         
         # Get YAML to validate
-        if rules_yaml:
-            yaml_to_validate = rules_yaml
+        if request and request.rules_yaml:
+            yaml_to_validate = request.rules_yaml
         else:
             service = PolicyEditorService(db)
             policy = service.get_policy(policy_id)
@@ -298,6 +304,44 @@ async def validate_policy(
         
         # Validate
         result = validator.validate(yaml_to_validate)
+        
+        return {
+            "status": "success",
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings,
+            "metadata": result.metadata
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating policy: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error validating policy: {str(e)}")
+
+
+@router.post("/validate", response_model=Dict[str, Any])
+async def validate_policy_standalone(
+    request: ValidatePolicyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Validate policy YAML without requiring a policy ID.
+    
+    Args:
+        request: ValidatePolicyRequest with rules_yaml
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Validation results
+    """
+    try:
+        validator = PolicyValidator()
+        
+        # Validate
+        result = validator.validate(request.rules_yaml)
         
         return {
             "status": "success",

@@ -630,7 +630,7 @@ class DealService:
             deal_id=deal.deal_id,
             note_id=deal_note.id,
             content=note_content,
-            metadata=deal_note.metadata
+            metadata=deal_note.note_metadata
         )
         
         # Optionally update deal status based on verification

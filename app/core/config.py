@@ -184,18 +184,41 @@ class Settings(BaseSettings):
             return []
         
         rules_dir = Path(self.POLICY_RULES_DIR)
+        
+        # Resolve path relative to project root if it's a relative path
+        if not rules_dir.is_absolute():
+            # Try to find project root (where server.py is located)
+            import os
+            current_dir = Path(os.getcwd())
+            # If we're in client directory, go up one level
+            if current_dir.name == 'client':
+                rules_dir = current_dir.parent / rules_dir
+            else:
+                rules_dir = current_dir / rules_dir
+        
         if not rules_dir.exists():
+            logging.getLogger(__name__).warning(f"Policy rules directory does not exist: {rules_dir}")
             return []
         
-        # Find all YAML files matching the pattern
+        # Find all YAML files recursively matching the pattern
         pattern = self.POLICY_RULES_PATTERN
-        rule_files = list(rules_dir.glob(pattern))
+        # Use rglob for recursive search
+        rule_files = list(rules_dir.rglob(pattern))
         
-        # Also check for .yml extension
+        # Also check for .yml extension recursively
         if pattern.endswith('.yaml'):
-            rule_files.extend(rules_dir.glob(pattern.replace('.yaml', '.yml')))
+            rule_files.extend(rules_dir.rglob(pattern.replace('.yaml', '.yml')))
         
-        return sorted(rule_files)  # Sort for deterministic loading order
+        # Remove duplicates and sort for deterministic loading order
+        rule_files = sorted(set(rule_files))
+        
+        logger_instance = logging.getLogger(__name__)
+        if rule_files:
+            logger_instance.info(f"Found {len(rule_files)} policy rule file(s) in {rules_dir}")
+        else:
+            logger_instance.warning(f"No policy rule files found in {rules_dir} (searched recursively for {pattern})")
+        
+        return rule_files
     
     def get_secret_value(self, key: str) -> str:
         """Get the secret value for a given key."""

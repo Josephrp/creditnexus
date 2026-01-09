@@ -2,10 +2,14 @@ import { useState, useCallback, useEffect } from 'react';
 import { Upload, FileText, X, Loader2, CheckCircle2, AlertCircle, User, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { SignupFormApplicant, ApplicantFormData } from './SignupFormApplicant';
-import { SignupFormBanker, BankerFormData } from './SignupFormBanker';
-import { SignupFormLawOfficer, LawOfficerFormData } from './SignupFormLawOfficer';
-import { SignupFormAccountant, AccountantFormData } from './SignupFormAccountant';
+import { SignupFormApplicant } from './SignupFormApplicant';
+import type { ApplicantFormData } from './SignupFormApplicant';
+import { SignupFormBanker } from './SignupFormBanker';
+import type { BankerFormData } from './SignupFormBanker';
+import { SignupFormLawOfficer } from './SignupFormLawOfficer';
+import type { LawOfficerFormData } from './SignupFormLawOfficer';
+import { SignupFormAccountant } from './SignupFormAccountant';
+import type { AccountantFormData } from './SignupFormAccountant';
 import { fetchWithAuth } from '@/context/AuthContext';
 import type { UserRole } from './SignupFlow';
 
@@ -133,7 +137,7 @@ export function ProfileEnrichment({ role, formData, onChange, errors = {} }: Pro
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Profile extraction failed' }));
-        throw new Error(errorData.detail || 'Profile extraction failed');
+        throw new Error(errorData.detail?.message || errorData.detail || errorData.message || 'Profile extraction failed');
       }
 
       const result = await response.json();

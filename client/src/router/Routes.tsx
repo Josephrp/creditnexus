@@ -23,7 +23,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">Loading...</div>;
   }
   
   if (!user) {
@@ -53,8 +53,9 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Router configuration
-export const router = createBrowserRouter([
-  // Public routes
+export const router = createBrowserRouter(
+  [
+    // Public routes
   {
     path: '/',
     element: <Navigate to="/dashboard" replace />,
@@ -212,6 +213,22 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/dashboard/deals',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard/deals/:dealId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/dashboard/inbox',
     element: (
       <AdminRoute>
@@ -261,6 +278,10 @@ export const router = createBrowserRouter([
       </div>
     ),
   },
-]);
-
-export default router;
+  ],
+  {
+    future: {
+      v7_startTransition: true,
+    },
+  }
+);

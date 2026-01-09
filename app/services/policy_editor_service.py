@@ -70,7 +70,7 @@ class PolicyEditorService:
             status=PolicyStatus.DRAFT.value,
             version=1,
             created_by=created_by,
-            metadata=metadata or {}
+            additional_metadata=metadata or {}
         )
         
         self.db.add(policy)

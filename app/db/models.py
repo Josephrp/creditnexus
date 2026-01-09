@@ -1181,7 +1181,8 @@ class DealNote(Base):
     
     note_type = Column(String(50), nullable=True)  # general, verification, status_change, etc.
     
-    metadata = Column(JSONB, nullable=True)  # Additional note metadata
+    # Note: Using note_metadata instead of metadata to avoid SQLAlchemy reserved attribute conflict
+    note_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional note metadata
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
@@ -1199,7 +1200,7 @@ class DealNote(Base):
             "user_id": self.user_id,
             "content": self.content,
             "note_type": self.note_type,
-            "metadata": self.metadata,
+            "metadata": self.note_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -1226,7 +1227,8 @@ class Policy(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
-    metadata = Column(JSONB, nullable=True)  # Additional metadata (tags, notes, etc.)
+    # Note: Using additional_metadata instead of metadata to avoid SQLAlchemy reserved attribute conflict
+    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional metadata (tags, notes, etc.)
     
     # Soft delete
     deleted_at = Column(DateTime, nullable=True, index=True)
@@ -1251,7 +1253,7 @@ class Policy(Base):
             "approved_by": self.approved_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "metadata": self.metadata,
+            "metadata": self.additional_metadata,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
 

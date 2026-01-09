@@ -313,6 +313,36 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"Failed to initialize policy template seeding: {e}")
                 
+                # Seed policies from YAML files (for Policy Editor visibility)
+                try:
+                    from app.db.models import Policy, User
+                    from app.db import SessionLocal
+                    from scripts.seed_policies import seed_policies_from_yaml
+                    
+                    db = SessionLocal()
+                    try:
+                        # Always sync policies from YAML files (updates existing, creates new)
+                        logger.info("Syncing policies from YAML files...")
+                        
+                        # Get admin user ID for policy creator
+                        admin = db.query(User).filter(User.role == 'admin').first()
+                        admin_user_id = admin.id if admin else 1
+                        
+                        # Seed/update policies from YAML files
+                        total_seeded = seed_policies_from_yaml(db, admin_user_id)
+                        
+                        if total_seeded > 0:
+                            logger.info(f"Synced {total_seeded} policy(ies) from YAML files.")
+                        else:
+                            logger.info("No policies were synced from YAML files.")
+                    except Exception as e:
+                        logger.warning(f"Failed to sync policies from YAML files: {e}", exc_info=True)
+                        db.rollback()
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize policy seeding: {e}")
+                
                 # Seed demo users if enabled
                 if settings.SEED_DEMO_USERS or any([
                     settings.SEED_AUDITOR,
@@ -436,6 +466,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(credit_risk_router)
 app.include_router(policy_editor_router)
+app.include_router(policy_template_router)
 app.include_router(auth_router, prefix="/api")
 app.include_router(jwt_router, prefix="/api")
 

@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchWithAuth, useAuth } from '../../context/AuthContext';
 import { RuleBuilder } from './RuleBuilder';
+import { PolicyTemplateSelector } from './PolicyTemplateSelector';
 import { 
   Save, 
   FileText, 
@@ -25,7 +26,10 @@ import {
   Settings,
   History,
   CheckSquare,
-  XSquare
+  XSquare,
+  List,
+  Plus,
+  Edit
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -71,25 +75,37 @@ interface Rule {
 export function PolicyEditor() {
   const { policyId } = useParams<{ policyId?: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   // State
   const [policy, setPolicy] = useState<Policy | null>(null);
+  const [policies, setPolicies] = useState<Policy[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [yamlPreview, setYamlPreview] = useState<string>('');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'builder' | 'yaml'>('builder');
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showPolicyList, setShowPolicyList] = useState(!policyId);
   const [policyName, setPolicyName] = useState('');
   const [policyCategory, setPolicyCategory] = useState('regulatory');
   const [policyDescription, setPolicyDescription] = useState('');
   
+  // Load policies list on mount or when auth state changes
+  useEffect(() => {
+    if (!policyId && isAuthenticated) {
+      loadPolicies();
+    }
+  }, [isAuthenticated, policyId]);
+
   // Load policy if editing
   useEffect(() => {
     if (policyId) {
       loadPolicy(parseInt(policyId));
+      setShowPolicyList(false);
     } else {
       // New policy - initialize with empty rule
       setRules([{
@@ -108,6 +124,41 @@ export function PolicyEditor() {
       }]);
     }
   }, [policyId]);
+
+  const loadPolicies = async () => {
+    // Only load if authenticated
+    if (!isAuthenticated) {
+      setPolicies([]);
+      return;
+    }
+    
+    try {
+      setLoadingPolicies(true);
+      setError(null);
+      
+      const response = await fetchWithAuth('/api/policies?limit=100');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Not authenticated - clear policies
+          setPolicies([]);
+          return;
+        }
+        throw new Error('Failed to load policies');
+      }
+      
+      const data = await response.json();
+      setPolicies(data.policies || []);
+    } catch (err) {
+      // Only set error if it's not an auth issue
+      if (err instanceof Error && !err.message.includes('401')) {
+        setError(err.message);
+      }
+      setPolicies([]);
+    } finally {
+      setLoadingPolicies(false);
+    }
+  };
   
   // Real-time YAML generation
   useEffect(() => {
@@ -115,10 +166,12 @@ export function PolicyEditor() {
       const yaml = generateYamlFromRules(rules);
       setYamlPreview(yaml);
       
-      // Validate in real-time
-      validateYaml(yaml);
+      // Validate in real-time (only if authenticated)
+      if (isAuthenticated) {
+        validateYaml(yaml);
+      }
     }
-  }, [rules]);
+  }, [rules, isAuthenticated]);
   
   const loadPolicy = async (id: number) => {
     try {
@@ -184,10 +237,15 @@ export function PolicyEditor() {
   };
   
   const validateYaml = async (yaml: string) => {
+    // Skip validation if no YAML content or user not authenticated
+    if (!yaml || !yaml.trim() || !isAuthenticated) {
+      return;
+    }
+    
     try {
       const endpoint = policyId 
         ? `/api/policies/${policyId}/validate`
-        : '/api/policies/0/validate';
+        : '/api/policies/validate';
       
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -198,9 +256,16 @@ export function PolicyEditor() {
       if (response.ok) {
         const data = await response.json();
         setValidationResult(data);
+      } else if (response.status === 401) {
+        // User not authenticated - silently skip validation
+        return;
+      } else {
+        // Don't show error for validation failures - just log
+        console.warn('Validation request failed:', response.status);
       }
     } catch (err) {
-      console.error('Validation error:', err);
+      // Silently handle validation errors
+      console.debug('Validation error:', err);
     }
   };
   
@@ -253,12 +318,52 @@ export function PolicyEditor() {
       }
       
       setPolicy(savedPolicy);
+      setShowPolicyList(false);
+      
+      // Reload policies list
+      await loadPolicies();
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save policy');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTemplateSelect = (template: any) => {
+    setPolicyName(template.name);
+    setPolicyCategory(template.category || 'regulatory');
+    setPolicyDescription(template.description || '');
+    setYamlPreview(template.rules_yaml);
+    // Try to parse YAML to rules
+    const parsedRules = parseYamlToRules(template.rules_yaml);
+    if (parsedRules.length > 0) {
+      setRules(parsedRules);
+    }
+    setShowTemplateSelector(false);
+  };
+
+  const handleCreateNew = () => {
+    setShowPolicyList(false);
+    setShowTemplateSelector(false);
+    setPolicy(null);
+    setPolicyName('');
+    setPolicyCategory('regulatory');
+    setPolicyDescription('');
+    setRules([{
+      name: 'new_rule',
+      when: {},
+      action: 'allow',
+      priority: 50,
+      description: ''
+    }]);
+    generateYamlFromRules([{
+      name: 'new_rule',
+      when: {},
+      action: 'allow',
+      priority: 50,
+      description: ''
+    }]);
   };
   
   const handleAddRule = () => {
@@ -282,6 +387,105 @@ export function PolicyEditor() {
     const updatedRules = rules.filter((_, i) => i !== index);
     setRules(updatedRules);
   };
+
+  // Show policy list if no policyId and showPolicyList is true
+  if (showPolicyList && !policyId) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Policy Editor</h1>
+            <p className="text-muted-foreground">Manage and create policy rules</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowTemplateSelector(true)} variant="outline">
+              <FileText className="h-4 w-4 mr-2" />
+              Use Template
+            </Button>
+            <Button onClick={handleCreateNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Policy
+            </Button>
+          </div>
+        </div>
+
+        {loadingPolicies ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {policies.length === 0 ? (
+              <div className="col-span-full text-center p-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No policies found. Create your first policy to get started.</p>
+              </div>
+            ) : (
+              policies.map((p) => (
+                <Card key={p.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/app/policy-editor/${p.id}`)}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg">{p.name}</CardTitle>
+                      <Badge variant="outline">{p.status}</Badge>
+                    </div>
+                    <CardDescription>{p.category}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {p.description && (
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{p.description}</p>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Version {p.version}</span>
+                      <span>{new Date(p.updated_at).toLocaleDateString()}</span>
+                    </div>
+                    <Button 
+                      className="w-full mt-4" 
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/app/policy-editor/${p.id}`);
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Policy
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Show template selector
+  if (showTemplateSelector) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Select Template</h1>
+            <p className="text-muted-foreground">Choose a template to start from</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowTemplateSelector(false)} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <Button onClick={handleCreateNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Start from Scratch
+            </Button>
+          </div>
+        </div>
+        <PolicyTemplateSelector
+          onTemplateSelect={handleTemplateSelect}
+          onClone={handleTemplateSelect}
+        />
+      </div>
+    );
+  }
   
   if (loading) {
     return (

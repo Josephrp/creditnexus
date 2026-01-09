@@ -744,60 +744,61 @@ export function Dashboard() {
                 <li>• Review and customize generated content</li>
               </ul>
             </div>
+            </div>
           </PermissionGate>
           </div>
-        </div>
         )}
       </PermissionGate>
 
       <PermissionGate permission={PERMISSION_DOCUMENT_VIEW}>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Leaf className="h-5 w-5 text-green-400" />
-          <h3 className="text-lg font-medium text-white">ESG Breakdown</h3>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center justify-between p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-              <div>
-                <span className="text-sm text-green-300 block">Sustainability-Linked</span>
-                <span className="text-xs text-green-400/70">ESG compliant</span>
-              </div>
-            </div>
-            <span className="text-2xl font-bold text-green-400">{esg_breakdown.sustainability_linked}</span>
+          <div className="flex items-center gap-2 mb-4">
+            <Leaf className="h-5 w-5 text-green-400" />
+            <h3 className="text-lg font-medium text-white">ESG Breakdown</h3>
           </div>
           
-          <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-slate-400" />
-              <div>
-                <span className="text-sm text-slate-300 block">Standard</span>
-                <span className="text-xs text-slate-400/70">Traditional agreements</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <div>
+                  <span className="text-sm text-green-300 block">Sustainability-Linked</span>
+                  <span className="text-xs text-green-400/70">ESG compliant</span>
+                </div>
               </div>
+              <span className="text-2xl font-bold text-green-400">{esg_breakdown.sustainability_linked}</span>
             </div>
-            <span className="text-2xl font-bold text-slate-300">{esg_breakdown.non_sustainability}</span>
+            
+            <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-slate-400" />
+                <div>
+                  <span className="text-sm text-slate-300 block">Standard</span>
+                  <span className="text-xs text-slate-400/70">Traditional agreements</span>
+                </div>
+              </div>
+              <span className="text-2xl font-bold text-slate-300">{esg_breakdown.non_sustainability}</span>
+            </div>
+            
+            {Object.keys(esg_breakdown.esg_score_distribution).length > 0 && (
+              <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600">
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">ESG Categories</p>
+                <div className="space-y-2">
+                  {Object.entries(esg_breakdown.esg_score_distribution).map(([category, count]) => (
+                    <div key={category} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-400">{category}</span>
+                      <span className="text-sm font-medium text-slate-300">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          
-          {Object.keys(esg_breakdown.esg_score_distribution).length > 0 && (
-            <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">ESG Categories</p>
-              <div className="space-y-2">
-                {Object.entries(esg_breakdown.esg_score_distribution).map(([category, count]) => (
-                  <div key={category} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">{category}</span>
-                    <span className="text-sm font-medium text-slate-300">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Clause Cache Editor */}
-      <ClauseEditor className="mt-6" />
+        {/* Clause Cache Editor */}
+        <ClauseEditor className="mt-6" />
+      </PermissionGate>
     </div>
   );
 }
