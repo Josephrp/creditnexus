@@ -1,0 +1,801 @@
+[
+  {
+    "template_code": "LMA-CL-FA-2024-EN",
+    "name": "Corporate Lending Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Corporate Lending - Syndicated",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CL-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Administrative Agent'].name",
+      "parties[role='Lender'].name",
+      "sustainability_linked",
+      "esg_kpi_targets",
+      "deal_id",
+      "loan_identification_number"
+    ],
+    "ai_generated_sections": [
+      "representations_and_warranties",
+      "conditions_precedent",
+      "covenants",
+      "events_of_default"
+    ]
+  },
+  {
+    "template_code": "LMA-CL-TS-2024-EN",
+    "name": "Corporate Lending Term Sheet (English Law)",
+    "category": "Term Sheet",
+    "subcategory": "Corporate Lending - Syndicated",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CL-TS-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "parties[role='Administrative Agent'].name",
+      "facilities[0].interest_terms.payment_frequency",
+      "sustainability_linked",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "key_terms_summary",
+      "conditions_precedent_summary",
+      "pricing_summary"
+    ]
+  },
+  {
+    "template_code": "LMA-SLL-FA-2024-EN",
+    "name": "Sustainability-Linked Loan Facility Agreement (English Law)",
+    "category": "Sustainable Finance",
+    "subcategory": "Sustainability-Linked Loans",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-SLL-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "sustainability_linked",
+      "esg_kpi_targets"
+    ],
+    "optional_cdm_fields": [
+      "spt_definitions",
+      "margin_adjustment",
+      "sustainability_performance_targets",
+      "verification_mechanism"
+    ],
+    "ai_generated_sections": [
+      "sustainability_provisions",
+      "kpi_monitoring_clause",
+      "margin_adjustment_mechanism",
+      "reporting_obligations"
+    ]
+  },
+  {
+    "template_code": "LMA-CA-2024-EN",
+    "name": "Confidentiality Agreement (English Law)",
+    "category": "Confidentiality Agreement",
+    "subcategory": "Standard",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Lender'].name",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Borrower'].lei",
+      "parties[role='Lender'].lei",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "confidentiality_obligations",
+      "permitted_disclosures",
+      "return_of_information",
+      "duration_clause"
+    ]
+  },
+  {
+    "template_code": "LMA-ST-CSA-2024-EN",
+    "name": "Credit Support Annex for Secondary Trading (English Law)",
+    "category": "Secondary Trading",
+    "subcategory": "Credit Support",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-ST-CSA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "collateral_details",
+      "margin_thresholds"
+    ],
+    "ai_generated_sections": [
+      "collateral_obligations",
+      "margin_calculation",
+      "transfer_provisions",
+      "dispute_resolution"
+    ]
+  },
+  {
+    "template_code": "LMA-SI-ICA-2024-EN",
+    "name": "Intercreditor Agreement (English Law)",
+    "category": "Security & Intercreditor",
+    "subcategory": "Intercreditor",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-SI-ICA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "parties[role='Administrative Agent'].name",
+      "security_interests",
+      "priority_arrangements"
+    ],
+    "ai_generated_sections": [
+      "priority_provisions",
+      "enforcement_rights",
+      "voting_mechanisms",
+      "standstill_provisions"
+    ]
+  },
+  {
+    "template_code": "LMA-OR-AML-2024-EN",
+    "name": "Anti-Money Laundering Certificate (English Law)",
+    "category": "Origination Documents",
+    "subcategory": "Compliance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-OR-AML-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "deal_id",
+      "kyc_verification_date"
+    ],
+    "ai_generated_sections": [
+      "aml_certification",
+      "source_of_funds",
+      "sanctions_compliance",
+      "ongoing_obligations"
+    ]
+  },
+  {
+    "template_code": "LMA-RG-MiCA-2024-EU",
+    "name": "MiCA Compliance Certificate (EU Law)",
+    "category": "Regulatory",
+    "subcategory": "MiCA Compliance",
+    "governing_law": "EU",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RG-MiCA-2024-EU-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "crypto_asset_details",
+      "regulatory_status"
+    ],
+    "ai_generated_sections": [
+      "mica_compliance_statement",
+      "regulatory_classification",
+      "disclosure_obligations",
+      "reporting_requirements"
+    ]
+  },
+  {
+    "template_code": "LMA-RS-RSA-2024-EN",
+    "name": "Restructuring Support Agreement (English Law)",
+    "category": "Restructuring",
+    "subcategory": "Support Agreement",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RS-RSA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "restructuring_terms",
+      "forbearance_period"
+    ],
+    "ai_generated_sections": [
+      "restructuring_terms",
+      "forbearance_provisions",
+      "voting_mechanisms",
+      "implementation_timeline"
+    ]
+  },
+  {
+    "template_code": "LMA-SP-OPINION-2024-EN",
+    "name": "Legal Opinion Template (English Law)",
+    "category": "Supporting Documents",
+    "subcategory": "Legal Opinions",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-SP-OPINION-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "parties[role='Administrative Agent'].name",
+      "jurisdiction_details"
+    ],
+    "ai_generated_sections": [
+      "legal_capacity_opinion",
+      "authorization_opinion",
+      "enforceability_opinion",
+      "governing_law_opinion"
+    ]
+  },
+  {
+    "template_code": "LMA-CL-FA-2024-NY",
+    "name": "Corporate Lending Facility Agreement (New York Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Corporate Lending - Syndicated",
+    "governing_law": "New York",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CL-FA-2024-NY-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Administrative Agent'].name",
+      "parties[role='Lender'].name",
+      "deal_id",
+      "loan_identification_number"
+    ],
+    "ai_generated_sections": [
+      "representations_and_warranties",
+      "conditions_precedent",
+      "covenants",
+      "events_of_default"
+    ]
+  },
+  {
+    "template_code": "LMA-RG-BASEL-2024-EU",
+    "name": "Basel III Capital Adequacy Certificate (EU Law)",
+    "category": "Regulatory",
+    "subcategory": "Basel III Compliance",
+    "governing_law": "EU",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RG-BASEL-2024-EU-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "risk_weighting",
+      "capital_requirements"
+    ],
+    "ai_generated_sections": [
+      "capital_adequacy_certification",
+      "risk_weighting_disclosure",
+      "regulatory_capital_requirements",
+      "reporting_obligations"
+    ]
+  },
+  {
+    "template_code": "LMA-RG-FATF-2024-EN",
+    "name": "FATF AML/CFT Compliance Certificate (English Law)",
+    "category": "Regulatory",
+    "subcategory": "FATF Compliance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RG-FATF-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "kyc_verification_date",
+      "sanctions_screening_date"
+    ],
+    "ai_generated_sections": [
+      "fatf_compliance_statement",
+      "cdd_obligations",
+      "suspicious_transaction_reporting",
+      "sanctions_compliance"
+    ]
+  },
+  {
+    "template_code": "LMA-RG-UK-2024-UK",
+    "name": "UK Consumer Credit Agreement (UK Law)",
+    "category": "Regional Documents",
+    "subcategory": "UK Consumer Credit",
+    "governing_law": "UK",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RG-UK-2024-UK-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "apr_disclosure",
+      "cooling_off_period"
+    ],
+    "ai_generated_sections": [
+      "consumer_rights_disclosure",
+      "apr_calculation",
+      "early_repayment_rights",
+      "complaints_procedure"
+    ]
+  },
+  {
+    "template_code": "LMA-RG-EU-2024-EU",
+    "name": "EU Consumer Credit Directive Agreement (EU Law)",
+    "category": "Regional Documents",
+    "subcategory": "EU Consumer Credit",
+    "governing_law": "EU",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-RG-EU-2024-EU-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "apr_disclosure",
+      "withdrawal_rights"
+    ],
+    "ai_generated_sections": [
+      "consumer_rights_disclosure",
+      "apr_calculation",
+      "withdrawal_rights",
+      "pre_contractual_information"
+    ]
+  },
+  {
+    "template_code": "LMA-CL-BL-2024-EN",
+    "name": "Bridge Loan Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Bridge Loan",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CL-BL-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "parties[role='Administrative Agent'].name",
+      "bridge_to_permanent_financing",
+      "refinancing_conditions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "bridge_loan_provisions",
+      "refinancing_obligations",
+      "prepayment_terms",
+      "events_of_default"
+    ]
+  },
+  {
+    "template_code": "LMA-CL-MEZ-2024-EN",
+    "name": "Mezzanine Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Mezzanine Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-CL-MEZ-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "equity_kicker_provisions",
+      "subordination_terms",
+      "warrant_provisions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "mezzanine_provisions",
+      "equity_participation_rights",
+      "subordination_agreement",
+      "conversion_rights"
+    ]
+  },
+  {
+    "template_code": "LMA-PF-FA-2024-EN",
+    "name": "Project Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Project Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-PF-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "parties[role='Project Company'].name",
+      "project_details",
+      "offtake_agreements",
+      "construction_phase_provisions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "project_specific_provisions",
+      "offtake_agreement_provisions",
+      "construction_phase_covenants",
+      "operational_phase_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-REF-FA-2024-EN",
+    "name": "Real Estate Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Real Estate Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-REF-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "property_description",
+      "valuation_requirements",
+      "ltv_ratios",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "property_description",
+      "security_package",
+      "valuation_requirements",
+      "ltv_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-ACQ-FA-2024-EN",
+    "name": "Acquisition Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Acquisition Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-ACQ-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "target_company_details",
+      "acquisition_structure",
+      "equity_commitment",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "acquisition_provisions",
+      "target_company_representations",
+      "equity_funding_conditions",
+      "post_acquisition_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-WC-FA-2024-EN",
+    "name": "Working Capital Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Working Capital",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-WC-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "revolving_credit_provisions",
+      "drawdown_conditions",
+      "utilization_covenants",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "working_capital_provisions",
+      "revolving_credit_terms",
+      "drawdown_mechanics",
+      "utilization_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-TR-FA-2024-EN",
+    "name": "Trade Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Trade Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-TR-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "trade_documentation_requirements",
+      "letter_of_credit_provisions",
+      "shipping_documents",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "trade_finance_provisions",
+      "letter_of_credit_terms",
+      "documentary_requirements",
+      "shipping_document_provisions"
+    ]
+  },
+  {
+    "template_code": "LMA-LEV-FA-2024-EN",
+    "name": "Leveraged Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Leveraged Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-LEV-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "leverage_ratios",
+      "ebitda_definitions",
+      "covenant_lite_provisions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "leverage_covenants",
+      "ebitda_definitions",
+      "financial_covenants",
+      "incurrence_based_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-ASSET-FA-2024-EN",
+    "name": "Asset-Based Lending Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Asset-Based Lending",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-ASSET-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "collateral_assets",
+      "advance_rates",
+      "field_examiner_provisions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "asset_based_provisions",
+      "collateral_monitoring",
+      "advance_rate_calculations",
+      "field_examiner_rights"
+    ]
+  },
+  {
+    "template_code": "LMA-INFRA-FA-2024-EN",
+    "name": "Infrastructure Finance Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Infrastructure Finance",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-INFRA-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "infrastructure_project_details",
+      "regulatory_approvals",
+      "concession_agreements",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "infrastructure_provisions",
+      "regulatory_compliance",
+      "concession_agreement_provisions",
+      "long_term_operational_covenants"
+    ]
+  },
+  {
+    "template_code": "LMA-SOV-FA-2024-EN",
+    "name": "Sovereign Lending Facility Agreement (English Law)",
+    "category": "Facility Agreement",
+    "subcategory": "Sovereign Lending",
+    "governing_law": "English",
+    "version": "2024.1",
+    "file_path": "storage/templates/LMA-SOV-FA-2024-EN-2024.1.docx",
+    "required_cdm_fields": [
+      "parties[role='Borrower'].name",
+      "parties[role='Borrower'].lei",
+      "facilities[0].facility_name",
+      "facilities[0].commitment_amount.amount",
+      "facilities[0].commitment_amount.currency",
+      "facilities[0].maturity_date",
+      "facilities[0].interest_terms.rate_option.benchmark",
+      "facilities[0].interest_terms.rate_option.spread_bps",
+      "agreement_date",
+      "governing_law"
+    ],
+    "optional_cdm_fields": [
+      "parties[role='Lender'].name",
+      "sovereign_immunity_provisions",
+      "waiver_of_immunity",
+      "political_risk_provisions",
+      "deal_id"
+    ],
+    "ai_generated_sections": [
+      "sovereign_immunity_waiver",
+      "political_risk_provisions",
+      "sovereign_representations",
+      "enforcement_provisions"
+    ]
+  }
+]

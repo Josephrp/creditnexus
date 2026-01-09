@@ -73,9 +73,8 @@ class FieldPathParser:
                 # Start of filter or index
                 # Preserve attribute name before bracket for pattern matching
                 attr_name_before_bracket = current_segment if current_segment else None
-                if current_segment:
-                    segments.append(current_segment)
-                    current_segment = ""
+                # Don't add to segments yet - we'll add it after parsing the bracket
+                current_segment = ""
                 
                 # Find matching closing bracket
                 bracket_content = ""
@@ -103,27 +102,21 @@ class FieldPathParser:
                     attr_name = filter_match.group(1)
                     filter_key = filter_match.group(2)
                     filter_value = filter_match.group(3)
+                    # Add attribute name, then filter
+                    segments.append(attr_name)
                     segments.append({"filter": {filter_key: filter_value}})
-                    # Remove the attribute name from segments if it was added
-                    if segments and segments[-1] == attr_name:
-                        segments.pop()
-                    segments.insert(-1 if segments else 0, attr_name)
                 elif index_match:
                     # Array index: facilities[0]
                     attr_name = index_match.group(1)
                     index = int(index_match.group(2))
+                    # Add attribute name, then index
+                    segments.append(attr_name)
                     segments.append({"index": index})
-                    # Remove the attribute name from segments if it was added
-                    if segments and segments[-1] == attr_name:
-                        segments.pop()
-                    segments.insert(-1 if segments else 0, attr_name)
                 else:
                     # Try to parse as simple index
                     try:
                         index = int(bracket_content)
                         attr_name = attr_name_before_bracket if attr_name_before_bracket else (segments[-1] if segments else None)
-                        if attr_name and segments and segments[-1] == attr_name:
-                            segments.pop()
                         if attr_name:
                             segments.append(attr_name)
                         segments.append({"index": index})
@@ -166,6 +159,7 @@ class FieldPathParser:
             return None
         
         segments = FieldPathParser.parse_field_path(path)
+        
         current = obj
         
         for segment in segments:
@@ -239,10 +233,11 @@ class FieldPathParser:
             
             if isinstance(segment, dict):
                 if "filter" in segment:
-                    # List filter
+                    # List filter - find matching item in list
                     filter_dict = segment["filter"]
                     if isinstance(current, list):
-                        for item in current:
+                        found_item = None
+                        for idx, item in enumerate(current):
                             if isinstance(item, dict):
                                 match = all(
                                     str(item.get(key)).lower() == str(value).lower()
@@ -254,8 +249,25 @@ class FieldPathParser:
                                     for key, value in filter_dict.items()
                                 )
                             if match:
+                                found_item = item
+                                # Store reference to the list and index for later modification
+                                # We need to track this so we can update the item in place
+                                if not hasattr(obj, '_field_parser_context'):
+                                    obj._field_parser_context = {}
+                                obj._field_parser_context['current_list'] = current
+                                obj._field_parser_context['current_index'] = idx
                                 current = item
                                 break
+                        if found_item is None:
+                            # Item not found - create new one if we're at the end
+                            if i == len(segments) - 2:  # Last segment before final
+                                new_item = filter_dict.copy()  # Start with filter criteria
+                                current.append(new_item)
+                                current = new_item
+                                if not hasattr(obj, '_field_parser_context'):
+                                    obj._field_parser_context = {}
+                                obj._field_parser_context['current_list'] = current
+                                obj._field_parser_context['current_index'] = len(current) - 1
                 elif "index" in segment:
                     # Array index
                     index = segment["index"]
@@ -278,7 +290,14 @@ class FieldPathParser:
         final_segment = segments[-1]
         if isinstance(final_segment, str):
             if isinstance(current, dict):
-                current[final_segment] = value
+                # If setting a nested object/dict and value is also a dict, merge instead of replace
+                # This preserves existing fields in the object
+                if isinstance(value, dict) and final_segment in current and isinstance(current[final_segment], dict):
+                    # Merge dictionaries to preserve existing fields
+                    current[final_segment].update(value)
+                else:
+                    # Simple field assignment
+                    current[final_segment] = value
             else:
                 setattr(current, final_segment, value)
     

@@ -3,16 +3,21 @@ AI field population engine for LMA template generation.
 
 Uses LLM to generate AI-populated sections like representations, covenants,
 conditions precedent, events of default, and ESG clauses.
+
+Integrates with clause caching to reduce LLM costs.
 """
 
 import logging
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
 
+from sqlalchemy.orm import Session
+
 from app.models.cdm import CreditAgreement
 from app.db.models import LMATemplate
 from app.core.llm_client import get_chat_model
 from app.prompts.templates.loader import PromptLoader
+from app.services.clause_cache_service import ClauseCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -25,17 +30,25 @@ class AIFieldPopulator:
     template-specific prompts.
     """
     
-    def __init__(self):
-        """Initialize AI field populator with LLM."""
+    def __init__(self, db: Optional[Session] = None):
+        """
+        Initialize AI field populator with LLM.
+        
+        Args:
+            db: Optional database session for clause caching
+        """
         self.llm = get_chat_model()
         self.prompt_loader = PromptLoader()
+        self.cache_service = ClauseCacheService() if db else None
+        self.db = db
         logger.info("AIFieldPopulator initialized")
     
     def populate_ai_fields(
         self,
         cdm_data: CreditAgreement,
         template: LMATemplate,
-        mapped_fields: Dict[str, Any]
+        mapped_fields: Dict[str, Any],
+        user_id: Optional[int] = None
     ) -> Dict[str, str]:
         """
         Populate all AI-generated fields for a template.
@@ -44,6 +57,7 @@ class AIFieldPopulator:
             cdm_data: CreditAgreement instance with CDM data
             template: LMATemplate instance
             mapped_fields: Already mapped direct/computed fields (for context)
+            user_id: Optional user ID for clause cache tracking
             
         Returns:
             Dictionary mapping template field names to generated content
@@ -63,17 +77,48 @@ class AIFieldPopulator:
         # Generate each section
         for section_name in ai_sections:
             try:
-                generated_content = self._generate_section(
-                    section_name=section_name,
-                    cdm_data=cdm_data,
-                    template=template,
-                    mapped_fields=mapped_fields
-                )
+                # Map section name to template field placeholder
+                template_field = f"[{section_name.upper().replace('_', '_')}]"
+                
+                # Check cache first if available
+                cached_clause = None
+                if self.cache_service and self.db:
+                    cached_clause = self.cache_service.get_cached_clause(
+                        db=self.db,
+                        template_id=template.id,
+                        field_name=template_field,
+                        cdm_data=cdm_data
+                    )
+                
+                if cached_clause:
+                    # Use cached clause
+                    generated_content = cached_clause.clause_content
+                    logger.debug(f"Using cached clause for {section_name} (usage count: {cached_clause.usage_count})")
+                else:
+                    # Generate new clause
+                    generated_content = self._generate_section(
+                        section_name=section_name,
+                        cdm_data=cdm_data,
+                        template=template,
+                        mapped_fields=mapped_fields
+                    )
+                    
+                    # Save to cache if available
+                    if generated_content and self.cache_service and self.db:
+                        try:
+                            self.cache_service.save_clause(
+                                db=self.db,
+                                template_id=template.id,
+                                field_name=template_field,
+                                clause_content=generated_content,
+                                cdm_data=cdm_data,
+                                created_by=user_id
+                            )
+                            logger.debug(f"Cached generated clause for {section_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to cache clause for {section_name}: {e}")
                 
                 if generated_content:
-                    # Map section name to template field placeholder
-                    # Section names like "representations_and_warranties" map to "[REPRESENTATIONS_AND_WARRANTIES]"
-                    template_field = f"[{section_name.upper().replace('_', '_')}]"
                     ai_fields[template_field] = generated_content
                     logger.debug(f"Generated {section_name} ({len(generated_content)} chars)")
                 else:

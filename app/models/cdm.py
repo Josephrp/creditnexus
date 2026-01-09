@@ -187,6 +187,258 @@ class CreditAgreement(BaseModel):
         None,
         description="Loan Identification Number (LIN) for syndicated loan tracking"
     )
+    
+    # KYC/AML and Origination Fields
+    kyc_verification_date: Optional[date] = Field(
+        None,
+        description="Date of KYC (Know Your Customer) verification"
+    )
+    sanctions_screening_date: Optional[date] = Field(
+        None,
+        description="Date of sanctions screening check"
+    )
+    aml_certification_date: Optional[date] = Field(
+        None,
+        description="Date of AML (Anti-Money Laundering) certification"
+    )
+    source_of_funds: Optional[str] = Field(
+        None,
+        description="Declaration of source of funds for origination documents"
+    )
+    ongoing_obligations: Optional[List[str]] = Field(
+        None,
+        description="List of ongoing compliance obligations for origination documents"
+    )
+    
+    # Regulatory Compliance Fields
+    fatf_compliance_statement: Optional[str] = Field(
+        None,
+        description="FATF (Financial Action Task Force) compliance statement"
+    )
+    cdd_obligations: Optional[List[str]] = Field(
+        None,
+        description="Customer Due Diligence (CDD) obligations"
+    )
+    suspicious_transaction_reporting: Optional[str] = Field(
+        None,
+        description="Suspicious Transaction Reporting (STR) requirements"
+    )
+    sanctions_compliance: Optional[str] = Field(
+        None,
+        description="Sanctions compliance provisions"
+    )
+    capital_adequacy_certification: Optional[str] = Field(
+        None,
+        description="Capital adequacy certification statement"
+    )
+    risk_weighting: Optional[float] = Field(
+        None,
+        description="Risk weighting percentage for Basel III compliance"
+    )
+    regulatory_capital_requirements: Optional[Money] = Field(
+        None,
+        description="Regulatory capital requirements amount"
+    )
+    
+    # Security and Intercreditor Fields
+    collateral_details: Optional[str] = Field(
+        None,
+        description="Details of collateral arrangements and security interests"
+    )
+    margin_thresholds: Optional[Money] = Field(
+        None,
+        description="Margin threshold amounts for secondary trading"
+    )
+    security_interests: Optional[List[str]] = Field(
+        None,
+        description="List of security interests and charges"
+    )
+    priority_arrangements: Optional[str] = Field(
+        None,
+        description="Priority provisions and subordination arrangements"
+    )
+    voting_mechanisms: Optional[str] = Field(
+        None,
+        description="Voting mechanisms and decision-making processes for intercreditor agreements"
+    )
+    standstill_provisions: Optional[str] = Field(
+        None,
+        description="Standstill provisions and enforcement restrictions"
+    )
+    
+    # Secondary Trading Fields
+    transfer_provisions: Optional[str] = Field(
+        None,
+        description="Transfer provisions and assignment restrictions"
+    )
+    assignment_restrictions: Optional[List[str]] = Field(
+        None,
+        description="List of assignment restrictions and conditions"
+    )
+    margin_calculation_methodology: Optional[str] = Field(
+        None,
+        description="Margin calculation methodology for secondary trading"
+    )
+    dispute_resolution_mechanism: Optional[str] = Field(
+        None,
+        description="Dispute resolution mechanism (arbitration, courts, etc.)"
+    )
+    
+    # Crypto and Digital Assets Fields
+    crypto_asset_details: Optional[str] = Field(
+        None,
+        description="Details of crypto assets or digital assets involved"
+    )
+    digital_asset_types: Optional[List[str]] = Field(
+        None,
+        description="Types of digital assets (e.g., 'Bitcoin', 'Ethereum', 'Stablecoin')"
+    )
+    blockchain_network: Optional[str] = Field(
+        None,
+        description="Blockchain network information (e.g., 'Ethereum', 'Bitcoin', 'Polygon')"
+    )
+    wallet_addresses: Optional[List[str]] = Field(
+        None,
+        description="Cryptocurrency wallet addresses"
+    )
+    custody_arrangements: Optional[str] = Field(
+        None,
+        description="Custody arrangements for digital assets"
+    )
+    
+    # Consumer Credit Fields (UK/EU)
+    apr_disclosure: Optional[str] = Field(
+        None,
+        description="APR (Annual Percentage Rate) disclosure for consumer credit"
+    )
+    cooling_off_period: Optional[int] = Field(
+        None,
+        description="Cooling-off period in days (UK Consumer Credit)"
+    )
+    withdrawal_rights: Optional[str] = Field(
+        None,
+        description="Withdrawal rights information (EU Consumer Credit)"
+    )
+    
+    # Restructuring Fields
+    restructuring_terms: Optional[str] = Field(
+        None,
+        description="Restructuring terms and conditions"
+    )
+    forbearance_period: Optional[int] = Field(
+        None,
+        description="Forbearance period in days for restructuring agreements"
+    )
+    
+    # Bridge Loan Fields
+    bridge_period: Optional[int] = Field(
+        None,
+        description="Bridge period in days for bridge loans"
+    )
+    takeout_facility_reference: Optional[str] = Field(
+        None,
+        description="Reference to takeout facility for bridge loans"
+    )
+    
+    # Mezzanine Finance Fields
+    equity_kicker: Optional[str] = Field(
+        None,
+        description="Equity kicker provisions for mezzanine finance"
+    )
+    warrant_terms: Optional[str] = Field(
+        None,
+        description="Warrant terms for mezzanine finance"
+    )
+    
+    # Project Finance Fields
+    project_name: Optional[str] = Field(
+        None,
+        description="Project name for project finance agreements"
+    )
+    sponsor_details: Optional[List[str]] = Field(
+        None,
+        description="List of project sponsor details"
+    )
+    revenue_streams: Optional[List[str]] = Field(
+        None,
+        description="List of revenue streams for project finance"
+    )
+    
+    # Trade Finance Fields
+    lc_number: Optional[str] = Field(
+        None,
+        description="Letter of Credit (LC) number"
+    )
+    beneficiary_details: Optional[str] = Field(
+        None,
+        description="Beneficiary details for trade finance"
+    )
+    shipping_documents: Optional[List[str]] = Field(
+        None,
+        description="List of shipping documents for trade finance"
+    )
+    
+    # Asset-Based Lending Fields
+    collateral_valuation: Optional[Money] = Field(
+        None,
+        description="Collateral valuation amount for asset-based lending"
+    )
+    borrowing_base: Optional[Money] = Field(
+        None,
+        description="Borrowing base amount for asset-based lending"
+    )
+    
+    # Letter of Credit Fields
+    lc_type: Optional[str] = Field(
+        None,
+        description="Type of Letter of Credit"
+    )
+    expiry_date: Optional[date] = Field(
+        None,
+        description="Expiry date for Letter of Credit"
+    )
+    presentation_period: Optional[int] = Field(
+        None,
+        description="Presentation period in days for Letter of Credit"
+    )
+    
+    # Guarantee Fields
+    guarantor_details: Optional[List[str]] = Field(
+        None,
+        description="List of guarantor details"
+    )
+    guarantee_amount: Optional[Money] = Field(
+        None,
+        description="Guarantee amount"
+    )
+    guarantee_type: Optional[str] = Field(
+        None,
+        description="Type of guarantee (e.g., 'Payment Guarantee', 'Performance Guarantee')"
+    )
+    
+    # Subordination Fields
+    senior_debt_amount: Optional[Money] = Field(
+        None,
+        description="Senior debt amount for subordination agreements"
+    )
+    subordination_ratio: Optional[float] = Field(
+        None,
+        description="Subordination ratio for subordination agreements"
+    )
+    
+    # Amendment Fields
+    amendment_number: Optional[int] = Field(
+        None,
+        description="Amendment number for amendment agreements"
+    )
+    effective_date: Optional[date] = Field(
+        None,
+        description="Effective date for amendments"
+    )
+    amended_sections: Optional[List[str]] = Field(
+        None,
+        description="List of amended sections in amendment agreements"
+    )
 
     @model_validator(mode='after')
     def check_core_fields_completeness(self) -> 'CreditAgreement':

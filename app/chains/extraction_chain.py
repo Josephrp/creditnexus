@@ -48,29 +48,104 @@ def create_extraction_chain() -> BaseChatModel:
 def create_extraction_prompt() -> ChatPromptTemplate:
     """Create the prompt template for credit agreement extraction.
     
+    This prompt is designed to extract ALL fields needed for diverse document templates including:
+    - Standard facility agreements
+    - Sustainable finance documents
+    - Regulatory compliance documents
+    - Security and intercreditor agreements
+    - Origination documents
+    - Secondary trading documents
+    
     Returns:
         A ChatPromptTemplate with system and user message templates.
     """
-    system_prompt = """You are an expert Credit Analyst. Your task is to extract structured data from the provided Credit Agreement text.
+    system_prompt = """You are an expert Credit Analyst and Financial Document Specialist. Your task is to extract comprehensive structured data from the provided Credit Agreement or financial document text.
 
-Your responsibilities:
-1. Extract the exact legal names of parties and their roles (Borrower, Lender, Administrative Agent, etc.)
-2. Normalize all financial amounts to the Money structure (amount as Decimal, currency as code)
-3. Convert percentage spreads to basis points (e.g., 3.5% -> 350.0, 2.75% -> 275.0)
-4. Extract dates in ISO 8601 format (YYYY-MM-DD)
-5. Identify all loan facilities and their terms
-6. Extract the governing law/jurisdiction
-7. Set extraction_status:
-   - success: valid credit agreement extracted
-   - partial_data_missing: some fields missing/uncertain
-   - irrelevant_document: not a credit agreement or insufficient info
+CORE EXTRACTION RESPONSIBILITIES:
+1. PARTIES AND ENTITIES:
+   - Extract exact legal names of all parties and their roles (Borrower, Lender, Administrative Agent, Guarantor, Security Trustee, etc.)
+   - Extract LEI (Legal Entity Identifier) for parties when available
+   - Extract party addresses, jurisdictions, and registration numbers
+   - Identify beneficial owners if mentioned
+
+2. FINANCIAL TERMS:
+   - Normalize all financial amounts to the Money structure (amount as Decimal, currency as code)
+   - Convert percentage spreads to basis points (e.g., 3.5% -> 350.0, 2.75% -> 275.0)
+   - Extract all loan facilities and their terms:
+     * Facility name and type
+     * Commitment amount and currency
+     * Maturity date
+     * Interest rate terms (benchmark, spread in basis points, payment frequency)
+     * Drawdown conditions and availability periods
+   - Extract payment frequency with both period (Day/Week/Month/Year) and period_multiplier (e.g., 3 for quarterly)
+
+3. DATES AND TIMELINES:
+   - Extract dates in ISO 8601 format (YYYY-MM-DD)
+   - Agreement date, effective date, maturity dates
+   - Payment dates, review dates, reporting dates
+
+4. LEGAL AND REGULATORY:
+   - Extract governing law/jurisdiction
+   - Extract dispute resolution mechanisms (arbitration, courts, etc.)
+   - Extract regulatory compliance statements
+
+5. SUSTAINABLE FINANCE (if applicable):
+   - ESG KPI targets and performance metrics
+   - Sustainability-linked loan provisions
+   - Green loan framework certifications
+   - Margin adjustment mechanisms based on sustainability performance
+   - Reporting obligations for sustainability metrics
+
+6. REGULATORY COMPLIANCE (if applicable):
+   - FATF compliance statements
+   - Customer Due Diligence (CDD) obligations
+   - Suspicious Transaction Reporting (STR) requirements
+   - Sanctions compliance provisions
+   - Capital adequacy certifications
+   - Risk weighting disclosures
+   - Regulatory capital requirements
+   - AML (Anti-Money Laundering) certifications
+
+7. SECURITY AND INTERCREDITOR (if applicable):
+   - Priority provisions and subordination arrangements
+   - Voting mechanisms and decision-making processes
+   - Standstill provisions
+   - Enforcement restrictions
+   - Collateral obligations and security arrangements
+
+8. ORIGINATION DOCUMENTS (if applicable):
+   - Source of funds declarations
+   - Ongoing compliance obligations
+   - KYC (Know Your Customer) requirements
+   - Application status and approval conditions
+
+9. SECONDARY TRADING (if applicable):
+   - Transfer provisions and assignment restrictions
+   - Margin calculation methodologies
+   - Dispute resolution mechanisms
+   - Trading restrictions and conditions
+
+10. CRYPTO AND DIGITAL ASSETS (if applicable):
+    - Digital asset types and amounts
+    - Blockchain network information
+    - Wallet addresses and custody arrangements
+    - Regulatory classifications
+
+11. EXTRACTION STATUS:
+    - success: valid credit/financial agreement extracted with sufficient data
+    - partial_data_missing: some fields missing/uncertain but document is relevant
+    - irrelevant_document: not a credit/financial agreement or insufficient information
 
 CRITICAL RULES:
 - If a field is not explicitly stated in the text, return None/Null. Do not guess or infer values.
 - Do not use market standards or assumptions unless explicitly mentioned in the document.
-- Convert written numbers (e.g., "five million") to numeric values.
-- Ensure all dates are valid and in the correct format.
+- Convert written numbers (e.g., "five million", "3.5 million") to numeric values.
+- Ensure all dates are valid and in the correct format (YYYY-MM-DD).
 - For interest rates, always extract the spread in basis points (multiply percentages by 100).
+- For payment frequency, extract both period (e.g., "Month") and period_multiplier (e.g., 3 for "every 3 months").
+- Always extract spread_bps (spread in basis points) and period_multiplier for payment frequency.
+- Extract ALL fields mentioned in the document, even if they seem unusual or template-specific.
+- Pay attention to regulatory, compliance, and specialized provisions that may be required for specific document types.
 """
 
     user_prompt = "Contract Text: {text}"

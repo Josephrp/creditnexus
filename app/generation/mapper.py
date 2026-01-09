@@ -93,7 +93,7 @@ class FieldMapper:
     
     def _map_direct_field(self, cdm_data: CreditAgreement, cdm_field_path: str) -> Optional[Any]:
         """
-        Map a direct field from CDM data.
+        Map a direct field from CDM data with fallback logic for missing fields.
         
         Args:
             cdm_data: CreditAgreement instance
@@ -106,6 +106,10 @@ class FieldMapper:
             return None
         
         value = self.parser.get_nested_value(cdm_data, cdm_field_path)
+        
+        # Fallback logic for missing critical fields
+        if value is None:
+            value = self._try_fallback_value(cdm_data, cdm_field_path)
         
         # Handle special formatting for common field types
         if isinstance(value, date):
@@ -127,6 +131,61 @@ class FieldMapper:
             return value.value
         
         return value
+    
+    def _try_fallback_value(self, cdm_data: CreditAgreement, cdm_field_path: str) -> Optional[Any]:
+        """
+        Try to compute a fallback value for missing fields.
+        
+        Fallback strategies:
+        - spread_bps: Log warning (cannot compute without source percentage)
+        - period_multiplier: Default to 1 if period exists (most common case)
+        - payment_frequency: Handle missing period_multiplier gracefully
+        
+        Args:
+            cdm_data: CreditAgreement instance
+            cdm_field_path: CDM field path that returned None
+            
+        Returns:
+            Fallback value or None if no fallback available
+        """
+        # Fallback for spread_bps - cannot compute without source data
+        if "spread_bps" in cdm_field_path:
+            logger.warning(
+                f"spread_bps missing for {cdm_field_path}. "
+                "Cannot compute fallback without source percentage value. "
+                "Please ensure extraction prompt explicitly requests spread_bps."
+            )
+            return None
+        
+        # Fallback for period_multiplier
+        if "period_multiplier" in cdm_field_path:
+            # Try to get the Frequency object
+            frequency_path = cdm_field_path.replace(".period_multiplier", "")
+            frequency = self.parser.get_nested_value(cdm_data, frequency_path)
+            
+            if frequency and hasattr(frequency, 'period'):
+                # Default to 1 if period is specified but multiplier is missing
+                # This handles cases like "Monthly" where multiplier should be 1
+                logger.info(f"period_multiplier missing for {cdm_field_path}, defaulting to 1")
+                return 1
+        
+        # Fallback for payment_frequency - handle missing period_multiplier
+        if "payment_frequency" in cdm_field_path:
+            frequency = self.parser.get_nested_value(cdm_data, cdm_field_path)
+            
+            if frequency and isinstance(frequency, Frequency):
+                # If period_multiplier is None, create a temporary Frequency with default
+                if frequency.period_multiplier is None:
+                    from app.models.cdm import Frequency, PeriodEnum
+                    # Default to 1 for missing multiplier
+                    temp_frequency = Frequency(
+                        period=frequency.period,
+                        period_multiplier=1
+                    )
+                    logger.info(f"payment_frequency missing period_multiplier, defaulting to 1 for {cdm_field_path}")
+                    return self._format_payment_frequency(temp_frequency)
+        
+        return None
     
     def _map_computed_field(
         self, 

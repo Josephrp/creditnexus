@@ -181,90 +181,62 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"Failed to initialize demo user: {e}")
                 
-                # Check if templates exist and seed if needed
+                # Check if templates exist and seed missing ones from metadata
                 try:
                     from app.templates.registry import TemplateRegistry
+                    from scripts.seed_templates import seed_templates, load_template_metadata
+                    from pathlib import Path
+                    
                     db = SessionLocal()
                     try:
                         templates = TemplateRegistry.list_templates(db)
-                        if not templates:
-                            logger.info("No templates found in database. Seeding default templates...")
-                            from scripts.seed_templates import seed_templates
+                        existing_count = len(templates) if templates else 0
+                        
+                        # Always try to load and seed from metadata file
+                        # seed_templates will skip existing templates automatically
+                        json_paths = [
+                            Path("data/templates_metadata.json"),
+                            Path("scripts/templates_metadata.json"),
+                            Path("storage/templates_metadata.json"),
+                        ]
+                        
+                        templates_data = []
+                        for json_path in json_paths:
+                            if json_path.exists():
+                                templates_data = load_template_metadata(json_path)
+                                logger.info(f"Loaded {len(templates_data)} template(s) from {json_path}")
+                                break
+                        
+                        if templates_data:
+                            # Normalize field names for compatibility
+                            for template_data in templates_data:
+                                # Handle both "required_fields" and "required_cdm_fields"
+                                if "required_cdm_fields" in template_data and "required_fields" not in template_data:
+                                    template_data["required_fields"] = template_data["required_cdm_fields"]
+                                if "optional_cdm_fields" in template_data and "optional_fields" not in template_data:
+                                    template_data["optional_fields"] = template_data["optional_cdm_fields"]
                             
-                            # Create sample template data
-                            templates_data = [
-                                {
-                                    "template_code": "LMA-CL-FA-2024-EN",
-                                    "name": "Corporate Lending Facility Agreement (English Law)",
-                                    "category": "Facility Agreement",
-                                    "subcategory": "Corporate Lending - Syndicated",
-                                    "governing_law": "English",
-                                    "version": "2024.1",
-                                    "file_path": "storage/templates/facility_agreements/corporate_lending/english/CL-FA-EN-2024.1.docx",
-                                    "required_fields": [
-                                        "parties[role='Borrower'].name",
-                                        "parties[role='Borrower'].lei",
-                                        "facilities[0].facility_name",
-                                        "facilities[0].commitment_amount.amount",
-                                        "facilities[0].commitment_amount.currency",
-                                        "facilities[0].maturity_date",
-                                        "facilities[0].interest_terms.rate_option.benchmark",
-                                        "facilities[0].interest_terms.rate_option.spread_bps",
-                                        "agreement_date",
-                                        "governing_law"
-                                    ],
-                                    "optional_fields": [
-                                        "parties[role='Administrative Agent']",
-                                        "parties[role='Lender']",
-                                        "sustainability_linked",
-                                        "esg_kpi_targets",
-                                        "deal_id",
-                                        "loan_identification_number"
-                                    ],
-                                    "ai_generated_sections": [
-                                        "representations_and_warranties",
-                                        "conditions_precedent",
-                                        "covenants",
-                                        "events_of_default",
-                                        "governing_law_clause"
-                                    ]
-                                },
-                                {
-                                    "template_code": "LMA-CL-TS-2024-EN",
-                                    "name": "Corporate Lending Term Sheet (English Law)",
-                                    "category": "Term Sheet",
-                                    "subcategory": "Corporate Lending",
-                                    "governing_law": "English",
-                                    "version": "2024.1",
-                                    "file_path": "storage/templates/term_sheets/corporate_lending/english/CL-TS-EN-2024.1.docx",
-                                    "required_fields": [
-                                        "parties[role='Borrower'].name",
-                                        "facilities[0].facility_name",
-                                        "facilities[0].commitment_amount.amount",
-                                        "facilities[0].commitment_amount.currency",
-                                        "facilities[0].maturity_date",
-                                        "facilities[0].interest_terms.rate_option.benchmark",
-                                        "facilities[0].interest_terms.rate_option.spread_bps"
-                                    ],
-                                    "optional_fields": [
-                                        "agreement_date",
-                                        "governing_law",
-                                        "sustainability_linked"
-                                    ],
-                                    "ai_generated_sections": [
-                                        "purpose",
-                                        "conditions_precedent",
-                                        "representations",
-                                        "fees"
-                                    ]
-                                }
-                            ]
-                            
+                            # Seed templates (will skip existing ones)
                             created = seed_templates(db, templates_data)
                             db.commit()
-                            logger.info(f"Seeded {created} template(s) on startup")
+                            
+                            if created > 0:
+                                logger.info(f"Seeded {created} new template(s) from metadata file (found {existing_count} existing)")
+                            else:
+                                logger.info(f"All templates from metadata already exist in database ({existing_count} total)")
+                            
+                            # Generate template files if they don't exist
+                            try:
+                                from scripts.create_template_files import main as create_templates
+                                logger.info("Generating template Word files...")
+                                create_templates(use_metadata=True, force_regenerate=False)
+                            except Exception as e:
+                                logger.warning(f"Failed to generate template files: {e}")
                         else:
-                            logger.info(f"Found {len(templates)} existing template(s) in database")
+                            if existing_count > 0:
+                                logger.info(f"Found {existing_count} existing template(s) in database (no metadata file found)")
+                            else:
+                                logger.warning("No template metadata file found. Templates will need to be seeded manually.")
                     except Exception as e:
                         logger.warning(f"Failed to check/seed templates: {e}")
                         db.rollback()
@@ -272,6 +244,21 @@ async def lifespan(app: FastAPI):
                         db.close()
                 except Exception as e:
                     logger.warning(f"Failed to initialize template seeding: {e}")
+                
+                # Load seed documents into ChromaDB if configured
+                if settings.CHROMADB_SEED_DOCUMENTS_DIR:
+                    try:
+                        from app.utils.load_chroma_seeds import load_chroma_seeds_on_startup
+                        logger.info("Loading seed documents into ChromaDB...")
+                        loaded_count = load_chroma_seeds_on_startup()
+                        if loaded_count > 0:
+                            logger.info(f"Successfully loaded {loaded_count} seed document(s) into ChromaDB")
+                        else:
+                            logger.info("No seed documents loaded (directory empty or not found)")
+                    except ImportError as e:
+                        logger.warning(f"ChromaDB not available, skipping seed document loading: {e}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load seed documents into ChromaDB: {e}")
             else:
                 logger.warning("Database engine is None, skipping initialization")
         except Exception as e:
