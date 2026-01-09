@@ -7757,3 +7757,37 @@ async def wallet_authentication(
         "user": user.to_dict()
     }
 
+
+# Recovery endpoints
+@router.post("/recovery/send-sms")
+async def send_recovery_sms(
+    phone: str = Field(..., description="Recipient phone number"),
+    message: str = Field(..., description="SMS message content"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Send recovery SMS message."""
+    from app.services.twilio_service import TwilioService
+    
+    try:
+        twilio_service = TwilioService()
+        result = twilio_service.send_sms(phone, message)
+        
+        # Log the action
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="recovery_sms",
+            user_id=current_user.id,
+            metadata={"phone": phone, "status": result["status"]}
+        )
+        db.commit()
+        
+        return {"status": "success", "result": result}
+        
+    except Exception as e:
+        logger.error(f"Error sending recovery SMS: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to send SMS: {str(e)}"}
+        )

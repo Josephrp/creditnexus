@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     # ChromaDB Configuration
     CHROMADB_PERSIST_DIR: str = "./chroma_db"  # Directory to persist ChromaDB data
     CHROMADB_SEED_DOCUMENTS_DIR: Optional[str] = None  # Optional directory to load documents into ChromaDB on startup
+
+    # Twilio configuration
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None  
+    TWILIO_PHONE_NUMBER: Optional[str] = None
     
     # Database Configuration
     DATABASE_URL: Optional[str] = None  # PostgreSQL or SQLite connection string
