@@ -781,6 +781,59 @@ class TemplateFieldMapping(Base):
         }
 
 
+class ClauseCache(Base):
+    """Cache for AI-generated clauses to reduce LLM costs."""
+    
+    __tablename__ = "clause_cache"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    field_name = Column(String(100), nullable=False, index=True)  # e.g., "REPRESENTATIONS_AND_WARRANTIES"
+    
+    clause_content = Column(Text, nullable=False)  # The generated clause text
+    
+    context_hash = Column(String(64), nullable=True, index=True)  # Hash of CDM context for cache key
+    
+    context_summary = Column(JSONB, nullable=True)  # Summary of CDM context used (for display)
+    
+    usage_count = Column(Integer, default=0, nullable=False)  # How many times this clause has been used
+    
+    last_used_at = Column(DateTime, nullable=True, index=True)
+    
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    template = relationship("LMATemplate", foreign_keys=[template_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    
+    # Unique constraint: one clause per template+field_name+context_hash combination
+    __table_args__ = (
+        {'sqlite_autoincrement': True},
+    )
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "field_name": self.field_name,
+            "clause_content": self.clause_content,
+            "context_hash": self.context_hash,
+            "context_summary": self.context_summary,
+            "usage_count": self.usage_count,
+            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Application(Base):
     """Application model for individual and business applications."""
     

@@ -24,12 +24,15 @@ import {
   Users,
   Briefcase,
   Info,
-  ExternalLink
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { fetchWithAuth } from '@/context/AuthContext';
 import { SkeletonList } from '@/components/ui/loading-states';
 import { EmptyState } from '@/components/ui/skeleton';
 import type { CreditAgreementData } from '@/context/FDC3Context';
+import { CdmPreviewCard } from './CdmPreviewCard';
 
 interface DocumentSummary {
   id: number;
@@ -295,180 +298,53 @@ export function DocumentCdmSelector({
           }
         />
       ) : (
-        <div className="space-y-3">
-          {documents.map((doc) => {
-            const isSelected = selectedDocumentId === doc.id;
-            
-            return (
-              <Card
-                key={doc.id}
-                className={`border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-colors ${
-                  isSelected ? 'border-emerald-500 bg-emerald-500/10' : ''
-                }`}
+        <div className="space-y-4">
+          {/* Grid Container with Horizontal Scroll */}
+          <div className="relative">
+            {/* Scrollable Grid: 2 rows × 3 columns (6 visible cards) */}
+            <div className="overflow-x-auto overflow-y-hidden pb-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+              <div 
+                className="inline-grid gap-4"
+                style={{ 
+                  gridTemplateColumns: 'repeat(3, minmax(280px, 320px))',
+                  gridTemplateRows: 'repeat(2, auto)',
+                  gridAutoFlow: 'column',
+                  minWidth: 'max-content'
+                }}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-3">
-                      {/* Header */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileText className="h-4 w-4 text-slate-400" />
-                            <h3 className="font-semibold text-slate-100">{doc.title}</h3>
-                            {isSelected && (
-                              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {doc.workflow_state && (
-                              <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getStatusBadge(doc.workflow_state)}`}>
-                                {doc.workflow_state}
-                              </span>
-                            )}
-                            {doc.completenessScore !== undefined && (
-                              <div className="flex items-center gap-2">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border ${getCompletenessColor(doc.completenessScore)}`}>
-                                  <Info className="h-3 w-3" />
-                                  {doc.completenessScore}% Complete
-                                </span>
-                                <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full transition-all ${
-                                      doc.completenessScore >= 80 ? 'bg-emerald-500' :
-                                      doc.completenessScore >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                                    }`}
-                                    style={{ width: `${doc.completenessScore}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* CDM Data Summary */}
-                      {doc.cdmData && (
-                        <div className="flex items-center gap-4 text-xs text-slate-400">
-                          {doc.cdmData.parties && doc.cdmData.parties.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              <span>{doc.cdmData.parties.length} party(ies)</span>
-                            </div>
-                          )}
-                          {doc.cdmData.facilities && doc.cdmData.facilities.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Briefcase className="h-3 w-3" />
-                              <span>{doc.cdmData.facilities.length} facility(ies)</span>
-                            </div>
-                          )}
-                          {doc.cdmData.agreement_date && (
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              <span>{formatDate(doc.cdmData.agreement_date)}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Metadata Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        {doc.borrower_name && (
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-slate-400" />
-                            <div>
-                              <p className="text-xs text-slate-500">Borrower</p>
-                              <p className="text-slate-200">{doc.borrower_name}</p>
-                            </div>
-                          </div>
-                        )}
-                        {doc.agreement_date && (
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-slate-400" />
-                            <div>
-                              <p className="text-xs text-slate-500">Date</p>
-                              <p className="text-slate-200">{formatDate(doc.agreement_date)}</p>
-                            </div>
-                          </div>
-                        )}
-                        {doc.total_commitment && (
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-slate-400" />
-                            <div>
-                              <p className="text-xs text-slate-500">Amount</p>
-                              <p className="text-slate-200">{formatCurrency(doc.total_commitment, doc.currency)}</p>
-                            </div>
-                          </div>
-                        )}
-                        {doc.governing_law && (
-                          <div className="flex items-center gap-2">
-                            <Scale className="h-4 w-4 text-slate-400" />
-                            <div>
-                              <p className="text-xs text-slate-500">Law</p>
-                              <p className="text-slate-200">{doc.governing_law}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sustainability Badge */}
-                      {doc.sustainability_linked && (
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs">
-                            Sustainability-Linked
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2">
-                      {onPreview && doc.cdmData && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePreview(doc)}
-                          className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                          title="Preview CDM data"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {isSelected ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled
-                          className="border-emerald-500 text-emerald-400"
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Selected
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => handleDocumentSelect(doc.id)}
-                          disabled={isSelecting}
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          {isSelecting ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Loading...
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="h-4 w-4 mr-2" />
-                              Select
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                {documents.map((doc) => {
+                  const isSelected = selectedDocumentId === doc.id;
+                  
+                  return (
+                    <CdmPreviewCard
+                      key={doc.id}
+                      documentId={doc.id}
+                      title={doc.title}
+                      borrowerName={doc.borrower_name}
+                      borrowerLei={doc.borrower_lei}
+                      governingLaw={doc.governing_law}
+                      totalCommitment={doc.total_commitment}
+                      currency={doc.currency}
+                      agreementDate={doc.agreement_date}
+                      completenessScore={doc.completenessScore}
+                      isSelected={isSelected}
+                      onSelect={handleDocumentSelect}
+                      onPreview={onPreview ? () => handlePreview(doc) : undefined}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Scroll Indicators */}
+            {documents.length > 6 && (
+              <div className="flex items-center justify-center gap-2 mt-2 text-xs text-gray-400">
+                <ChevronLeft className="w-4 h-4" />
+                <span>Scroll horizontally to see more documents ({documents.length} total)</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

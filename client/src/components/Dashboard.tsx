@@ -33,6 +33,7 @@ import {
 import { fetchWithAuth } from '@/context/AuthContext';
 import { SkeletonDashboard, EmptyState } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
+import { ClauseEditor } from '@/components/ClauseEditor';
 
 interface PortfolioAnalytics {
   summary: {
@@ -777,6 +778,9 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Clause Cache Editor */}
+      <ClauseEditor className="mt-6" />
     </div>
   );
 }

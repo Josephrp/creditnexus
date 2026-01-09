@@ -6,19 +6,20 @@ import json
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request, Form
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session, joinedload
 import pandas as pd
 
 from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult, CreditAgreement
 from app.db import get_db
-from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction, PolicyDecision as PolicyDecisionModel
+from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction, PolicyDecision as PolicyDecisionModel, ClauseCache, LMATemplate
 from app.auth.jwt_auth import get_current_user, require_auth
 from app.services.policy_service import PolicyService
 from app.services.x402_payment_service import X402PaymentService
+from app.services.clause_cache_service import ClauseCacheService
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
@@ -1253,6 +1254,7 @@ async def list_documents(
 @router.get("/documents/{document_id}")
 async def get_document(
     document_id: int,
+    include_cdm_data: bool = Query(False, description="Include CDM data in response"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1260,11 +1262,12 @@ async def get_document(
     
     Args:
         document_id: The document ID.
+        include_cdm_data: If True, include CDM data in the response.
         db: Database session.
         current_user: The current user (optional).
         
     Returns:
-        The document with all versions.
+        The document with all versions, optionally including CDM data.
     """
     try:
         doc = db.query(Document).options(
@@ -1284,10 +1287,32 @@ async def get_document(
         doc_dict["workflow"] = doc.workflow.to_dict() if doc.workflow else None
         doc_dict["uploaded_by_name"] = doc.uploaded_by_user.display_name if doc.uploaded_by_user else None
         
-        return {
+        response = {
             "status": "success",
             "document": doc_dict
         }
+        
+        # Include CDM data if requested
+        if include_cdm_data:
+            cdm_data = None
+            # Try source_cdm_data first, then latest version's extracted_data
+            if doc.source_cdm_data:
+                cdm_data = doc.source_cdm_data
+            elif doc.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    cdm_data = version.extracted_data
+            # Also try latest version if current_version_id is not set
+            if not cdm_data and doc.versions:
+                latest_version = sorted(doc.versions, key=lambda v: v.version_number or 0, reverse=True)[0]
+                if latest_version and latest_version.extracted_data:
+                    cdm_data = latest_version.extracted_data
+            
+            response["cdm_data"] = cdm_data
+        
+        return response
     except HTTPException:
         raise
     except Exception as e:
@@ -1295,6 +1320,210 @@ async def get_document(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to get document: {str(e)}"}
+        )
+
+
+@router.post("/documents/re-extract")
+async def re_extract_document(
+    document_id: int = Form(...),
+    additional_text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Re-extract CDM data from a document by appending new information.
+    
+    This endpoint allows users to:
+    1. Append additional text to the original document
+    2. Upload an image file (OCR will extract text)
+    3. Upload an audio file (transcription will extract text)
+    4. Re-run extraction on the combined text
+    5. Create a new document version with updated CDM data
+    
+    Args:
+        document_id: Document ID to re-extract
+        additional_text: Optional additional text to append
+        file: Optional image or audio file to process
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Updated CDM data and extraction result
+    """
+    try:
+        from app.chains.extraction_chain import extract_data_smart
+        from app.chains.image_extraction_chain import process_multiple_image_files
+        from app.models.cdm import ExtractionStatus
+        
+        # Get original document
+        doc = db.query(Document).options(
+            joinedload(Document.versions)
+        ).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        # Check user access
+        if doc.uploaded_by != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You do not have access to this document"}
+            )
+        
+        # Get original text from latest version
+        latest_version = db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document_id
+        ).order_by(DocumentVersion.version_number.desc()).first()
+        
+        if not latest_version or not latest_version.original_text:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Original document text not found"}
+            )
+        
+        original_text = latest_version.original_text
+        
+        # Process additional inputs
+        additional_text_parts = []
+        
+        # Process additional text if provided
+        if additional_text and additional_text.strip():
+            additional_text_parts.append(f"\n\n--- Additional Information ---\n\n{additional_text.strip()}")
+        
+        # Process file if provided
+        if file:
+            filename = file.filename or "file"
+            extension = filename.lower().split(".")[-1] if "." in filename else ""
+            file_bytes = await file.read()
+            
+            if extension in ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif"]:
+                # Image file - use OCR
+                try:
+                    from app.chains.image_extraction_chain import process_multiple_image_files
+                    ocr_texts = process_multiple_image_files([(file_bytes, filename)])
+                    if ocr_texts and ocr_texts[0]:
+                        additional_text_parts.append(
+                            f"\n\n--- Information from Image: {filename} ---\n\n{ocr_texts[0]}"
+                        )
+                except Exception as e:
+                    logger.error(f"Image OCR failed: {e}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail={"status": "error", "message": f"Image OCR failed: {str(e)}"}
+                    )
+            elif extension in ["mp3", "wav", "m4a", "ogg", "flac", "webm"]:
+                # Audio file - use transcription
+                try:
+                    from app.chains.audio_transcription_chain import process_audio_file
+                    transcription = process_audio_file(
+                        audio_bytes=file_bytes,
+                        filename=filename
+                    )
+                    if transcription:
+                        additional_text_parts.append(
+                            f"\n\n--- Information from Audio: {filename} ---\n\n{transcription}"
+                        )
+                except Exception as e:
+                    logger.error(f"Audio transcription failed: {e}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail={"status": "error", "message": f"Audio transcription failed: {str(e)}"}
+                    )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": f"Unsupported file type: {extension}. Supported: images (png, jpg, etc.) or audio (mp3, wav, etc.)"}
+                )
+        
+        if not additional_text_parts:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": "Please provide either additional_text or a file (image/audio)"}
+            )
+        
+        # Combine original text with additional information
+        combined_text = original_text + "\n".join(additional_text_parts)
+        
+        logger.info(f"Re-extracting document {document_id} with {len(combined_text)} characters (original: {len(original_text)}, additional: {len(combined_text) - len(original_text)})")
+        
+        # Re-run extraction
+        extraction_result = extract_data_smart(text=combined_text)
+        
+        if extraction_result.status == ExtractionStatus.FAILURE:
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "error", "message": extraction_result.message or "Extraction failed"}
+            )
+        
+        if not extraction_result.agreement:
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "error", "message": "No CDM data extracted from combined text"}
+            )
+        
+        # Create new document version
+        new_version_number = (latest_version.version_number or 0) + 1
+        new_version = DocumentVersion(
+            document_id=document_id,
+            version_number=new_version_number,
+            extracted_data=extraction_result.agreement.model_dump(mode='json'),
+            original_text=combined_text,
+            source_filename=latest_version.source_filename,
+            extraction_method="re-extraction",
+            created_by=current_user.id
+        )
+        db.add(new_version)
+        
+        # Update document's current version
+        doc.current_version_id = new_version.id
+        if extraction_result.agreement.deal_id:
+            # Update document metadata if available
+            if extraction_result.agreement.parties:
+                borrower = next((p for p in extraction_result.agreement.parties if p.role == "Borrower"), None)
+                if borrower:
+                    doc.borrower_name = borrower.name
+                    doc.borrower_lei = borrower.lei
+        
+        db.commit()
+        db.refresh(new_version)
+        
+        # Audit log
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="document",
+            target_id=document_id,
+            user_id=current_user.id,
+            metadata={"action": "re-extraction", "version": new_version_number}
+        )
+        
+        return {
+            "status": "success",
+            "message": "Document re-extracted successfully",
+            "document_id": document_id,
+            "version_id": new_version.id,
+            "version_number": new_version_number,
+            "cdm_data": extraction_result.agreement.model_dump(mode='json'),
+            "extraction_summary": {
+                "original_length": len(original_text),
+                "additional_length": len(combined_text) - len(original_text),
+                "combined_length": len(combined_text),
+                "extraction_status": extraction_result.status.value
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Re-extraction failed for document {document_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Re-extraction failed: {str(e)}"}
         )
 
 
@@ -1363,6 +1592,217 @@ class DocumentRetrieveRequest(BaseModel):
     top_k: int = Field(5, ge=1, le=20, description="Number of similar documents to retrieve (default: 5, max: 20)")
     filter_metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata filters (e.g., {'borrower_name': 'ACME Corp'})")
     extract_cdm: bool = Field(True, description="Whether to extract CDM data from retrieved documents")
+
+
+# ============================================================================
+# CDM Field Editing API
+# ============================================================================
+
+class CdmFieldUpdateRequest(BaseModel):
+    """Request model for updating CDM fields."""
+    field_path: str = Field(..., description="CDM field path (e.g., 'parties[0].name', 'facilities[0].commitment_amount.amount')")
+    value: Any = Field(..., description="New value for the field")
+    update_version: bool = Field(False, description="Whether to update the current version's extracted_data (default: updates source_cdm_data)")
+
+
+@router.patch("/documents/{document_id}/cdm-fields")
+async def update_document_cdm_field(
+    document_id: int,
+    request: CdmFieldUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Update a specific CDM field in a document's CDM data.
+    
+    Supports nested field paths like:
+    - "parties[0].name"
+    - "facilities[0].commitment_amount.amount"
+    - "parties[role='Borrower'].lei"
+    
+    Args:
+        document_id: Document ID
+        request: CdmFieldUpdateRequest with field_path and value
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Updated CDM data
+    """
+    from app.generation.field_parser import FieldPathParser
+    from app.models.cdm import CreditAgreement
+    
+    try:
+        # Get document
+        doc = db.query(Document).options(
+            joinedload(Document.versions)
+        ).filter(Document.id == document_id).first()
+        
+        if not doc:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Document not found"}
+            )
+        
+        # Check authorization
+        if doc.uploaded_by != current_user.id and current_user.role not in ["admin", "reviewer"]:
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "You don't have permission to edit this document"}
+            )
+        
+        # Get current CDM data
+        cdm_data_dict = None
+        if request.update_version and doc.current_version_id:
+            # Update version's extracted_data
+            version = db.query(DocumentVersion).filter(
+                DocumentVersion.id == doc.current_version_id
+            ).first()
+            if version and version.extracted_data:
+                cdm_data_dict = version.extracted_data.copy()
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"status": "error", "message": "Document version has no CDM data"}
+                )
+        else:
+            # Update source_cdm_data
+            if doc.source_cdm_data:
+                cdm_data_dict = doc.source_cdm_data.copy()
+            elif doc.current_version_id:
+                # Fallback to version's extracted_data
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == doc.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    cdm_data_dict = version.extracted_data.copy()
+                else:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"status": "error", "message": "Document has no CDM data"}
+                    )
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"status": "error", "message": "Document has no CDM data"}
+                )
+        
+        # Parse CDM data to CreditAgreement for validation
+        try:
+            cdm_agreement = CreditAgreement(**cdm_data_dict)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Invalid CDM data structure: {str(e)}"}
+            )
+        
+        # Update field in dict representation (simpler and more reliable)
+        # Convert to dict for easier manipulation
+        cdm_dict = cdm_data_dict.copy()
+        
+        try:
+            # Parse the field path
+            parser = FieldPathParser()
+            segments = parser.parse_field_path(request.field_path)
+            
+            # Navigate to the parent in the dict
+            current = cdm_dict
+            for i, segment in enumerate(segments[:-1]):
+                if isinstance(segment, str):
+                    if segment not in current:
+                        raise ValueError(f"Field '{segment}' not found in path")
+                    current = current[segment]
+                elif isinstance(segment, dict):
+                    if "filter" in segment:
+                        # Filter list by attribute
+                        filter_key = list(segment["filter"].keys())[0]
+                        filter_value = segment["filter"][filter_key]
+                        if isinstance(current, list):
+                            found = next(
+                                (item for item in current if isinstance(item, dict) and item.get(filter_key) == filter_value),
+                                None
+                            )
+                            if found is None:
+                                raise ValueError(f"No item found matching filter {filter_key}={filter_value}")
+                            current = found
+                        else:
+                            raise ValueError(f"Cannot filter non-list type")
+                    elif "index" in segment:
+                        # Array index
+                        if isinstance(current, list):
+                            if segment["index"] >= len(current):
+                                raise ValueError(f"Index {segment['index']} out of range")
+                            current = current[segment["index"]]
+                        else:
+                            raise ValueError(f"Cannot index into non-list type")
+            
+            # Set the value on the last segment
+            last_segment = segments[-1]
+            if isinstance(last_segment, str):
+                current[last_segment] = request.value
+            else:
+                raise ValueError("Last segment must be a field name, not a filter or index")
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Failed to update field: {str(e)}"}
+            )
+        
+        # Validate updated CDM data
+        try:
+            # Re-validate the entire structure
+            validated_agreement = CreditAgreement(**cdm_dict)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Updated CDM data is invalid: {str(e)}"}
+            )
+        
+        # Convert back to dict and update document
+        updated_cdm_dict = validated_agreement.model_dump(mode='json')
+        
+        if request.update_version and doc.current_version_id:
+            # Update version's extracted_data
+            version.extracted_data = updated_cdm_dict
+            db.commit()
+            db.refresh(version)
+        else:
+            # Update source_cdm_data
+            doc.source_cdm_data = updated_cdm_dict
+            db.commit()
+            db.refresh(doc)
+        
+        # Log audit action
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="document",
+            target_id=document_id,
+            user_id=current_user.id,
+            metadata={
+                "field_path": request.field_path,
+                "action": "cdm_field_update"
+            }
+        )
+        
+        logger.info(f"Updated CDM field {request.field_path} in document {document_id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": f"Field {request.field_path} updated successfully",
+            "cdm_data": updated_cdm_dict
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating CDM field in document {document_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to update CDM field: {str(e)}"}
+        )
 
 
 @router.post("/documents/retrieve")
@@ -5807,10 +6247,25 @@ from app.db.models import LMATemplate, GeneratedDocument, TemplateFieldMapping
 
 
 class GenerateDocumentRequest(BaseModel):
-    """Request model for document generation."""
+    """Request model for document generation.
+    
+    Either cdm_data or document_id must be provided:
+    - If document_id is provided, CDM data will be loaded from that document
+    - If cdm_data is provided, it will be used directly
+    - If both are provided, document_id takes precedence
+    """
     template_id: int = Field(..., description="Template ID")
-    cdm_data: dict = Field(..., description="CDM CreditAgreement data")
-    source_document_id: Optional[int] = Field(None, description="Optional source document ID")
+    cdm_data: Optional[dict] = Field(None, description="CDM CreditAgreement data (optional if document_id provided)")
+    document_id: Optional[int] = Field(None, description="Document ID to load CDM data from library (optional if cdm_data provided)")
+    source_document_id: Optional[int] = Field(None, description="Optional source document ID for tracking")
+    field_overrides: Optional[Dict[str, Any]] = Field(None, description="Optional field overrides to apply to CDM data before generation. Format: {\"parties[role='Borrower'].lei\": \"value\"}")
+    
+    @model_validator(mode='after')
+    def validate_cdm_source(self) -> 'GenerateDocumentRequest':
+        """Ensure either cdm_data or document_id is provided."""
+        if not self.cdm_data and not self.document_id:
+            raise ValueError("Either 'cdm_data' or 'document_id' must be provided")
+        return self
 
 
 class ExportRequest(BaseModel):
@@ -5911,6 +6366,123 @@ async def get_template_requirements(
         raise HTTPException(status_code=404, detail=f"Template not found: {str(e)}")
 
 
+class PreGenerationAnalysisRequest(BaseModel):
+    """Request model for pre-generation analysis."""
+    cdm_data: Optional[dict] = Field(None, description="CDM CreditAgreement data (optional if document_id provided)")
+    document_id: Optional[int] = Field(None, description="Document ID to load CDM data from library (optional if cdm_data provided)")
+    field_overrides: Optional[Dict[str, Any]] = Field(None, description="Optional field overrides to apply")
+    
+    @model_validator(mode='after')
+    def validate_cdm_source(self) -> 'PreGenerationAnalysisRequest':
+        """Ensure either cdm_data or document_id is provided."""
+        if not self.cdm_data and not self.document_id:
+            raise ValueError("Either 'cdm_data' or 'document_id' must be provided")
+        return self
+
+
+@router.post("/templates/{template_id}/pre-generation-analysis")
+async def get_pre_generation_analysis(
+    template_id: int,
+    request: PreGenerationAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Get pre-generation analysis for a template and CDM data.
+    
+    Provides:
+    - Field completeness analysis
+    - Clause cache predictions
+    - Template compatibility assessment
+    - Recommendations
+    
+    Args:
+        template_id: Template ID
+        request: Optional request body with cdm_data dict
+        document_id: Optional document ID to load CDM data from library (query param)
+    """
+    try:
+        from app.generation.analyzer import analyze_pre_generation
+        from app.models.cdm import CreditAgreement
+        from app.templates.registry import TemplateRegistry
+        
+        # Get template
+        template = TemplateRegistry.get_template(db, template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Template with ID {template_id} not found")
+        
+        # Get CDM data
+        cdm_data = None
+        field_overrides = request.field_overrides
+        
+        if request.cdm_data:
+            # Get from request body
+            try:
+                cdm_data = CreditAgreement.model_validate(request.cdm_data)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid CDM data in request: {e}"
+                )
+        
+        if not cdm_data and request.document_id:
+            # Load from document library
+            document = db.query(Document).filter(Document.id == request.document_id).first()
+            if not document:
+                raise HTTPException(status_code=404, detail=f"Document with ID {request.document_id} not found")
+            
+            # Get latest version with CDM data
+            version = db.query(DocumentVersion).filter(
+                DocumentVersion.document_id == request.document_id
+            ).order_by(DocumentVersion.version_number.desc()).first()
+            
+            if not version or not version.extracted_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Document {request.document_id} does not have CDM data"
+                )
+            
+            # Convert extracted_data to CreditAgreement
+            try:
+                cdm_data = CreditAgreement.model_validate(version.extracted_data)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to parse CDM data from document: {e}"
+                )
+        
+        if not cdm_data:
+            raise HTTPException(
+                status_code=400,
+                detail="CDM data is required. Provide either 'cdm_data' in request body or 'document_id' query parameter"
+            )
+        
+        # Perform analysis
+        analysis = analyze_pre_generation(
+            db=db,
+            template_id=template_id,
+            cdm_data=cdm_data,
+            field_overrides=field_overrides
+        )
+        
+        return {
+            "status": "success",
+            "template_id": template_id,
+            "template_code": template.template_code,
+            "template_name": template.name,
+            "analysis": analysis
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to perform pre-generation analysis: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Pre-generation analysis failed: {str(e)}"
+        )
+
+
 @router.get("/templates/{template_id}/mappings")
 async def get_template_mappings(
     template_id: int,
@@ -5953,7 +6525,7 @@ async def generate_document(
     Generate a document from a template using CDM data.
     
     Args:
-        request: GenerateDocumentRequest with template_id and cdm_data
+        request: GenerateDocumentRequest with template_id and either cdm_data or document_id
         db: Database session
         current_user: Authenticated user
         
@@ -5961,14 +6533,63 @@ async def generate_document(
         Generated document metadata
     """
     try:
+        # Load CDM data from document if document_id is provided
+        cdm_data_dict = request.cdm_data
+        
+        if request.document_id:
+            # Load document from database
+            document = db.query(Document).filter(Document.id == request.document_id).first()
+            if not document:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Document with ID {request.document_id} not found"
+                )
+            
+            # Check if user has access to this document
+            if document.uploaded_by != current_user.id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to this document"
+                )
+            
+            # Try to get CDM data from document
+            if document.source_cdm_data:
+                cdm_data_dict = document.source_cdm_data
+            elif document.current_version_id:
+                # Try to get from current version
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == document.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    cdm_data_dict = version.extracted_data
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Document {request.document_id} has no CDM data available"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Document {request.document_id} has no CDM data available"
+                )
+        
+        if not cdm_data_dict:
+            raise HTTPException(
+                status_code=400,
+                detail="CDM data is required. Provide either 'cdm_data' or 'document_id'"
+            )
+        
         # Parse CDM data
         try:
-            cdm_agreement = CreditAgreement(**request.cdm_data)
+            cdm_agreement = CreditAgreement(**cdm_data_dict)
         except Exception as e:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid CDM data: {str(e)}"
             )
+        
+        # Use document_id as source_document_id if not explicitly provided
+        source_document_id = request.source_document_id or request.document_id
         
         # Generate document
         generation_service = DocumentGenerationService()
@@ -5977,7 +6598,8 @@ async def generate_document(
             template_id=request.template_id,
             cdm_data=cdm_agreement,
             user_id=current_user.id,
-            source_document_id=request.source_document_id
+            source_document_id=source_document_id,
+            field_overrides=request.field_overrides
         )
         
         return {
@@ -5999,6 +6621,207 @@ async def generate_document(
     except Exception as e:
         logger.error(f"Unexpected error during document generation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Document generation failed: {str(e)}")
+
+
+# ============================================================================
+# Clause Cache Management API
+# ============================================================================
+
+class ClauseUpdateRequest(BaseModel):
+    """Request model for updating a cached clause."""
+    clause_content: str = Field(..., description="Updated clause content")
+
+
+@router.get("/clauses")
+async def list_clauses(
+    template_id: Optional[int] = Query(None, description="Filter by template ID"),
+    field_name: Optional[str] = Query(None, description="Filter by field name"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List cached clauses with optional filters.
+    
+    Args:
+        template_id: Optional template ID filter
+        field_name: Optional field name filter (e.g., "REPRESENTATIONS_AND_WARRANTIES")
+        limit: Maximum number of results
+        offset: Offset for pagination
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        List of cached clauses with metadata
+    """
+    try:
+        cache_service = ClauseCacheService()
+        clauses = cache_service.list_clauses(
+            db=db,
+            template_id=template_id,
+            field_name=field_name,
+            limit=limit,
+            offset=offset
+        )
+        
+        return {
+            "status": "success",
+            "clauses": [clause.to_dict() for clause in clauses],
+            "count": len(clauses)
+        }
+    except Exception as e:
+        logger.error(f"Error listing clauses: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list clauses: {str(e)}"}
+        )
+
+
+@router.get("/clauses/{clause_id}")
+async def get_clause(
+    clause_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get a specific cached clause by ID.
+    
+    Args:
+        clause_id: Clause cache ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Clause cache details
+    """
+    try:
+        clause = db.query(ClauseCache).filter(ClauseCache.id == clause_id).first()
+        
+        if not clause:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Clause not found"}
+            )
+        
+        # Load template info
+        template = db.query(LMATemplate).filter(LMATemplate.id == clause.template_id).first()
+        
+        clause_dict = clause.to_dict()
+        if template:
+            clause_dict["template"] = {
+                "id": template.id,
+                "code": template.template_code,
+                "name": template.name
+            }
+        
+        return {
+            "status": "success",
+            "clause": clause_dict
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting clause {clause_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get clause: {str(e)}"}
+        )
+
+
+@router.put("/clauses/{clause_id}")
+async def update_clause(
+    clause_id: int,
+    request: ClauseUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Update a cached clause's content.
+    
+    Args:
+        clause_id: Clause cache ID
+        request: Clause update request with new content
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Updated clause details
+    """
+    try:
+        clause = db.query(ClauseCache).filter(ClauseCache.id == clause_id).first()
+        
+        if not clause:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Clause not found"}
+            )
+        
+        # Update clause content
+        clause.clause_content = request.clause_content
+        clause.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(clause)
+        
+        logger.info(f"Updated clause {clause_id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "clause": clause.to_dict(),
+            "message": "Clause updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating clause {clause_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to update clause: {str(e)}"}
+        )
+
+
+@router.delete("/clauses/{clause_id}")
+async def delete_clause(
+    clause_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Delete a cached clause.
+    
+    Args:
+        clause_id: Clause cache ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Success message
+    """
+    try:
+        cache_service = ClauseCacheService()
+        deleted = cache_service.delete_clause(db=db, clause_id=clause_id)
+        
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Clause not found"}
+            )
+        
+        logger.info(f"Deleted clause {clause_id} by user {current_user.id}")
+        
+        return {
+            "status": "success",
+            "message": "Clause deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting clause {clause_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to delete clause: {str(e)}"}
+        )
 
 
 @router.get("/generated-documents")
