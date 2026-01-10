@@ -41,6 +41,8 @@ import {
   PERMISSION_AUDIT_VIEW,
   PERMISSION_TEMPLATE_VIEW,
   PERMISSION_TEMPLATE_GENERATE,
+  PERMISSION_DEAL_VIEW,
+  PERMISSION_DEAL_VIEW_OWN,
 } from '@/utils/permissions';
 
 interface PortfolioAnalytics {
@@ -744,6 +746,28 @@ export function Dashboard() {
                 <li>• Review and customize generated content</li>
               </ul>
             </div>
+            </div>
+          </PermissionGate>
+
+          <PermissionGate permissions={[PERMISSION_DEAL_VIEW, PERMISSION_DEAL_VIEW_OWN]} requireAll={false}>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="h-5 w-5 text-emerald-400" />
+                <h3 className="text-lg font-medium text-white">Deal Management</h3>
+              </div>
+              
+              <p className="text-sm text-slate-400 mb-4">
+                Manage your loan and credit deals, track lifecycle, and view timelines.
+              </p>
+              
+              <button
+                onClick={() => navigate('/dashboard/deals')}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-lg text-white font-medium transition-all"
+              >
+                <Building2 className="h-5 w-5" />
+                View Deals
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
           </PermissionGate>
           </div>

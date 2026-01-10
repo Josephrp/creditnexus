@@ -19,6 +19,8 @@ import {
   PERMISSION_TEMPLATE_VIEW,
   PERMISSION_TEMPLATE_GENERATE,
   PERMISSION_APPLICATION_VIEW,
+  PERMISSION_DEAL_VIEW,
+  PERMISSION_DEAL_VIEW_OWN,
 } from '@/utils/permissions';
 
 interface NavItem {
@@ -77,6 +79,15 @@ const mainNavItems: NavItemWithPermission[] = [
     icon: Building2,
     description: 'Loan applications & status',
     requiredPermission: PERMISSION_APPLICATION_VIEW,
+  },
+  {
+    id: 'deals',
+    label: 'Deals',
+    path: '/dashboard/deals',
+    icon: Building2,
+    description: 'Deal management & lifecycle',
+    requiredPermissions: [PERMISSION_DEAL_VIEW, PERMISSION_DEAL_VIEW_OWN],
+    requireAll: false,
   },
   {
     id: 'calendar',

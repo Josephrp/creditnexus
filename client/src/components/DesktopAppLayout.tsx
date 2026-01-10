@@ -12,10 +12,11 @@ import { ApplicationDashboard } from '@/components/ApplicationDashboard';
 import { AdminSignupDashboard } from '@/components/AdminSignupDashboard';
 import { CalendarView } from '@/components/CalendarView';
 import { DealDashboard } from '@/components/DealDashboard';
+import { DealDetail } from '@/components/DealDetail';
 import { LoginForm } from '@/components/LoginForm';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Breadcrumb, BreadcrumbContainer } from '@/components/ui/Breadcrumb';
-import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower } from 'lucide-react';
+import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower, Building2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, IntentName, DocumentContext, AgreementContext } from '@/context/FDC3Context';
@@ -31,6 +32,8 @@ import {
   PERMISSION_SATELLITE_VIEW,
   PERMISSION_APPLICATION_VIEW,
   PERMISSION_USER_VIEW,
+  PERMISSION_DEAL_VIEW,
+  PERMISSION_DEAL_VIEW_OWN,
 } from '@/utils/permissions';
 
 type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals';
@@ -127,6 +130,14 @@ const sidebarApps: AppConfig[] = [
     description: 'Review platform user account signups (admin only)',
     requiredPermission: PERMISSION_USER_VIEW,
   },
+  {
+    id: 'deals',
+    name: 'Deals',
+    icon: <Building2 className="h-5 w-5 text-emerald-400" />,
+    description: 'Deal management & lifecycle',
+    requiredPermissions: [PERMISSION_DEAL_VIEW, PERMISSION_DEAL_VIEW_OWN],
+    requireAll: false,
+  },
 ];
 
 interface PolicyDecision {
@@ -190,7 +201,8 @@ export function DesktopAppLayout() {
     if (location.pathname.startsWith('/dashboard/deals/')) {
       return 'deals';
     }
-    return pathToApp[location.pathname] || 'dashboard';
+    const result = pathToApp[location.pathname] || 'dashboard';
+    return result;
   };
   
   const [activeApp, setActiveApp] = useState<AppView>(getInitialApp());
@@ -282,6 +294,7 @@ export function DesktopAppLayout() {
       '/dashboard/applications': 'applications',
       '/dashboard/admin-signups': 'admin-signups',
       '/dashboard/calendar': 'calendar',
+      '/dashboard/deals': 'deals',  // Add explicit mapping for deals list
       '/app/document-parser': 'document-parser',
       '/app/document-generator': 'document-generator',
       '/app/trade-blotter': 'trade-blotter',
@@ -298,7 +311,7 @@ export function DesktopAppLayout() {
     if (!app && location.pathname.startsWith('/app/policy-editor')) {
       app = 'policy-editor';
     }
-    // Handle deal detail routes
+    // Handle deal detail routes (must come after checking exact path)
     if (!app && location.pathname.startsWith('/dashboard/deals/')) {
       app = 'deals';
     }
@@ -311,7 +324,7 @@ export function DesktopAppLayout() {
     if (app !== activeApp) {
       setActiveApp(app);
     }
-  }, [location.pathname]); // Only depend on pathname to avoid loops
+  }, [location.pathname, activeApp]); // Include activeApp to track changes
 
   // Update route when activeApp changes
   const handleAppChange = (app: AppView) => {
@@ -629,7 +642,10 @@ export function DesktopAppLayout() {
           {activeApp === 'applications' && <ApplicationDashboard />}
           {activeApp === 'admin-signups' && <AdminSignupDashboard />}
           {activeApp === 'calendar' && <CalendarView />}
-          {activeApp === 'deals' && <DealDashboard />}
+          {activeApp === 'deals' && (() => {
+            const isDetailRoute = location.pathname.startsWith('/dashboard/deals/') && location.pathname !== '/dashboard/deals';
+            return isDetailRoute ? <DealDetail /> : <DealDashboard />;
+          })()}
           {activeApp === 'document-parser' && (
             <DocumentParser
               onBroadcast={handleBroadcast}

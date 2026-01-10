@@ -25,7 +25,7 @@ export interface TimelineEvent {
 }
 
 interface DealTimelineProps {
-  events: TimelineEvent[];
+  events: TimelineEvent[] | null | undefined;
   dealStatus?: string;
   className?: string;
 }
@@ -151,7 +151,9 @@ const formatEventType = (eventType: string): string => {
 export function DealTimeline({ events, dealStatus, className = '' }: DealTimelineProps) {
   // Process events and create nodes with positions
   const nodes = useMemo(() => {
-    if (!events || events.length === 0) return [];
+    if (!events || events.length === 0) {
+      return [];
+    }
     
     const processedNodes: Node[] = [];
     const branchMap = new Map<string, number>(); // Track vertical positions for branches
@@ -241,7 +243,8 @@ export function DealTimeline({ events, dealStatus, className = '' }: DealTimelin
     return connections;
   }, [nodes]);
   
-  if (events.length === 0) {
+  // Handle null/undefined or empty events
+  if (!events || events.length === 0) {
     return (
       <div className={`bg-slate-800 border border-slate-700 rounded-lg p-8 text-center ${className}`}>
         <Clock className="h-12 w-12 text-slate-500 mx-auto mb-4" />

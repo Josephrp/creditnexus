@@ -2402,106 +2402,96 @@ async def chatbot_fill_fields(
     """
     from app.chains.decision_support_chain import DecisionSupportChatbot
     
-        # Validate required fields
-        if not request.required_fields:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "status": "error",
-                    "message": "required_fields cannot be empty"
-                }
-            )
-        
-        # Initialize chatbot with database session for deal context
-        chatbot = DecisionSupportChatbot(db_session=db)
-        
-        logger.info(
-            f"Field filling request: required_fields_count={len(request.required_fields)}, "
-            f"has_cdm_data={bool(request.cdm_data)}, has_context={bool(request.conversation_context)}, "
-            f"deal_id={request.deal_id}"
-        )
-        
-        # Get field filling assistance
-        try:
-            result = chatbot.fill_missing_fields(
-                cdm_data=request.cdm_data,
-                required_fields=request.required_fields,
-                conversation_context=request.conversation_context,
-                deal_id=request.deal_id,
-            )
-        except ImportError as e:
-            logger.error(f"ChromaDB not available: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "status": "error",
-                    "message": "Field filling service is not available. ChromaDB is not installed."
-                }
-            )
-        except Exception as e:
-            logger.error(f"Field filling failed: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "status": "error",
-                    "message": f"Field filling failed: {str(e)}"
-                }
-            )
-        
-        # Prepare response
-        # Frontend expects field_guidance.suggested_values format
-        suggestions = result.get("suggestions", {})
-        response_data = {
-            "status": "success",
-            "all_fields_present": result.get("all_fields_present", False),
-            "missing_fields": result.get("missing_fields", []),
-            "suggestions": suggestions,
-            "guidance": result.get("guidance", ""),
-            "questions": result.get("questions", []),
-            # Add field_guidance format for frontend compatibility
-            "field_guidance": {
-                "suggested_values": suggestions,
-                "guidance": result.get("guidance", ""),
-                "questions": result.get("questions", [])
+    # Validate required fields
+    if not request.required_fields:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "message": "required_fields cannot be empty"
             }
-        }
-        
-        
-        if "error" in result:
-            response_data["error"] = result["error"]
-        
-        # If all fields are present, include the filled data
-        if result.get("all_fields_present"):
-            response_data["filled_data"] = result.get("filled_data", request.cdm_data)
-        
-        # Audit log (if user is authenticated)
-        if current_user:
-            try:
-                log_audit_action(
-                    db=db,
-                    action=AuditAction.CREATE,
-                    target_type="chatbot_fill_fields",
-                    user_id=current_user.id,
-                    metadata={
-                        "required_fields_count": len(request.required_fields),
-                        "missing_fields_count": len(result.get("missing_fields", [])),
-                        "all_fields_present": result.get("all_fields_present", False),
-                        "has_conversation_context": bool(request.conversation_context),
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Failed to log field filling audit: {e}")
-        
-        return response_data
-        
-    except HTTPException:
-        raise
+        )
+    
+    # Initialize chatbot with database session for deal context
+    chatbot = DecisionSupportChatbot(db_session=db)
+    
+    logger.info(
+        f"Field filling request: required_fields_count={len(request.required_fields)}, "
+        f"has_cdm_data={bool(request.cdm_data)}, has_context={bool(request.conversation_context)}, "
+        f"deal_id={request.deal_id}"
+    )
+    
+    # Get field filling assistance
+    try:
+        result = chatbot.fill_missing_fields(
+            cdm_data=request.cdm_data,
+            required_fields=request.required_fields,
+            conversation_context=request.conversation_context,
+            deal_id=request.deal_id,
+        )
+    except ImportError as e:
+        logger.error(f"ChromaDB not available: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "error",
+                "message": "Field filling service is not available. ChromaDB is not installed."
+            }
+        )
     except Exception as e:
-        logger.error(f"Unexpected error during field filling: {e}", exc_info=True)
+        logger.error(f"Field filling failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail={"status": "error", "message": f"Failed to fill fields: {str(e)}"}
+            detail={
+                "status": "error",
+                "message": f"Field filling failed: {str(e)}"
+            }
         )
+    
+    # Prepare response
+    # Frontend expects field_guidance.suggested_values format
+    suggestions = result.get("suggestions", {})
+    response_data = {
+        "status": "success",
+        "all_fields_present": result.get("all_fields_present", False),
+        "missing_fields": result.get("missing_fields", []),
+        "suggestions": suggestions,
+        "guidance": result.get("guidance", ""),
+        "questions": result.get("questions", []),
+        # Add field_guidance format for frontend compatibility
+        "field_guidance": {
+            "suggested_values": suggestions,
+            "guidance": result.get("guidance", ""),
+            "questions": result.get("questions", [])
+        }
+    }
+    
+    if "error" in result:
+        response_data["error"] = result["error"]
+    
+    # If all fields are present, include the filled data
+    if result.get("all_fields_present"):
+        response_data["filled_data"] = result.get("filled_data", request.cdm_data)
+    
+    # Audit log (if user is authenticated)
+    if current_user:
+        try:
+            log_audit_action(
+                db=db,
+                action=AuditAction.CREATE,
+                target_type="chatbot_fill_fields",
+                user_id=current_user.id,
+                metadata={
+                    "required_fields_count": len(request.required_fields),
+                    "missing_fields_count": len(result.get("missing_fields", [])),
+                    "all_fields_present": result.get("all_fields_present", False),
+                    "has_conversation_context": bool(request.conversation_context),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log field filling audit: {e}")
+    
+    return response_data
 
 
 @router.get("/documents/{document_id}/versions")

@@ -92,7 +92,8 @@ export function DealDetail() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchWithAuth(`/api/deals/${dealId}`);
+      const url = `/api/deals/${dealId}`;
+      const response = await fetchWithAuth(url);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail?.message || 'Failed to fetch deal');
@@ -352,7 +353,7 @@ export function DealDetail() {
               : 'text-slate-400 hover:text-slate-100'
           }`}
         >
-          Timeline ({timeline.length})
+          Timeline ({timeline?.length || 0})
         </button>
       </div>
 
@@ -522,7 +523,7 @@ export function DealDetail() {
         <div className="space-y-4">
           <DealTimeline
             events={timeline as DealTimelineEvent[]}
-            dealStatus={deal.status}
+            dealStatus={deal?.status}
             className="w-full"
           />
         </div>

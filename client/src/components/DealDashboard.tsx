@@ -69,7 +69,8 @@ export function DealDashboard() {
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
       
-      const response = await fetchWithAuth(`/api/deals?${params.toString()}`);
+      const url = `/api/deals?${params.toString()}`;
+      const response = await fetchWithAuth(url);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -90,6 +91,10 @@ export function DealDashboard() {
   useEffect(() => {
     fetchDeals();
   }, [fetchDeals]);
+
+  // Track state changes for debugging
+  useEffect(() => {
+  }, [loading, deals, error, filterStatus, filterType, searchQuery]);
 
   const handleSearch = useCallback(() => {
     setOffset(0);
@@ -242,17 +247,22 @@ export function DealDashboard() {
       )}
 
       {/* Deals List */}
-      {loading ? (
-        <SkeletonDocumentList count={5} />
-      ) : deals.length === 0 ? (
-        <EmptyState
-          icon={<FileText className="h-12 w-12 text-slate-500" />}
-          title="No deals found"
-          description={searchQuery || filterStatus !== 'all' || filterType !== 'all' 
-            ? "Try adjusting your filters or search query"
-            : "Deals will appear here once created"}
-        />
-      ) : (
+      {(() => {
+        if (loading) {
+          return <SkeletonDocumentList count={5} />;
+        }
+        if (deals.length === 0) {
+          return (
+            <EmptyState
+              icon={<FileText className="h-12 w-12 text-slate-500" />}
+              title="No deals found"
+              description={searchQuery || filterStatus !== 'all' || filterType !== 'all' 
+                ? "Try adjusting your filters or search query"
+                : "Deals will appear here once created"}
+            />
+          );
+        }
+        return (
         <>
           <div className="space-y-4">
             {deals.map((deal) => (
@@ -344,7 +354,8 @@ export function DealDashboard() {
             </div>
           )}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }
