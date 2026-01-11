@@ -44,6 +44,11 @@ class SeedingStatus:
     completed_at: Optional[datetime] = None
 
 
+# Global seeding status store - persists across requests
+# This is necessary because each API request creates a new DemoDataService instance
+_global_seeding_status: Dict[str, SeedingStatus] = {}
+
+
 class DemoDataService:
     """Service for seeding and managing demo data."""
     
@@ -55,7 +60,8 @@ class DemoDataService:
             db: Database session
         """
         self.db = db
-        self._status: Dict[str, SeedingStatus] = {}
+        # Use global status store to persist status across requests
+        self._status = _global_seeding_status
         self._progress_callback: Optional[Callable[[str, SeedingStatus], None]] = None
     
     def set_progress_callback(self, callback: Callable[[str, SeedingStatus], None]):
@@ -135,22 +141,33 @@ class DemoDataService:
             dry_run: If True, preview without committing
             
         Returns:
-            Dictionary with created/updated counts and errors
+            Dictionary with created/updated counts, errors, and user credentials
         """
         self._update_status("users", status="running", started_at=datetime.utcnow())
         
         try:
-            # Import seed function
-            from scripts.seed_demo_users import seed_demo_users
+            # Import seed function and user definitions
+            from scripts.seed_demo_users import seed_demo_users, DEMO_USERS
             
             # Call seed function with seed_all_roles=True to ensure all users are created
             # (API calls should seed all roles by default, not rely on environment variables)
             count = seed_demo_users(self.db, force=force, seed_all_roles=True)
             
+            # Prepare user credentials list
+            user_credentials = []
+            for user_data in DEMO_USERS:
+                user_credentials.append({
+                    "email": user_data["email"],
+                    "password": user_data["password"],
+                    "role": user_data["role"].value,
+                    "display_name": user_data["display_name"]
+                })
+            
             result = {
                 "created": count if not force else 0,
                 "updated": count if force else 0,
-                "errors": []
+                "errors": [],
+                "user_credentials": user_credentials
             }
             
             self._update_status("users", status="completed", completed_at=datetime.utcnow(), current=count, total=count, progress=1.0)
@@ -160,7 +177,7 @@ class DemoDataService:
             error_msg = str(e)
             logger.error(f"Error seeding users: {error_msg}", exc_info=True)
             self._update_status("users", status="failed", completed_at=datetime.utcnow(), errors=[error_msg])
-            return {"created": 0, "updated": 0, "errors": [error_msg]}
+            return {"created": 0, "updated": 0, "errors": [error_msg], "user_credentials": []}
     
     def seed_templates(self, dry_run: bool = False) -> Dict[str, Any]:
         """
@@ -437,16 +454,32 @@ class DemoDataService:
         """
         Create complete demo deals with full data flow: Applications → Deals → Documents → Workflows.
         
+        Only creates new deals if the requested count exceeds existing demo deals.
+        
         Args:
-            count: Number of deals to create
+            count: Number of deals to have (not number to create)
             
         Returns:
-            List of created Deal objects
+            List of created Deal objects (empty if count satisfied by existing)
         """
-        self._update_status("deals", status="running", started_at=datetime.utcnow(), total=count, current=0)
+        # Check existing demo deals
+        existing_demo_deals = self.db.query(Deal).filter(Deal.is_demo == True).count()
+        
+        # If we already have enough demo deals, skip creation
+        if existing_demo_deals >= count:
+            logger.info(f"Skipping deal creation: {existing_demo_deals} demo deals exist, {count} requested")
+            self._update_status("deals", status="completed", completed_at=datetime.utcnow(), 
+                              total=count, current=count, progress=1.0)
+            return []
+        
+        # Only create the difference
+        deals_to_create = count - existing_demo_deals
+        logger.info(f"Creating {deals_to_create} new demo deals (have {existing_demo_deals}, want {count})")
+        
+        self._update_status("deals", status="running", started_at=datetime.utcnow(), total=deals_to_create, current=0)
         
         # Step 1: Generate Applications
-        applications = self._generate_applications(count)
+        applications = self._generate_applications(deals_to_create)
         
         # Step 2: Create Deals from Applications
         deals = self._create_deals_from_applications(applications)
@@ -701,17 +734,15 @@ class DemoDataService:
                 # Create folder path
                 folder_path = f"storage/deals/demo/{deal_id}/"
                 
-                # Mark as demo deal
-                deal_data["is_demo"] = True
-                
-                # Create deal
+                # Create deal with is_demo flag
                 deal = Deal(
                     deal_id=deal_id,
                     applicant_id=application.user_id,
                     application_id=application.id,
                     status=deal_status,
                     deal_type=DealType.LOAN_APPLICATION.value,
-                    deal_data=deal_data,  # is_demo is already in deal_data
+                    is_demo=True,  # Mark as demo deal
+                    deal_data=deal_data,
                     folder_path=folder_path,
                     created_at=application.submitted_at or application.created_at,
                     updated_at=application.approved_at or application.reviewed_at or application.submitted_at or application.created_at
@@ -719,6 +750,7 @@ class DemoDataService:
                 
                 self.db.add(deal)
                 deals.append(deal)
+                
                 self._update_status("deals_creation", current=len(deals), progress=len(deals) / len(applications))
                 
             except Exception as e:
@@ -920,11 +952,15 @@ Interest Rate: {facility.interest_terms.rate_option.benchmark} + {facility.inter
                     )
                     
                     self.db.add(doc_version)
+                    # Flush to get the ID before updating document's current_version_id
+                    self.db.flush()
                     document_versions.append(doc_version)
                     
                     # Update document's current_version_id if this is version 1
                     if version_num == 1:
                         document.current_version_id = doc_version.id
+                        # Also set source_cdm_data for easier access
+                        document.source_cdm_data = cdm_dict
                     
                     self._update_status("document_versions", current=len(document_versions), progress=len(document_versions) / (len(documents) * 1.5))
                 
@@ -1638,12 +1674,18 @@ Interest Rate: {facility.interest_terms.rate_option.benchmark} + {facility.inter
                 # Create policy decision
                 policy_decision = PolicyDecision(
                     transaction_id=transaction_id,
+                    transaction_type="facility_creation",
                     decision=decision,
                     rule_applied=rule_applied,
                     trace_id=str(uuid.uuid4()),
                     document_id=document_id,
+                    trace=[{
+                        "rule": rule_applied,
+                        "decision": decision,
+                        "document_id": document_id
+                    }],
+                    matched_rules=[rule_applied],
                     cdm_events=policy_event,
-                    requires_review=(decision in ["FLAG", "BLOCK"]),
                     created_at=workflow.submitted_at or document.created_at
                 )
                 
@@ -1658,6 +1700,7 @@ Interest Rate: {facility.interest_terms.rate_option.benchmark} + {facility.inter
                 continue
         
         self.db.commit()
+        
         self._update_status("policy_decisions", status="completed", completed_at=datetime.utcnow())
         
         return policy_decisions

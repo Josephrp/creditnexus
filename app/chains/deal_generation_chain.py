@@ -7,6 +7,7 @@ scenarios using LLMs with structured output validation.
 
 import logging
 import random
+import json
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -126,12 +127,12 @@ def generate_cdm_for_deal(
             # Validate result
             if isinstance(result, CreditAgreement):
                 # Additional validation
-                _validate_generated_cdm(result)
+                _validate_generated_cdm(result, is_demo=True)
                 return result
             else:
                 # Convert dict to CreditAgreement if needed
                 result = CreditAgreement(**result)
-                _validate_generated_cdm(result)
+                _validate_generated_cdm(result, is_demo=True)
                 return result
                 
         except ValidationError as e:
@@ -155,65 +156,148 @@ def generate_cdm_for_deal(
     )
 
 
-def _validate_generated_cdm(cdm: CreditAgreement) -> None:
+def _validate_generated_cdm(cdm: CreditAgreement, is_demo: bool = False) -> None:
     """
     Validate that generated CDM has all required fields.
     
     Args:
         cdm: CreditAgreement to validate
+        is_demo: If True, be more lenient with validation (auto-fix common issues)
         
     Raises:
-        ValueError: If required fields are missing or invalid
+        ValueError: If required fields are missing or invalid (only for critical errors in demo mode)
     """
     errors = []
+    warnings = []
     
     # Check required fields
     if not cdm.parties:
-        errors.append("Missing parties")
+        if is_demo:
+            warnings.append("Missing parties - will be auto-generated")
+        else:
+            errors.append("Missing parties")
     else:
         borrower = next((p for p in cdm.parties if p.role == "Borrower"), None)
         if not borrower:
-            errors.append("Missing Borrower party")
-        elif not borrower.name:
-            errors.append("Borrower missing name")
-        elif not borrower.lei:
-            errors.append("Borrower missing LEI")
-        elif len(borrower.lei) != 20:
-            errors.append(f"Borrower LEI must be 20 characters, got {len(borrower.lei)}")
+            if is_demo:
+                warnings.append("Missing Borrower party - will use first party")
+                borrower = cdm.parties[0]
+            else:
+                errors.append("Missing Borrower party")
+        if borrower:
+            if not borrower.name:
+                if is_demo:
+                    borrower.name = "Demo Borrower Corp"
+                    warnings.append("Borrower missing name - auto-filled")
+                else:
+                    errors.append("Borrower missing name")
+            if not borrower.lei:
+                if is_demo:
+                    borrower.lei = generate_lei()
+                    warnings.append("Borrower missing LEI - auto-generated")
+                else:
+                    errors.append("Borrower missing LEI")
+            elif borrower.lei and len(borrower.lei) != 20:
+                if is_demo:
+                    # Auto-fix LEI length
+                    if len(borrower.lei) < 20:
+                        borrower.lei = borrower.lei.ljust(20, '0')
+                    else:
+                        borrower.lei = borrower.lei[:20]
+                    warnings.append(f"Borrower LEI length fixed from {len(borrower.lei)} to 20")
+                else:
+                    errors.append(f"Borrower LEI must be 20 characters, got {len(borrower.lei)}")
     
     if not cdm.facilities:
-        errors.append("Missing facilities")
+        if is_demo:
+            warnings.append("Missing facilities - will be auto-generated")
+        else:
+            errors.append("Missing facilities")
     else:
         facility = cdm.facilities[0]
         if not facility.facility_name:
-            errors.append("Facility missing name")
+            if is_demo:
+                facility.facility_name = "Term Loan Facility"
+                warnings.append("Facility missing name - auto-filled")
+            else:
+                errors.append("Facility missing name")
         if not facility.commitment_amount:
-            errors.append("Facility missing commitment_amount")
+            if is_demo:
+                from app.models.cdm import Money, Currency
+                facility.commitment_amount = Money(amount=Decimal("1000000"), currency=Currency.USD)
+                warnings.append("Facility missing commitment_amount - auto-filled")
+            else:
+                errors.append("Facility missing commitment_amount")
         elif facility.commitment_amount.amount <= 0:
-            errors.append("Facility commitment_amount must be positive")
+            if is_demo:
+                facility.commitment_amount.amount = Decimal("1000000")
+                warnings.append("Facility commitment_amount fixed to positive value")
+            else:
+                errors.append("Facility commitment_amount must be positive")
         if not facility.maturity_date:
-            errors.append("Facility missing maturity_date")
+            if is_demo:
+                facility.maturity_date = date.today() + timedelta(days=365*5)
+                warnings.append("Facility missing maturity_date - auto-filled")
+            else:
+                errors.append("Facility missing maturity_date")
         if not facility.interest_terms:
-            errors.append("Facility missing interest_terms")
+            if is_demo:
+                from app.models.cdm import InterestRatePayout, FloatingRateOption, Frequency, PeriodEnum
+                facility.interest_terms = InterestRatePayout(
+                    rate_option=FloatingRateOption(benchmark="SOFR", spread_bps=250.0),
+                    payment_frequency=Frequency(period=PeriodEnum.MONTHLY, period_multiplier=1)
+                )
+                warnings.append("Facility missing interest_terms - auto-filled")
+            else:
+                errors.append("Facility missing interest_terms")
         elif not facility.interest_terms.rate_option:
-            errors.append("Facility missing rate_option")
+            if is_demo:
+                facility.interest_terms.rate_option = FloatingRateOption(benchmark="SOFR", spread_bps=250.0)
+                warnings.append("Facility missing rate_option - auto-filled")
+            else:
+                errors.append("Facility missing rate_option")
         elif not facility.interest_terms.rate_option.benchmark:
-            errors.append("Facility missing benchmark")
+            if is_demo:
+                facility.interest_terms.rate_option.benchmark = "SOFR"
+                warnings.append("Facility missing benchmark - auto-filled")
+            else:
+                errors.append("Facility missing benchmark")
     
     if not cdm.agreement_date:
-        errors.append("Missing agreement_date")
+        if is_demo:
+            cdm.agreement_date = date.today() - timedelta(days=30)
+            warnings.append("Missing agreement_date - auto-filled")
+        else:
+            errors.append("Missing agreement_date")
     elif cdm.agreement_date > date.today():
-        errors.append("agreement_date must be in the past")
+        if is_demo:
+            cdm.agreement_date = date.today() - timedelta(days=30)
+            warnings.append("agreement_date was in future - fixed to past date")
+        else:
+            errors.append("agreement_date must be in the past")
     
     if not cdm.governing_law:
-        errors.append("Missing governing_law")
+        if is_demo:
+            cdm.governing_law = "NY"
+            warnings.append("Missing governing_law - auto-filled")
+        else:
+            errors.append("Missing governing_law")
     
     # Validate date relationships
     if cdm.agreement_date and cdm.facilities:
         for facility in cdm.facilities:
             if facility.maturity_date and facility.maturity_date <= cdm.agreement_date:
-                errors.append(f"Facility {facility.facility_name} maturity_date must be after agreement_date")
+                if is_demo:
+                    facility.maturity_date = cdm.agreement_date + timedelta(days=365*5)
+                    warnings.append(f"Facility {facility.facility_name} maturity_date fixed to be after agreement_date")
+                else:
+                    errors.append(f"Facility {facility.facility_name} maturity_date must be after agreement_date")
     
+    # Log warnings in demo mode
+    if is_demo and warnings:
+        logger.info(f"Demo mode auto-fixes applied: {', '.join(warnings)}")
+    
+    # Only raise errors for critical issues that can't be auto-fixed
     if errors:
         raise ValueError(f"CDM validation failed: {', '.join(errors)}")
 

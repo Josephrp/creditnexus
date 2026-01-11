@@ -25,6 +25,12 @@ export interface DemoSeedResponse {
   updated: Record<string, number>;
   errors: Record<string, string[]>;
   preview?: Record<string, any>;
+  user_credentials?: Array<{
+    email: string;
+    password: string;
+    role: string;
+    display_name: string;
+  }>;
 }
 
 export interface SeedingStatus {
@@ -116,6 +122,9 @@ export function useDemoData(): UseDemoDataReturn {
   const [seedingStatus, setSeedingStatus] = useState<Record<string, SeedingStatus>>({});
   const [isPolling, setIsPolling] = useState(false);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Use ref for seedingStatus to avoid stale closure in polling interval
+  const seedingStatusRef = useRef<Record<string, SeedingStatus>>({});
+  seedingStatusRef.current = seedingStatus;
   const { addToast } = useToast();
 
   /**
@@ -363,19 +372,22 @@ export function useDemoData(): UseDemoDataReturn {
       try {
         await getSeedingStatus();
         
+        // Use ref to get fresh seedingStatus (avoid stale closure)
+        const currentStatus = seedingStatusRef.current;
+        
         // Stop polling if all stages are completed or failed
-        const allCompleted = Object.values(seedingStatus).every(
+        const allCompleted = Object.values(currentStatus).every(
           s => s.status === 'completed' || s.status === 'failed'
         );
         
-        if (allCompleted && Object.keys(seedingStatus).length > 0) {
+        if (allCompleted && Object.keys(currentStatus).length > 0) {
           stopPolling();
         }
       } catch (err) {
         console.error('Error polling seeding status:', err);
       }
     }, 2000); // Poll every 2 seconds
-  }, [getSeedingStatus, seedingStatus]);
+  }, [getSeedingStatus]);
 
   /**
    * Stop polling for seeding status updates.

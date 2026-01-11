@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Database, FileText, BarChart3, Settings, RefreshCw, Play, Trash2, Loader2, Search, Filter, Eye, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, Clock, Download, RotateCcw, Radio } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Database, FileText, BarChart3, Settings, RefreshCw, Play, Trash2, Loader2, Search, Filter, Eye, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, Clock, Download, RotateCcw, Radio, Copy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -51,6 +52,7 @@ interface DemoDeal {
 }
 
 export function DemoDataDashboard() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('seed');
   const [stats, setStats] = useState<DemoDataStats>({
     total_deals: 0,
@@ -70,6 +72,7 @@ export function DemoDataDashboard() {
   });
   
   const [seedResults, setSeedResults] = useState<Record<string, SeedResult>>({});
+  const [userCredentials, setUserCredentials] = useState<Array<{email: string; password: string; role: string; display_name: string}>>([]);
   
   // Generated Deals state
   const [dealFilterStatus, setDealFilterStatus] = useState<string>('all');
@@ -212,6 +215,7 @@ export function DemoDataDashboard() {
         const params = new URLSearchParams();
         params.append('limit', documentsPerPage.toString());
         params.append('offset', ((documentPage - 1) * documentsPerPage).toString());
+        params.append('is_demo', 'true'); // Request only demo documents from API
         
         if (documentSearchQuery.trim()) {
           params.append('search', documentSearchQuery.trim());
@@ -225,11 +229,8 @@ export function DemoDataDashboard() {
         
         const data = await response.json();
         
-        // Filter by is_demo and workflow state
+        // Filter by workflow state (is_demo filtering is now done by API)
         let filteredDocs = data.documents || [];
-        
-        // Filter by is_demo (if backend supports it, otherwise filter client-side)
-        filteredDocs = filteredDocs.filter((doc: any) => doc.is_demo === true);
         
         // Filter by workflow state
         if (documentWorkflowFilter !== 'all') {
@@ -321,6 +322,11 @@ export function DemoDataDashboard() {
         generate_deals: false, // Already handled above
         dry_run: seedOptions.dry_run,
       });
+      
+      // Store user credentials if available
+      if (result.user_credentials && Array.isArray(result.user_credentials)) {
+        setUserCredentials(result.user_credentials);
+      }
       
       // Convert result to SeedResult format
       const results: Record<string, SeedResult> = {};
@@ -641,6 +647,7 @@ export function DemoDataDashboard() {
                     variant="outline"
                     onClick={() => {
                       setSeedResults({});
+                      setUserCredentials([]);
                     }}
                     disabled={loading}
                   >
@@ -675,7 +682,7 @@ export function DemoDataDashboard() {
 
                 {/* Results Table */}
                 {Object.keys(seedResults).length > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-white">Seeding Results</h3>
                     <div className="border border-slate-700 rounded-lg overflow-hidden">
                       <table className="w-full">
@@ -700,6 +707,60 @@ export function DemoDataDashboard() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* User Credentials Display */}
+                {userCredentials.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-white">Generated User Credentials</h3>
+                    <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/50">
+                      <div className="p-4">
+                        <p className="text-sm text-slate-400 mb-4">
+                          Use these credentials to log in to the application:
+                        </p>
+                        <div className="space-y-2">
+                          {userCredentials.map((user, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm font-medium text-white">{user.display_name}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                                    {user.role}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm">
+                                  <div>
+                                    <span className="text-slate-400">Email: </span>
+                                    <span className="text-white font-mono">{user.email}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400">Password: </span>
+                                    <span className="text-emerald-400 font-mono">{user.password}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const text = `Email: ${user.email}\nPassword: ${user.password}`;
+                                  navigator.clipboard.writeText(text);
+                                  addToast('Credentials copied to clipboard', 'success');
+                                }}
+                                className="text-slate-400 hover:text-white"
+                                title="Copy credentials"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1089,13 +1150,26 @@ export function DemoDataDashboard() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => {
-                                      // Navigate to document viewer
-                                      window.location.href = `/app/document-viewer/${doc.id}`;
+                                      // Navigate to document parser with document ID
+                                      navigate(`/app/document-parser?documentId=${doc.id}`);
                                     }}
-                                    title="View Document"
+                                    title="View/Edit Document Extraction"
                                   >
                                     <Eye className="w-4 h-4" />
                                   </Button>
+                                  {doc.has_cdm_data && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        // Navigate to verification demo with document ID
+                                        navigate(`/app/verification-demo?documentId=${doc.id}`);
+                                      }}
+                                      title="Verify Document"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="sm"

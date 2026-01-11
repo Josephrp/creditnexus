@@ -569,15 +569,15 @@ class PolicyDecision(Base):
     
     # Foreign keys to CreditNexus entities
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
-    loan_asset_id = Column(Integer, ForeignKey("loan_assets.id"), nullable=True)
+    # Note: loan_asset_id is NOT a foreign key because LoanAsset uses SQLModel (separate table creation)
+    # The loan_assets table may not exist when PolicyDecision is created
+    loan_asset_id = Column(Integer, nullable=True, index=True)  # Reference without FK constraint
     deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     # Relationships
     document = relationship("Document", backref="policy_decisions")
     deal = relationship("Deal", backref="policy_decisions")
-    # Note: LoanAsset is a SQLModel in app.models.loan_asset, not in app.db.models
-    # Relationship will work if loan_assets table exists
     user = relationship("User", backref="policy_decisions")
     
     def to_dict(self):
@@ -1136,6 +1136,8 @@ class Deal(Base):
     
     deal_type = Column(String(50), nullable=True, index=True)  # loan_application, debt_sale, loan_purchase, etc.
     
+    is_demo = Column(Boolean, default=False, nullable=False, index=True)  # Flag for demo/seed data
+    
     deal_data = Column(JSONB, nullable=True)  # Deal parameters, metadata
     
     folder_path = Column(String(500), nullable=True)  # File system path for deal documents
@@ -1159,6 +1161,7 @@ class Deal(Base):
             "application_id": self.application_id,
             "status": self.status,
             "deal_type": self.deal_type,
+            "is_demo": self.is_demo,
             "deal_data": self.deal_data,
             "folder_path": self.folder_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
