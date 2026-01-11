@@ -9416,10 +9416,14 @@ async def reset_demo_data(
         raise HTTPException(status_code=500, detail=f"Failed to reset demo data: {str(e)}")
 
 # Recovery endpoints
+class RecoverySMSRequest(BaseModel):
+    """Request model for sending recovery SMS."""
+    phone: str = Field(..., description="Recipient phone number")
+    message: str = Field(..., description="SMS message content")
+
 @router.post("/recovery/send-sms")
 async def send_recovery_sms(
-    phone: str = Field(..., description="Recipient phone number"),
-    message: str = Field(..., description="SMS message content"),
+    request: RecoverySMSRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth)
 ):
@@ -9428,7 +9432,7 @@ async def send_recovery_sms(
     
     try:
         twilio_service = TwilioService()
-        result = twilio_service.send_sms(phone, message)
+        result = twilio_service.send_sms(request.phone, request.message)
         
         # Log the action
         log_audit_action(
@@ -9436,7 +9440,7 @@ async def send_recovery_sms(
             action=AuditAction.CREATE,
             target_type="recovery_sms",
             user_id=current_user.id,
-            metadata={"phone": phone, "status": result["status"]}
+            metadata={"phone": request.phone, "status": result["status"]}
         )
         db.commit()
         
