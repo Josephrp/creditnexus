@@ -9006,3 +9006,323 @@ async def search_users(
             detail={"status": "error", "message": f"Failed to search users: {str(e)}"}
         )
 
+
+# ============================================================================
+# Demo Data Seeding Endpoints
+# ============================================================================
+
+class DemoSeedRequest(BaseModel):
+    """Request model for demo data seeding."""
+    seed_users: bool = True
+    seed_templates: bool = True
+    seed_policies: bool = True
+    seed_policy_templates: bool = True
+    generate_deals: bool = False
+    deal_count: int = 12
+    dry_run: bool = False
+
+
+class DemoSeedResponse(BaseModel):
+    """Response model for demo data seeding."""
+    status: str
+    created: Dict[str, int] = {}
+    updated: Dict[str, int] = {}
+    errors: Dict[str, List[str]] = {}
+    preview: Optional[Dict[str, Any]] = None
+
+
+class SeedingStatusResponse(BaseModel):
+    """Response model for seeding status."""
+    stage: Optional[str] = None
+    progress: float = 0.0
+    total: int = 0
+    current: int = 0
+    errors: List[str] = []
+    status: str = "pending"
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    all_stages: Optional[Dict[str, Any]] = None
+
+
+@router.post("/demo/seed", response_model=DemoSeedResponse)
+async def seed_demo_data(
+    request: DemoSeedRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """
+    Seed demo data (users, templates, policies).
+    
+    Requires admin authentication.
+    """
+    # Check admin permission
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"status": "error", "message": "Admin access required"}
+        )
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        results = service.seed_all(
+            seed_users=request.seed_users,
+            seed_templates=request.seed_templates,
+            seed_policies=request.seed_policies,
+            seed_policy_templates=request.seed_policy_templates,
+            dry_run=request.dry_run
+        )
+        
+        # Generate deals if requested
+        if request.generate_deals and not request.dry_run:
+            try:
+                # Verify applicant users exist before generating deals
+                from app.db.models import User, UserRole
+                applicant_count = db.query(User).filter(User.role == UserRole.APPLICANT.value).count()
+                if applicant_count == 0:
+                    # Try to seed users with force=True if no applicants exist
+                    logger.warning("No applicant users found. Attempting to seed users with force=True...")
+                    user_result = service.seed_users(force=True, dry_run=False)
+                    applicant_count = db.query(User).filter(User.role == UserRole.APPLICANT.value).count()
+                    if applicant_count == 0:
+                        raise ValueError(
+                            "No applicant users found. Please seed demo users first. "
+                            "User seeding returned 0 created/updated. "
+                            "You may need to manually create users with APPLICANT role."
+                        )
+                    logger.info(f"Seeded users: {user_result['created']} created, {user_result['updated']} updated")
+                    # Update results with user seeding info
+                    if "users" not in results:
+                        results["users"] = user_result
+                    else:
+                        results["users"]["created"] += user_result.get("created", 0)
+                        results["users"]["updated"] += user_result.get("updated", 0)
+                
+                logger.info(f"Generating {request.deal_count} demo deals... (found {applicant_count} applicant users)")
+                deals = service.create_demo_deals(count=request.deal_count)
+                results["deals"] = {
+                    "created": len(deals),
+                    "updated": 0,
+                    "errors": []
+                }
+                logger.info(f"Successfully generated {len(deals)} demo deals")
+            except Exception as e:
+                logger.error(f"Error generating demo deals: {e}", exc_info=True)
+                results["deals"] = {
+                    "created": 0,
+                    "updated": 0,
+                    "errors": [str(e)]
+                }
+        
+        # Format response
+        created = {k: v.get("created", 0) for k, v in results.items()}
+        updated = {k: v.get("updated", 0) for k, v in results.items()}
+        errors = {k: v.get("errors", []) for k, v in results.items()}
+        
+        # Audit log
+        try:
+            log_audit_action(
+                db=db,
+                action=AuditAction.CREATE,
+                target_type="demo_data",
+                user_id=current_user.id,
+                metadata={
+                    "seed_users": request.seed_users,
+                    "seed_templates": request.seed_templates,
+                    "seed_policies": request.seed_policies,
+                    "seed_policy_templates": request.seed_policy_templates,
+                    "dry_run": request.dry_run,
+                    "created": created,
+                    "updated": updated,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log demo data seeding audit: {e}")
+        
+        return DemoSeedResponse(
+            status="success" if not any(errors.values()) else "partial",
+            created=created,
+            updated=updated,
+            errors=errors,
+            preview=results if request.dry_run else None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error seeding demo data: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to seed demo data: {str(e)}"}
+        )
+
+
+@router.get("/demo/seed/status", response_model=SeedingStatusResponse)
+async def get_seeding_status(
+    stage: Optional[str] = Query(None, description="Specific stage to get status for"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current seeding status.
+    
+    Returns status for a specific stage or all stages.
+    """
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        status = service.get_seeding_status(stage=stage)
+        
+        if stage:
+            if status:
+                return SeedingStatusResponse(**status)
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"status": "error", "message": f"Status not found for stage: {stage}"}
+                )
+        else:
+            return SeedingStatusResponse(all_stages=status)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting seeding status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get seeding status: {str(e)}"}
+        )
+
+
+@router.post("/demo/seed/users", response_model=DemoSeedResponse)
+async def seed_users(
+    force: bool = Query(False, description="Force update existing users"),
+    dry_run: bool = Query(False, description="Preview without committing"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed demo users only."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        result = service.seed_users(force=force, dry_run=dry_run)
+        
+        return DemoSeedResponse(
+            status="success" if not result["errors"] else "partial",
+            created={"users": result["created"]},
+            updated={"users": result["updated"]},
+            errors={"users": result["errors"]}
+        )
+    except Exception as e:
+        logger.error(f"Error seeding users: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to seed users: {str(e)}")
+
+
+@router.post("/demo/seed/templates", response_model=DemoSeedResponse)
+async def seed_templates(
+    dry_run: bool = Query(False, description="Preview without committing"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed templates only."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        result = service.seed_templates(dry_run=dry_run)
+        
+        return DemoSeedResponse(
+            status="success" if not result["errors"] else "partial",
+            created={"templates": result["created"]},
+            updated={"templates": result["updated"]},
+            errors={"templates": result["errors"]}
+        )
+    except Exception as e:
+        logger.error(f"Error seeding templates: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to seed templates: {str(e)}")
+
+
+@router.post("/demo/seed/policies", response_model=DemoSeedResponse)
+async def seed_policies(
+    dry_run: bool = Query(False, description="Preview without committing"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed policies only."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        result = service.seed_policies(dry_run=dry_run)
+        
+        return DemoSeedResponse(
+            status="success" if not result["errors"] else "partial",
+            created={"policies": result["created"]},
+            updated={"policies": result["updated"]},
+            errors={"policies": result["errors"]}
+        )
+    except Exception as e:
+        logger.error(f"Error seeding policies: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to seed policies: {str(e)}")
+
+
+@router.delete("/demo/seed/reset")
+async def reset_demo_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reset demo data (delete all demo deals, documents, etc.).
+    
+    WARNING: This will delete all demo data. Use with caution.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Delete demo deals and related data
+        # This is a placeholder - implement actual deletion logic
+        demo_deals = db.query(Deal).filter(Deal.deal_data["is_demo"].astext == "true").all()
+        
+        deleted_count = 0
+        for deal in demo_deals:
+            # Delete related documents, workflows, etc.
+            db.query(Document).filter(Document.deal_id == deal.id).delete()
+            db.query(DealNote).filter(DealNote.deal_id == deal.id).delete()
+            db.delete(deal)
+            deleted_count += 1
+        
+        db.commit()
+        
+        # Audit log
+        try:
+            log_audit_action(
+                db=db,
+                action=AuditAction.DELETE,
+                target_type="demo_data",
+                user_id=current_user.id,
+                metadata={"deleted_deals": deleted_count}
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log demo data reset audit: {e}")
+        
+        return {
+            "status": "success",
+            "message": f"Reset {deleted_count} demo deal(s) and related data"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting demo data: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to reset demo data: {str(e)}")
+

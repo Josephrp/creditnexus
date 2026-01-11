@@ -37,6 +37,10 @@ export class ErrorBoundary extends Component<Props, State> {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ErrorBoundary.tsx:34',message:'ErrorBoundary caught error',data:{errorMessage:error.message,errorName:error.name,errorStack:error.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+
     // In production, you might want to send this to an error reporting service
     // Example: Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
 
@@ -59,6 +63,12 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   render() {
+    // #region agent log
+    const logData9 = {location:'ErrorBoundary.tsx:61',message:'ErrorBoundary render',data:{hasError:this.state.hasError,errorMessage:this.state.error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};
+    console.log('[DEBUG]', logData9);
+    fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData9)}).catch((e)=>console.error('[DEBUG] Fetch failed:',e));
+    // #endregion
+    
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;

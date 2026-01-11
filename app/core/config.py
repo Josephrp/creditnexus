@@ -123,6 +123,15 @@ class Settings(BaseSettings):
     CHROMADB_PERSIST_DIR: str = "./chroma_db"  # Directory to persist ChromaDB data
     CHROMADB_SEED_DOCUMENTS_DIR: Optional[str] = None  # Optional directory to load documents into ChromaDB on startup
     
+    # Demo Data Configuration
+    DEMO_DATA_ENABLED: bool = True  # Feature flag to enable/disable demo data generation
+    DEMO_DATA_DEAL_COUNT: int = 12  # Default number of deals to generate
+    DEMO_DATA_DEAL_TYPES: List[str] = ["loan_application", "refinancing", "restructuring"]  # Available deal types
+    DEMO_DATA_STORAGE_PATH: str = "storage/deals/demo"  # Storage path for demo deal files
+    DEMO_DATA_CACHE_ENABLED: bool = True  # Enable caching for generated CDM data
+    DEMO_DATA_CACHE_TTL: int = 86400  # Cache TTL in seconds (default: 24 hours)
+    DEMO_DATA_CACHE_PATH: Optional[str] = None  # Optional path for cache database (default: in-memory)
+    
     # Database Configuration
     DATABASE_URL: Optional[str] = None  # PostgreSQL or SQLite connection string
     DATABASE_ENABLED: bool = True  # Feature flag to enable/disable database

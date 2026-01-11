@@ -1359,3 +1359,47 @@ class PolicyTemplate(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class DemoSeedingStatus(Base):
+    """Model for tracking demo data seeding progress."""
+    
+    __tablename__ = "demo_seeding_status"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    stage = Column(String(50), nullable=False, index=True)  # users, templates, deals, documents, etc.
+    
+    progress = Column(Numeric(5, 2), nullable=False, default=0.00)  # 0.00 to 100.00
+    
+    total = Column(Integer, nullable=False, default=0)
+    
+    current = Column(Integer, nullable=False, default=0)
+    
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    
+    errors = Column(JSONB, nullable=True)  # List of error messages
+    
+    started_at = Column(DateTime, nullable=True)
+    
+    completed_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "stage": self.stage,
+            "progress": float(self.progress) if self.progress else 0.0,
+            "total": self.total,
+            "current": self.current,
+            "status": self.status,
+            "errors": self.errors,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

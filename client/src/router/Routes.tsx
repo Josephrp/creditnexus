@@ -22,14 +22,29 @@ import { MetaMaskLogin } from '@/sites/metamask/MetaMaskLogin';
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   
+  // #region agent log
+  const logData4 = {location:'Routes.tsx:22',message:'ProtectedRoute rendering',data:{isLoading,hasUser:!!user},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+  console.log('[DEBUG]', logData4);
+  fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData4)}).catch((e)=>console.error('[DEBUG] Fetch failed:',e));
+  // #endregion
+  
   if (isLoading) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Routes.tsx:25',message:'ProtectedRoute showing loading',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     return <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">Loading...</div>;
   }
   
   if (!user) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Routes.tsx:29',message:'ProtectedRoute redirecting to login',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     return <Navigate to="/login" replace />;
   }
   
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Routes.tsx:33',message:'ProtectedRoute rendering children',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   return <>{children}</>;
 };
 
@@ -53,6 +68,9 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Router configuration
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Routes.tsx:56',message:'Creating router',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+// #endregion
 export const router = createBrowserRouter(
   [
     // Public routes
@@ -138,6 +156,14 @@ export const router = createBrowserRouter(
   },
   {
     path: '/app/verification-demo',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/demo-data',
     element: (
       <ProtectedRoute>
         <DesktopAppLayout />
@@ -278,10 +304,5 @@ export const router = createBrowserRouter(
       </div>
     ),
   },
-  ],
-  {
-    future: {
-      v7_startTransition: true,
-    },
-  }
+  ]
 );

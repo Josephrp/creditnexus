@@ -16,11 +16,12 @@ import { DealDetail } from '@/components/DealDetail';
 import { LoginForm } from '@/components/LoginForm';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Breadcrumb, BreadcrumbContainer } from '@/components/ui/Breadcrumb';
-import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower, Building2 } from 'lucide-react';
+import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower, Building2, Database } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, IntentName, DocumentContext, AgreementContext } from '@/context/FDC3Context';
 import VerificationDashboard from '@/components/VerificationDashboard';
+import { DemoDataDashboard } from '@/components/DemoDataDashboard';
 import RiskWarRoom from '@/components/RiskWarRoom';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -36,7 +37,7 @@ import {
   PERMISSION_DEAL_VIEW_OWN,
 } from '@/utils/permissions';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals';
 
 interface AppConfig {
   id: AppView;
@@ -81,6 +82,13 @@ const mainApps: AppConfig[] = [
 ];
 
 const sidebarApps: AppConfig[] = [
+  {
+    id: 'demo-data',
+    name: 'Demo Data',
+    icon: <Database className="h-5 w-5 text-indigo-400" />,
+    description: 'Seed and manage demo data',
+    requiredPermission: PERMISSION_DOCUMENT_VIEW,
+  },
   {
     id: 'verification-demo',
     name: 'Verification Demo',
@@ -172,6 +180,12 @@ interface TradeBlotterState {
 }
 
 export function DesktopAppLayout() {
+  // #region agent log
+  const logData8 = {location:'DesktopAppLayout.tsx:182',message:'DesktopAppLayout rendering',data:{pathname:window.location.pathname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+  console.log('[DEBUG]', logData8);
+  fetch('http://127.0.0.1:7242/ingest/b4962ed0-f261-4fa9-86f3-a557335b330a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData8)}).catch((e)=>console.error('[DEBUG] Fetch failed:',e));
+  // #endregion
+  
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -189,6 +203,7 @@ export function DesktopAppLayout() {
       '/app/green-lens': 'green-lens',
       '/app/ground-truth': 'ground-truth',
       '/app/verification-demo': 'verification-demo',
+      '/app/demo-data': 'demo-data',
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/library': 'library',
@@ -301,6 +316,7 @@ export function DesktopAppLayout() {
       '/app/green-lens': 'green-lens',
       '/app/ground-truth': 'ground-truth',
       '/app/verification-demo': 'verification-demo',
+      '/app/demo-data': 'demo-data',
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/library': 'library',
@@ -321,10 +337,11 @@ export function DesktopAppLayout() {
       return; // Don't update activeApp if pathname doesn't map to an app
     }
     
+    // Only update if different to avoid unnecessary re-renders and potential loops
     if (app !== activeApp) {
       setActiveApp(app);
     }
-  }, [location.pathname, activeApp]); // Include activeApp to track changes
+  }, [location.pathname]); // Remove activeApp from dependencies to prevent loops
 
   // Update route when activeApp changes
   const handleAppChange = (app: AppView) => {
@@ -340,6 +357,7 @@ export function DesktopAppLayout() {
       'green-lens': '/app/green-lens',
       'ground-truth': '/app/ground-truth',
       'verification-demo': '/app/verification-demo',
+      'demo-data': '/app/demo-data',
       'risk-war-room': '/app/risk-war-room',
       'policy-editor': '/app/policy-editor',
       'library': '/library',
@@ -684,6 +702,7 @@ export function DesktopAppLayout() {
           )}
           {activeApp === 'ground-truth' && <GroundTruthDashboard />}
           {activeApp === 'verification-demo' && <VerificationDashboard />}
+          {activeApp === 'demo-data' && <DemoDataDashboard />}
           {activeApp === 'risk-war-room' && <RiskWarRoom />}
           {activeApp === 'policy-editor' && <PolicyEditor />}
         </main>
