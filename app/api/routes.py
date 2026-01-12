@@ -6,7 +6,7 @@ import json
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request, Form, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session, joinedload
@@ -9473,6 +9473,8 @@ class RecoverySMSRequest(BaseModel):
 
 @router.post("/recovery/send-sms")
 async def send_recovery_sms(
+    phone: str = Body(..., description="Recipient phone number"),
+    message: str = Body(..., description="SMS message content"),
     request: RecoverySMSRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth)
