@@ -11,12 +11,13 @@ from app.db import Base
 
 class UserRole(str, enum.Enum):
     """User roles for access control."""
+
     # New roles
-    AUDITOR = "auditor"      # Full oversight, read-only access to all
-    BANKER = "banker"        # Write permissions for deals, documents
+    AUDITOR = "auditor"  # Full oversight, read-only access to all
+    BANKER = "banker"  # Write permissions for deals, documents
     LAW_OFFICER = "law_officer"  # Write/edit for legal documents
-    ACCOUNTANT = "accountant"     # Write/edit for financial data
-    APPLICANT = "applicant"      # Apply and track applications
+    ACCOUNTANT = "accountant"  # Write/edit for financial data
+    APPLICANT = "applicant"  # Apply and track applications
     # Legacy roles for backward compatibility
     VIEWER = "viewer"
     ANALYST = "analyst"
@@ -26,6 +27,7 @@ class UserRole(str, enum.Enum):
 
 class ExtractionStatus(str, enum.Enum):
     """Status of an extraction in the staging database."""
+
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -33,6 +35,7 @@ class ExtractionStatus(str, enum.Enum):
 
 class WorkflowState(str, enum.Enum):
     """States for the document approval workflow."""
+
     DRAFT = "draft"
     UNDER_REVIEW = "under_review"
     APPROVED = "approved"
@@ -43,6 +46,7 @@ class WorkflowState(str, enum.Enum):
 
 class AuditAction(str, enum.Enum):
     """Types of auditable actions."""
+
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -57,6 +61,7 @@ class AuditAction(str, enum.Enum):
 
 class TemplateCategory(str, enum.Enum):
     """LMA template categories."""
+
     FACILITY_AGREEMENT = "Facility Agreement"
     TERM_SHEET = "Term Sheet"
     CONFIDENTIALITY_AGREEMENT = "Confidentiality Agreement"
@@ -72,6 +77,7 @@ class TemplateCategory(str, enum.Enum):
 
 class GeneratedDocumentStatus(str, enum.Enum):
     """Status of generated documents."""
+
     DRAFT = "draft"
     REVIEW = "review"
     APPROVED = "approved"
@@ -80,6 +86,7 @@ class GeneratedDocumentStatus(str, enum.Enum):
 
 class MappingType(str, enum.Enum):
     """Types of field mappings."""
+
     DIRECT = "direct"
     COMPUTED = "computed"
     AI_GENERATED = "ai_generated"
@@ -87,12 +94,14 @@ class MappingType(str, enum.Enum):
 
 class ApplicationType(str, enum.Enum):
     """Types of applications."""
+
     INDIVIDUAL = "individual"
     BUSINESS = "business"
 
 
 class ApplicationStatus(str, enum.Enum):
     """Status of applications."""
+
     DRAFT = "draft"
     SUBMITTED = "submitted"
     UNDER_REVIEW = "under_review"
@@ -102,6 +111,7 @@ class ApplicationStatus(str, enum.Enum):
 
 class PolicyStatus(str, enum.Enum):
     """Status of policies in the editor workflow."""
+
     DRAFT = "draft"
     PENDING_APPROVAL = "pending_approval"
     ACTIVE = "active"
@@ -110,6 +120,7 @@ class PolicyStatus(str, enum.Enum):
 
 class DealStatus(str, enum.Enum):
     """Status of deals in the lifecycle."""
+
     DRAFT = "draft"
     SUBMITTED = "submitted"
     UNDER_REVIEW = "under_review"
@@ -121,6 +132,7 @@ class DealStatus(str, enum.Enum):
 
 class DealType(str, enum.Enum):
     """Types of deals."""
+
     LOAN_APPLICATION = "loan_application"
     DEBT_SALE = "debt_sale"
     LOAN_PURCHASE = "loan_purchase"
@@ -131,6 +143,7 @@ class DealType(str, enum.Enum):
 
 class InquiryType(str, enum.Enum):
     """Types of inquiries."""
+
     GENERAL = "general"
     APPLICATION_STATUS = "application_status"
     TECHNICAL_SUPPORT = "technical_support"
@@ -139,6 +152,7 @@ class InquiryType(str, enum.Enum):
 
 class InquiryStatus(str, enum.Enum):
     """Status of inquiries."""
+
     NEW = "new"
     IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
@@ -147,59 +161,67 @@ class InquiryStatus(str, enum.Enum):
 
 class User(Base):
     """User model for authentication and authorization."""
-    
+
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     replit_user_id = Column(String(255), unique=True, nullable=True, index=True)
-    
+
     email = Column(String(255), unique=True, nullable=False, index=True)
-    
+
     password_hash = Column(String(255), nullable=True)
-    
+
     display_name = Column(String(255), nullable=False)
-    
+
     profile_image = Column(String(500), nullable=True)
-    
+
     role = Column(String(20), default=UserRole.ANALYST.value, nullable=False)
-    
+
     is_active = Column(Boolean, default=True, nullable=False)
-    
+
     is_email_verified = Column(Boolean, default=False, nullable=False)
-    
+
     failed_login_attempts = Column(Integer, default=0, nullable=False)
-    
+
     locked_until = Column(DateTime, nullable=True)
-    
+
     password_changed_at = Column(DateTime, nullable=True)
-    
+
     last_login = Column(DateTime, nullable=True)
-    
+
     wallet_address = Column(String(255), nullable=True, unique=True, index=True)
-    
-    permissions = Column(JSONB(), nullable=True)  # Explicit user permissions (overrides role permissions)
-    
-    profile_data = Column(JSONB(), nullable=True)  # Enriched profile information (phone, company, job_title, address, etc.)
-    
+
+    permissions = Column(
+        JSONB(), nullable=True
+    )  # Explicit user permissions (overrides role permissions)
+
+    profile_data = Column(
+        JSONB(), nullable=True
+    )  # Enriched profile information (phone, company, job_title, address, etc.)
+
     # Signup approval workflow fields
-    signup_status = Column(String(20), default="pending", nullable=False, index=True)  # pending, approved, rejected
+    signup_status = Column(
+        String(20), default="pending", nullable=False, index=True
+    )  # pending, approved, rejected
     signup_submitted_at = Column(DateTime, nullable=True)
     signup_reviewed_at = Column(DateTime, nullable=True)
     signup_reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     signup_rejection_reason = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     documents = relationship("Document", back_populates="uploaded_by_user")
     audit_logs = relationship("AuditLog", back_populates="user")
     applications = relationship("Application", back_populates="user")
     deals = relationship("Deal", back_populates="applicant", foreign_keys="Deal.applicant_id")
     inquiries = relationship("Inquiry", back_populates="user", foreign_keys="Inquiry.user_id")
-    organized_meetings = relationship("Meeting", back_populates="organizer", foreign_keys="Meeting.organizer_id")
-    
+    organized_meetings = relationship(
+        "Meeting", back_populates="organizer", foreign_keys="Meeting.organizer_id"
+    )
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -212,8 +234,12 @@ class User(Base):
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "wallet_address": self.wallet_address,
             "signup_status": self.signup_status,
-            "signup_submitted_at": self.signup_submitted_at.isoformat() if self.signup_submitted_at else None,
-            "signup_reviewed_at": self.signup_reviewed_at.isoformat() if self.signup_reviewed_at else None,
+            "signup_submitted_at": self.signup_submitted_at.isoformat()
+            if self.signup_submitted_at
+            else None,
+            "signup_reviewed_at": self.signup_reviewed_at.isoformat()
+            if self.signup_reviewed_at
+            else None,
             "signup_reviewed_by": self.signup_reviewed_by,
             "signup_rejection_reason": self.signup_rejection_reason,
             "profile_data": self.profile_data,
@@ -223,51 +249,59 @@ class User(Base):
 
 class Document(Base):
     """Document model for storing credit agreement documents."""
-    
+
     __tablename__ = "documents"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     title = Column(String(500), nullable=False)
-    
+
     borrower_name = Column(String(255), nullable=True, index=True)
-    
+
     borrower_lei = Column(String(20), nullable=True, index=True)
-    
+
     governing_law = Column(String(50), nullable=True)
-    
+
     total_commitment = Column(Numeric(20, 2), nullable=True)
-    
+
     currency = Column(String(3), nullable=True)
-    
+
     agreement_date = Column(Date, nullable=True)
-    
+
     sustainability_linked = Column(Boolean, default=False)
-    
+
     esg_metadata = Column(JSONB, nullable=True)
-    
+
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     current_version_id = Column(Integer, nullable=True)
-    
+
     # LMA Template Generation fields
     is_generated = Column(Boolean, default=False, nullable=False, index=True)
-    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    template_id = Column(
+        Integer, ForeignKey("lma_templates.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     source_cdm_data = Column(JSONB, nullable=True)  # CDM data used for generation
-    
+
     # Deal relationship
-    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
-    
+    deal_id = Column(
+        Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     uploaded_by_user = relationship("User", back_populates="documents")
-    versions = relationship("DocumentVersion", back_populates="document", order_by="DocumentVersion.version_number.desc()")
+    versions = relationship(
+        "DocumentVersion",
+        back_populates="document",
+        order_by="DocumentVersion.version_number.desc()",
+    )
     workflow = relationship("Workflow", back_populates="document", uselist=False)
     lma_template = relationship("LMATemplate", foreign_keys=[template_id])
     deal = relationship("Deal", back_populates="documents")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -292,29 +326,29 @@ class Document(Base):
 
 class DocumentVersion(Base):
     """Version tracking for document extractions."""
-    
+
     __tablename__ = "document_versions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
-    
+
     version_number = Column(Integer, nullable=False, default=1)
-    
+
     extracted_data = Column(JSONB, nullable=False)
-    
+
     original_text = Column(Text, nullable=True)
-    
+
     source_filename = Column(String(255), nullable=True)
-    
+
     extraction_method = Column(String(50), default="simple")
-    
+
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     document = relationship("Document", back_populates="versions")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -331,37 +365,39 @@ class DocumentVersion(Base):
 
 class Workflow(Base):
     """Approval workflow state machine for documents."""
-    
+
     __tablename__ = "workflows"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, unique=True, index=True)
-    
+
+    document_id = Column(
+        Integer, ForeignKey("documents.id"), nullable=False, unique=True, index=True
+    )
+
     state = Column(String(20), default=WorkflowState.DRAFT.value, nullable=False, index=True)
-    
+
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     submitted_at = Column(DateTime, nullable=True)
-    
+
     approved_at = Column(DateTime, nullable=True)
-    
+
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     published_at = Column(DateTime, nullable=True)
-    
+
     rejection_reason = Column(Text, nullable=True)
-    
+
     due_date = Column(DateTime, nullable=True)
-    
+
     priority = Column(String(20), default="normal")
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     document = relationship("Document", back_populates="workflow")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -383,29 +419,29 @@ class Workflow(Base):
 
 class AuditLog(Base):
     """Audit trail for all user actions."""
-    
+
     __tablename__ = "audit_logs"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     action = Column(String(50), nullable=False, index=True)
-    
+
     target_type = Column(String(50), nullable=False)
-    
+
     target_id = Column(Integer, nullable=True)
-    
+
     action_metadata = Column(JSONB, nullable=True)
-    
+
     ip_address = Column(String(50), nullable=True)
-    
+
     user_agent = Column(String(500), nullable=True)
-    
+
     occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    
+
     user = relationship("User", back_populates="audit_logs")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -422,33 +458,33 @@ class AuditLog(Base):
 
 class OAuth(Base):
     """OAuth token storage for Replit Auth sessions."""
-    
+
     __tablename__ = "oauth_tokens"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+
     provider = Column(String(50), nullable=False, default="replit")
-    
+
     browser_session_key = Column(String(255), nullable=False, index=True)
-    
+
     access_token = Column(Text, nullable=True)
-    
+
     refresh_token = Column(Text, nullable=True)
-    
+
     token_type = Column(String(50), nullable=True)
-    
+
     expires_at = Column(DateTime, nullable=True)
-    
+
     id_token = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     user = relationship("User", backref="oauth_tokens")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -462,25 +498,25 @@ class OAuth(Base):
 
 class RefreshToken(Base):
     """Model for tracking JWT refresh tokens for secure revocation."""
-    
+
     __tablename__ = "refresh_tokens"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     jti = Column(String(255), unique=True, nullable=False, index=True)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+
     is_revoked = Column(Boolean, default=False, nullable=False)
-    
+
     expires_at = Column(DateTime, nullable=False)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     revoked_at = Column(DateTime, nullable=True)
-    
+
     user = relationship("User", backref="refresh_tokens")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -495,32 +531,27 @@ class RefreshToken(Base):
 
 class StagedExtraction(Base):
     """Model for storing staged credit agreement extractions (legacy support)."""
-    
+
     __tablename__ = "staged_extractions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    status = Column(
-        String(20),
-        default=ExtractionStatus.PENDING.value,
-        nullable=False,
-        index=True
-    )
-    
+
+    status = Column(String(20), default=ExtractionStatus.PENDING.value, nullable=False, index=True)
+
     agreement_data = Column(JSONB, nullable=False)
-    
+
     original_text = Column(Text, nullable=True)
-    
+
     source_filename = Column(String(255), nullable=True)
-    
+
     rejection_reason = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     reviewed_by = Column(String(255), nullable=True)
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -538,48 +569,50 @@ class StagedExtraction(Base):
 
 class PolicyDecision(Base):
     """Model for storing policy engine decisions and audit trail.
-    
+
     Stores policy evaluation results with full CDM event support for
     machine-readable and machine-executable compliance tracking.
     """
-    
+
     __tablename__ = "policy_decisions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     # Transaction identification
     transaction_id = Column(String(255), nullable=False, index=True)
     transaction_type = Column(String(50), nullable=False)
-    
+
     # Policy decision
     decision = Column(String(10), nullable=False, index=True)  # 'ALLOW', 'BLOCK', 'FLAG'
     rule_applied = Column(String(255), nullable=True)
     trace_id = Column(String(255), unique=True, nullable=False)
-    
+
     # Evaluation details
     trace = Column(JSONB, nullable=True)  # Full evaluation trace
     matched_rules = Column(ARRAY(String), nullable=True)  # Array of matched rule names
-    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional context
-    
+    additional_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional context
+
     # CDM Events (for full CDM compliance)
     cdm_events = Column(JSONB, nullable=True)  # Full CDM PolicyEvaluation events
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    
+
     # Foreign keys to CreditNexus entities
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
     loan_asset_id = Column(Integer, ForeignKey("loan_assets.id"), nullable=True)
-    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    deal_id = Column(
+        Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     # Relationships
     document = relationship("Document", backref="policy_decisions")
     deal = relationship("Deal", backref="policy_decisions")
     # Note: LoanAsset is a SQLModel in app.models.loan_asset, not in app.db.models
     # Relationship will work if loan_assets table exists
     user = relationship("User", backref="policy_decisions")
-    
+
     def to_dict(self):
         """Convert model to dictionary for API serialization."""
         return {
@@ -603,51 +636,53 @@ class PolicyDecision(Base):
 
 class PaymentEvent(Base):
     """Model for storing x402 payment events with CDM compliance.
-    
+
     Stores payment processing results with full CDM event support for
     machine-readable and machine-executable payment tracking.
     """
-    
+
     __tablename__ = "payment_events"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     # Payment identification
     payment_id = Column(String(255), nullable=False, unique=True, index=True)
     payment_method = Column(String(50), nullable=False)  # x402, wire, ach, swift
     payment_type = Column(String(50), nullable=False)  # loan_disbursement, trade_settlement, etc.
-    
+
     # Party information
     payer_id = Column(String(255), nullable=False)
     payer_name = Column(String(255), nullable=False)
     receiver_id = Column(String(255), nullable=False)
     receiver_name = Column(String(255), nullable=False)
-    
+
     # Payment amount
     amount = Column(Numeric(20, 2), nullable=False)
     currency = Column(String(3), nullable=False)
-    
+
     # Payment status (CDM state machine)
-    status = Column(String(20), nullable=False, index=True)  # pending, verified, settled, failed, cancelled
-    
+    status = Column(
+        String(20), nullable=False, index=True
+    )  # pending, verified, settled, failed, cancelled
+
     # x402-specific fields (JSONB for flexibility)
     x402_payment_payload = Column(JSONB, nullable=True)
     x402_verification = Column(JSONB, nullable=True)
     x402_settlement = Column(JSONB, nullable=True)
     transaction_hash = Column(String(255), nullable=True)
-    
+
     # CDM references
     related_trade_id = Column(String(255), nullable=True, index=True)
     related_loan_id = Column(String(255), nullable=True, index=True)
     related_facility_id = Column(String(255), nullable=True)
-    
+
     # Full CDM event (JSONB for complete CDM compliance)
     cdm_event = Column(JSONB, nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     settled_at = Column(DateTime, nullable=True)
-    
+
     def to_dict(self):
         """Convert model to dictionary for API serialization."""
         return {
@@ -677,38 +712,42 @@ class PaymentEvent(Base):
 
 class PaymentSchedule(Base):
     """Model for storing scheduled payment information.
-    
+
     Tracks periodic payments (interest, principal) that are scheduled
     for future processing via x402 payment service.
     """
-    
+
     __tablename__ = "payment_schedules"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     # Loan asset reference
     loan_asset_id = Column(Integer, nullable=False, index=True)
-    
+
     # Payment details
     amount = Column(Numeric(20, 2), nullable=False)
     currency = Column(String(3), nullable=False, default="USD")
     payment_type = Column(String(50), nullable=False)  # interest, principal, penalty
-    
+
     # Schedule information
     scheduled_date = Column(DateTime, nullable=False, index=True)
-    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, processed, failed, cancelled
-    
+    status = Column(
+        String(20), nullable=False, default="pending", index=True
+    )  # pending, processed, failed, cancelled
+
     # Payment frequency (for recurring payments)
     payment_frequency_period = Column(String(20), nullable=True)  # Day, Week, Month, Year
     payment_frequency_multiplier = Column(Integer, nullable=True)  # e.g., 3 for "every 3 months"
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     processed_at = Column(DateTime, nullable=True)
-    
+
     # Metadata
-    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional schedule information
-    
+    additional_metadata = Column(
+        JSONB, name="metadata", nullable=True
+    )  # Additional schedule information
+
     def to_dict(self):
         """Convert model to dictionary for API serialization."""
         return {
@@ -729,9 +768,9 @@ class PaymentSchedule(Base):
 
 class LMATemplate(Base):
     """LMA template metadata for document generation."""
-    
+
     __tablename__ = "lma_templates"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     template_code = Column(String(50), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
@@ -740,17 +779,21 @@ class LMATemplate(Base):
     governing_law = Column(String(50), nullable=True)
     version = Column(String(20), nullable=False)
     file_path = Column(Text, nullable=False)
-    additional_metadata = Column(JSONB, name='metadata', nullable=True)
+    additional_metadata = Column(JSONB, name="metadata", nullable=True)
     required_fields = Column(JSONB, nullable=True)
     optional_fields = Column(JSONB, nullable=True)
     ai_generated_sections = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
-    generated_documents = relationship("GeneratedDocument", back_populates="template", cascade="all, delete-orphan")
-    field_mappings = relationship("TemplateFieldMapping", back_populates="template", cascade="all, delete-orphan")
-    
+    generated_documents = relationship(
+        "GeneratedDocument", back_populates="template", cascade="all, delete-orphan"
+    )
+    field_mappings = relationship(
+        "TemplateFieldMapping", back_populates="template", cascade="all, delete-orphan"
+    )
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -773,26 +816,32 @@ class LMATemplate(Base):
 
 class GeneratedDocument(Base):
     """Generated LMA documents from templates."""
-    
+
     __tablename__ = "generated_documents"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
-    source_document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    template_id = Column(
+        Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     cdm_data = Column(JSONB, nullable=False)
     generated_content = Column(Text, nullable=True)
     file_path = Column(Text, nullable=True)
     status = Column(String(50), server_default="draft", nullable=False, index=True)
     generation_summary = Column(JSONB, nullable=True)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     template = relationship("LMATemplate", back_populates="generated_documents")
     source_document = relationship("Document", foreign_keys=[source_document_id])
     creator = relationship("User", foreign_keys=[created_by])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -812,21 +861,23 @@ class GeneratedDocument(Base):
 
 class TemplateFieldMapping(Base):
     """Field mappings from CDM to template placeholders."""
-    
+
     __tablename__ = "template_field_mappings"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_id = Column(
+        Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     template_field = Column(String(255), nullable=False, index=True)
     cdm_field = Column(String(255), nullable=False)
     mapping_type = Column(String(50), nullable=True)
     transformation_rule = Column(Text, nullable=True)
     is_required = Column(Boolean, server_default="false", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     template = relationship("LMATemplate", back_populates="field_mappings")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -843,40 +894,48 @@ class TemplateFieldMapping(Base):
 
 class ClauseCache(Base):
     """Cache for AI-generated clauses to reduce LLM costs."""
-    
+
     __tablename__ = "clause_cache"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    template_id = Column(Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True)
-    
-    field_name = Column(String(100), nullable=False, index=True)  # e.g., "REPRESENTATIONS_AND_WARRANTIES"
-    
+
+    template_id = Column(
+        Integer, ForeignKey("lma_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    field_name = Column(
+        String(100), nullable=False, index=True
+    )  # e.g., "REPRESENTATIONS_AND_WARRANTIES"
+
     clause_content = Column(Text, nullable=False)  # The generated clause text
-    
-    context_hash = Column(String(64), nullable=True, index=True)  # Hash of CDM context for cache key
-    
+
+    context_hash = Column(
+        String(64), nullable=True, index=True
+    )  # Hash of CDM context for cache key
+
     context_summary = Column(JSONB, nullable=True)  # Summary of CDM context used (for display)
-    
-    usage_count = Column(Integer, default=0, nullable=False)  # How many times this clause has been used
-    
+
+    usage_count = Column(
+        Integer, default=0, nullable=False
+    )  # How many times this clause has been used
+
     last_used_at = Column(DateTime, nullable=True, index=True)
-    
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    
+
+    created_by = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     template = relationship("LMATemplate", foreign_keys=[template_id])
     creator = relationship("User", foreign_keys=[created_by])
-    
+
     # Unique constraint: one clause per template+field_name+context_hash combination
-    __table_args__ = (
-        {'sqlite_autoincrement': True},
-    )
-    
+    __table_args__ = ({"sqlite_autoincrement": True},)
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -896,43 +955,45 @@ class ClauseCache(Base):
 
 class Application(Base):
     """Application model for individual and business applications."""
-    
+
     __tablename__ = "applications"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     application_type = Column(String(20), nullable=False, index=True)
-    
+
     status = Column(String(20), default=ApplicationStatus.DRAFT.value, nullable=False, index=True)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    
+
     submitted_at = Column(DateTime, nullable=True)
-    
+
     reviewed_at = Column(DateTime, nullable=True)
-    
+
     approved_at = Column(DateTime, nullable=True)
-    
+
     rejected_at = Column(DateTime, nullable=True)
-    
+
     rejection_reason = Column(Text, nullable=True)
-    
+
     application_data = Column(JSONB, nullable=True)  # Stores form data
-    
-    business_data = Column(JSONB, nullable=True)  # For business applications (debt selling, loan buying)
-    
+
+    business_data = Column(
+        JSONB, nullable=True
+    )  # For business applications (debt selling, loan buying)
+
     individual_data = Column(JSONB, nullable=True)  # For individual applications
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     user = relationship("User", back_populates="applications")
     deal = relationship("Deal", back_populates="application", uselist=False)
     inquiries = relationship("Inquiry", back_populates="application")
     meetings = relationship("Meeting", back_populates="application")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -955,46 +1016,46 @@ class Application(Base):
 
 class Inquiry(Base):
     """Inquiry model for customer support and inquiries."""
-    
+
     __tablename__ = "inquiries"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     inquiry_type = Column(String(50), nullable=False, index=True)
-    
+
     status = Column(String(20), default=InquiryStatus.NEW.value, nullable=False, index=True)
-    
+
     priority = Column(String(20), default="normal")  # low, normal, high, urgent
-    
+
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
-    
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    
+
     email = Column(String(255), nullable=False)
-    
+
     name = Column(String(255), nullable=False)
-    
+
     subject = Column(String(500), nullable=False)
-    
+
     message = Column(Text, nullable=False)
-    
+
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     resolved_at = Column(DateTime, nullable=True)
-    
+
     resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     response_message = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     application = relationship("Application", back_populates="inquiries")
     user = relationship("User", back_populates="inquiries", foreign_keys=[user_id])
     assigned_user = relationship("User", foreign_keys=[assigned_to])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1019,39 +1080,41 @@ class Inquiry(Base):
 
 class Meeting(Base):
     """Meeting model for calendar and meeting management."""
-    
+
     __tablename__ = "meetings"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     title = Column(String(255), nullable=False)
-    
+
     description = Column(Text, nullable=True)
-    
+
     scheduled_at = Column(DateTime, nullable=False, index=True)
-    
+
     duration_minutes = Column(Integer, default=30, nullable=False)
-    
+
     meeting_type = Column(String(50), nullable=True)  # consultation, review, onboarding, etc.
-    
+
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
-    
+
     organizer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     attendees = Column(JSONB, nullable=True)  # Array of {email, name, status}
-    
+
     meeting_link = Column(String(500), nullable=True)  # Zoom/Teams link
-    
+
     ics_file_path = Column(String(500), nullable=True)  # Path to generated .ics file
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     application = relationship("Application", back_populates="meetings")
-    organizer = relationship("User", back_populates="organized_meetings", foreign_keys=[organizer_id])
-    
+    organizer = relationship(
+        "User", back_populates="organized_meetings", foreign_keys=[organizer_id]
+    )
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1073,18 +1136,20 @@ class Meeting(Base):
 
 class Permission(Base):
     """Permission definition model for granular access control."""
-    
+
     __tablename__ = "permission_definitions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
-    category = Column(String(50), nullable=False, index=True)  # 'document', 'deal', 'user', 'policy', etc.
+    category = Column(
+        String(50), nullable=False, index=True
+    )  # 'document', 'deal', 'user', 'policy', etc.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     role_permissions = relationship("RolePermission", back_populates="permission")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1099,16 +1164,21 @@ class Permission(Base):
 
 class RolePermission(Base):
     """Junction table for role-permission mappings."""
-    
+
     __tablename__ = "role_permissions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     role = Column(String(50), nullable=False, index=True)
-    permission_id = Column(Integer, ForeignKey("permission_definitions.id", ondelete="CASCADE"), nullable=False, index=True)
+    permission_id = Column(
+        Integer,
+        ForeignKey("permission_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     permission = relationship("Permission", back_populates="role_permissions")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1121,35 +1191,47 @@ class RolePermission(Base):
 
 class Deal(Base):
     """Deal model for tracking deal lifecycle and file management."""
-    
+
     __tablename__ = "deals"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    deal_id = Column(String(255), unique=True, nullable=False, index=True)  # External deal identifier
-    
+
+    deal_id = Column(
+        String(255), unique=True, nullable=False, index=True
+    )  # External deal identifier
+
     applicant_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
-    
+
     status = Column(String(50), default=DealStatus.DRAFT.value, nullable=False, index=True)
-    
-    deal_type = Column(String(50), nullable=True, index=True)  # loan_application, debt_sale, loan_purchase, etc.
-    
+
+    deal_type = Column(
+        String(50), nullable=True, index=True
+    )  # loan_application, debt_sale, loan_purchase, etc.
+
     deal_data = Column(JSONB, nullable=True)  # Deal parameters, metadata
-    
+
     folder_path = Column(String(500), nullable=True)  # File system path for deal documents
-    
+
+    verification_required = Column(Boolean, default=False, nullable=False)
+
+    verification_completed_at = Column(DateTime, nullable=True)
+
+    notarization_required = Column(Boolean, default=False, nullable=False)
+
+    notarization_completed_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     applicant = relationship("User", back_populates="deals", foreign_keys=[applicant_id])
     application = relationship("Application", back_populates="deal")
     documents = relationship("Document", back_populates="deal")
     notes = relationship("DealNote", back_populates="deal", cascade="all, delete-orphan")
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1161,6 +1243,14 @@ class Deal(Base):
             "deal_type": self.deal_type,
             "deal_data": self.deal_data,
             "folder_path": self.folder_path,
+            "verification_required": self.verification_required,
+            "verification_completed_at": self.verification_completed_at.isoformat()
+            if self.verification_completed_at
+            else None,
+            "notarization_required": self.notarization_required,
+            "notarization_completed_at": self.notarization_completed_at.isoformat()
+            if self.notarization_completed_at
+            else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -1168,30 +1258,32 @@ class Deal(Base):
 
 class DealNote(Base):
     """Deal note model for user notes on deals."""
-    
+
     __tablename__ = "deal_notes"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
+    deal_id = Column(
+        Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+
     content = Column(Text, nullable=False)
-    
+
     note_type = Column(String(50), nullable=True)  # general, verification, status_change, etc.
-    
+
     # Note: Using note_metadata instead of metadata to avoid SQLAlchemy reserved attribute conflict
-    note_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional note metadata
-    
+    note_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional note metadata
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     deal = relationship("Deal", back_populates="notes")
     user = relationship("User", foreign_keys=[user_id])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1208,37 +1300,45 @@ class DealNote(Base):
 
 class Policy(Base):
     """Policy model for policy editor and management."""
-    
+
     __tablename__ = "policies"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+
     name = Column(String(255), nullable=False, index=True)
-    category = Column(String(100), nullable=True, index=True)  # 'regulatory', 'credit_risk', 'esg', etc.
+    category = Column(
+        String(100), nullable=True, index=True
+    )  # 'regulatory', 'credit_risk', 'esg', etc.
     description = Column(Text, nullable=True)
     rules_yaml = Column(Text, nullable=False)  # Full YAML content
-    
-    status = Column(String(50), default=PolicyStatus.DRAFT.value, nullable=False, index=True)  # 'draft', 'pending_approval', 'active', 'archived'
+
+    status = Column(
+        String(50), default=PolicyStatus.DRAFT.value, nullable=False, index=True
+    )  # 'draft', 'pending_approval', 'active', 'archived'
     version = Column(Integer, default=1, nullable=False)
-    
+
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Note: Using additional_metadata instead of metadata to avoid SQLAlchemy reserved attribute conflict
-    additional_metadata = Column(JSONB, name='metadata', nullable=True)  # Additional metadata (tags, notes, etc.)
-    
+    additional_metadata = Column(
+        JSONB, name="metadata", nullable=True
+    )  # Additional metadata (tags, notes, etc.)
+
     # Soft delete
     deleted_at = Column(DateTime, nullable=True, index=True)
-    
+
     # Relationships
     creator = relationship("User", foreign_keys=[created_by], backref="created_policies")
     approver = relationship("User", foreign_keys=[approved_by], backref="approved_policies")
     versions = relationship("PolicyVersion", back_populates="policy", cascade="all, delete-orphan")
-    approvals = relationship("PolicyApproval", back_populates="policy", cascade="all, delete-orphan")
-    
+    approvals = relationship(
+        "PolicyApproval", back_populates="policy", cascade="all, delete-orphan"
+    )
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1260,24 +1360,26 @@ class Policy(Base):
 
 class PolicyVersion(Base):
     """Policy version history for tracking changes."""
-    
+
     __tablename__ = "policy_versions"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    policy_id = Column(Integer, ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    policy_id = Column(
+        Integer, ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version = Column(Integer, nullable=False)
-    
+
     rules_yaml = Column(Text, nullable=False)  # YAML content for this version
     changes_summary = Column(Text, nullable=True)  # Summary of changes from previous version
-    
+
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     policy = relationship("Policy", back_populates="versions")
     creator = relationship("User", foreign_keys=[created_by])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1293,24 +1395,26 @@ class PolicyVersion(Base):
 
 class PolicyApproval(Base):
     """Policy approval history for audit trail."""
-    
+
     __tablename__ = "policy_approvals"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    policy_id = Column(Integer, ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    policy_id = Column(
+        Integer, ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version = Column(Integer, nullable=False)  # Version being approved
-    
+
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     approved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     approval_status = Column(String(50), nullable=False)  # 'approved', 'rejected'
     approval_comment = Column(Text, nullable=True)  # Approval/rejection reason
-    
+
     # Relationships
     policy = relationship("Policy", back_populates="approvals")
     approver = relationship("User", foreign_keys=[approved_by])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1326,24 +1430,32 @@ class PolicyApproval(Base):
 
 class PolicyTemplate(Base):
     """Policy template model for storing pre-built policy templates."""
-    
+
     __tablename__ = "policy_templates"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False, unique=True, index=True)
-    category = Column(String(100), nullable=False, index=True)  # 'regulatory', 'credit_risk', 'esg', etc.
+    category = Column(
+        String(100), nullable=False, index=True
+    )  # 'regulatory', 'credit_risk', 'esg', etc.
     description = Column(Text, nullable=True)
     rules_yaml = Column(Text, nullable=False)  # Template YAML content
-    use_case = Column(String(255), nullable=True, index=True)  # e.g., 'basel_iii_capital', 'sanctions_screening'
-    metadata_ = Column(JSONB, name='metadata', nullable=True)  # Additional metadata (tags, complexity, etc.)
-    is_system_template = Column(Boolean, default=False, nullable=False, index=True)  # System vs user-created
+    use_case = Column(
+        String(255), nullable=True, index=True
+    )  # e.g., 'basel_iii_capital', 'sanctions_screening'
+    metadata_ = Column(
+        JSONB, name="metadata", nullable=True
+    )  # Additional metadata (tags, complexity, etc.)
+    is_system_template = Column(
+        Boolean, default=False, nullable=False, index=True
+    )  # System vs user-created
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     creator = relationship("User", foreign_keys=[created_by])
-    
+
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1358,4 +1470,207 @@ class PolicyTemplate(Base):
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class RemoteAppProfile(Base):
+    """Remote application profile for API access control."""
+
+    __tablename__ = "remote_app_profiles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    profile_name = Column(String(100), unique=True, nullable=False, index=True)
+
+    api_key_hash = Column(String(255), nullable=False)  # bcrypt hash
+
+    allowed_ips = Column(JSONB, nullable=True)  # Array of IP addresses/CIDR blocks
+
+    permissions = Column(JSONB, nullable=True)  # {"read": True, "verify": True, "sign": False}
+
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "profile_name": self.profile_name,
+            "allowed_ips": self.allowed_ips,
+            "permissions": self.permissions,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class VerificationStatus(str, enum.Enum):
+    """Status of verification requests."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+
+
+class VerificationRequest(Base):
+    """Verification request model for cross-machine verification."""
+
+    __tablename__ = "verification_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    verification_id = Column(String(255), unique=True, nullable=False, index=True)
+
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    verifier_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    verification_link_token = Column(String(255), unique=True, nullable=False, index=True)
+
+    status = Column(
+        String(20), default=VerificationStatus.PENDING.value, nullable=False, index=True
+    )
+
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    accepted_at = Column(DateTime, nullable=True)
+
+    declined_at = Column(DateTime, nullable=True)
+
+    declined_reason = Column(Text, nullable=True)
+
+    verification_metadata = Column(JSONB, nullable=True)
+
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    deal = relationship("Deal", backref="verification_requests")
+    verifier = relationship("User", foreign_keys=[verifier_user_id])
+    creator = relationship("User", foreign_keys=[created_by])
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "verification_id": self.verification_id,
+            "deal_id": self.deal_id,
+            "verifier_user_id": self.verifier_user_id,
+            "status": self.status,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
+            "declined_at": self.declined_at.isoformat() if self.declined_at else None,
+            "declined_reason": self.declined_reason,
+            "verification_metadata": self.verification_metadata,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class NotarizationStatus(str, enum.Enum):
+    """Status of notarization records."""
+
+    PENDING = "pending"
+    SIGNED = "signed"
+    COMPLETED = "completed"
+
+
+class NotarizationRecord(Base):
+    """Notarization record model for blockchain-based signing."""
+
+    __tablename__ = "notarization_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    deal_id = Column(
+        Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    notarization_hash = Column(String(255), nullable=False)  # Hash of CDM payload
+
+    required_signers = Column(JSONB, nullable=False)  # Array of wallet addresses
+
+    signatures = Column(
+        JSONB, nullable=True
+    )  # Array of {"wallet_address": "...", "signature": "...", "signed_at": "..."}
+
+    status = Column(
+        String(20), default=NotarizationStatus.PENDING.value, nullable=False, index=True
+    )
+
+    completed_at = Column(DateTime, nullable=True)
+
+    cdm_event_id = Column(String(255), nullable=True)  # Reference to CDM event
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    deal = relationship("Deal", backref="notarization_records")
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "deal_id": self.deal_id,
+            "notarization_hash": self.notarization_hash,
+            "required_signers": self.required_signers,
+            "signatures": self.signatures,
+            "status": self.status,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "cdm_event_id": self.cdm_event_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class VerificationAuditLog(Base):
+    """Audit log for verification requests."""
+
+    __tablename__ = "verification_audit_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    verification_id = Column(
+        Integer,
+        ForeignKey("verification_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    action = Column(String(50), nullable=False)  # created, viewed, accepted, declined
+
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    actor_ip_address = Column(String(45), nullable=True)
+
+    audit_metadata = Column(JSONB, name="metadata", nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    verification_request = relationship("VerificationRequest", backref="audit_logs")
+    actor = relationship("User", foreign_keys=[actor_user_id])
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "verification_id": self.verification_id,
+            "action": self.action,
+            "actor_user_id": self.actor_user_id,
+            "actor_ip_address": self.actor_ip_address,
+            "metadata": self.metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
