@@ -799,6 +799,115 @@ async def health_check():
     return JSONResponse(content=status, status_code=status_code)
 
 
+@router.get("/health/database/ssl")
+async def health_check_database_ssl():
+    """Check SSL status of database connection.
+    
+    Returns SSL connection information including:
+    - SSL enabled status
+    - SSL version
+    - SSL cipher
+    - Certificate validation status
+    """
+    from app.db import SessionLocal, engine
+    from app.core.config import settings
+    from app.db.ssl_config import validate_ssl_config
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+    
+    # Check if database is available
+    if SessionLocal is None or engine is None:
+        return JSONResponse(
+            content={
+                "ssl_enabled": False,
+                "error": "Database not configured",
+                "status": "error"
+            },
+            status_code=503
+        )
+    
+    # Validate SSL configuration
+    is_valid, error_msg = validate_ssl_config()
+    
+    ssl_info = {
+        "ssl_enabled": False,
+        "ssl_mode": settings.DB_SSL_MODE,
+        "ssl_required": settings.DB_SSL_REQUIRED,
+        "ssl_version": None,
+        "ssl_cipher": None,
+        "certificate_validation": None,
+        "config_valid": is_valid,
+        "config_error": error_msg if not is_valid else None,
+        "status": "unknown"
+    }
+    
+    # Try to check SSL status from database
+    try:
+        with engine.connect() as conn:
+            # Check if SSL is active (PostgreSQL only)
+            if not str(engine.url).startswith("sqlite"):
+                try:
+                    # Check SSL status
+                    ssl_result = conn.execute(text("SHOW ssl"))
+                    ssl_active = ssl_result.scalar() == "on"
+                    ssl_info["ssl_enabled"] = ssl_active
+                    
+                    if ssl_active:
+                        # Get SSL version
+                        try:
+                            version_result = conn.execute(text("SHOW ssl_version"))
+                            ssl_info["ssl_version"] = version_result.scalar()
+                        except Exception:
+                            pass
+                        
+                        # Get SSL cipher
+                        try:
+                            cipher_result = conn.execute(text("SHOW ssl_cipher"))
+                            ssl_info["ssl_cipher"] = cipher_result.scalar()
+                        except Exception:
+                            pass
+                        
+                        # Determine certificate validation status
+                        if settings.DB_SSL_MODE in ["verify-ca", "verify-full"]:
+                            ssl_info["certificate_validation"] = "enabled"
+                        elif settings.DB_SSL_MODE == "require":
+                            ssl_info["certificate_validation"] = "disabled"
+                        else:
+                            ssl_info["certificate_validation"] = "optional"
+                        
+                        ssl_info["status"] = "healthy"
+                    else:
+                        if settings.DB_SSL_REQUIRED:
+                            ssl_info["status"] = "error"
+                            ssl_info["error"] = "SSL is required but connection is not using SSL"
+                        else:
+                            ssl_info["status"] = "warning"
+                            ssl_info["warning"] = "SSL is not active but not required"
+                            
+                except Exception as e:
+                    # PostgreSQL might not support these commands or SSL might not be configured
+                    ssl_info["status"] = "warning"
+                    ssl_info["warning"] = f"Could not determine SSL status: {str(e)}"
+            else:
+                # SQLite doesn't support SSL
+                ssl_info["status"] = "not_applicable"
+                ssl_info["message"] = "SQLite does not support SSL/TLS"
+                
+    except Exception as e:
+        ssl_info["status"] = "error"
+        ssl_info["error"] = str(e)
+    
+    # Determine HTTP status code
+    if ssl_info["status"] == "error":
+        status_code = 503
+    elif ssl_info["status"] == "warning":
+        status_code = 200  # Still return 200 but with warning
+    else:
+        status_code = 200
+    
+    return JSONResponse(content=ssl_info, status_code=status_code)
+
+
 class ApproveRequest(BaseModel):
     """Request model for approving an extraction."""
     agreement_data: dict = Field(..., description="The extracted agreement data to approve")

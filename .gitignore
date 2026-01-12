@@ -4,6 +4,26 @@ folder/
 *.mdc
 .cursor/
 
+# SSL/TLS Certificates and Keys (auto-generated and manual)
+ssl_certs/
+*.crt
+*.key
+*.pem
+*.csr
+*.p12
+*.pfx
+*.cer
+*.der
+
+# Test artifacts and temporary files
+dev/*.txt
+dev/*.log
+*.test.log
+test_artifacts/
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Environment variables
 .env
 

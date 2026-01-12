@@ -126,7 +126,12 @@ CreditNexus implements multiple layers of security:
 
 #### In Transit
 - **API:** HTTPS/TLS required
-- **Database:** SSL/TLS recommended (to be enforced)
+- **Database:** SSL/TLS **REQUIRED** in production (enforced via `DB_SSL_REQUIRED=true`)
+  - Supports all PostgreSQL SSL modes: `prefer`, `require`, `verify-ca`, `verify-full`
+  - Automatic certificate generation for development
+  - Manual certificate configuration for production
+  - Health monitoring via `/health/database/ssl` endpoint
+  - See [Database SSL Setup Guide](../guides/database-ssl-setup.md) for configuration
 - **File Uploads:** HTTPS via FastAPI
 
 ### 3.3 Data Retention
@@ -181,6 +186,44 @@ All responses include:
 - **Production:** Specific domains only
 - **Development:** Localhost and all hosts
 - **Middleware:** TrustedHostMiddleware
+
+### 4.5 Database SSL/TLS Encryption
+
+**Implementation Status:** ✅ **COMPLETE**
+
+CreditNexus enforces SSL/TLS encryption for all PostgreSQL database connections in production.
+
+**Configuration:**
+- **SSL Modes:** `prefer`, `require`, `verify-ca`, `verify-full`
+- **Production Mode:** `verify-full` (recommended)
+- **Certificate Validation:** CA certificate verification enabled
+- **Auto-Generation:** Self-signed certificates for development
+- **Health Monitoring:** Real-time SSL status via `/health/database/ssl`
+
+**Environment Variables:**
+```bash
+DB_SSL_MODE=verify-full          # SSL mode
+DB_SSL_CA_CERT=/path/to/ca.crt   # CA certificate path
+DB_SSL_REQUIRED=true              # Require SSL (fail if unavailable)
+DB_SSL_AUTO_GENERATE=true         # Auto-generate certs (development)
+```
+
+**Security Features:**
+- ✅ Automatic certificate generation for development
+- ✅ Manual certificate configuration for production
+- ✅ Certificate validation (CA and hostname)
+- ✅ Mutual TLS support (client certificates)
+- ✅ Connection health monitoring
+- ✅ Configuration validation at startup
+
+**Compliance:**
+- ✅ **GDPR:** Article 32 - Encrypted data in transit
+- ✅ **DORA:** Article 8 - Secure communication channels
+- ✅ **PCI-DSS:** Requirement 4 - Encrypted transmission
+
+**Documentation:**
+- [Database SSL Setup Guide](../guides/database-ssl-setup.md)
+- [SSL Troubleshooting Guide](../guides/ssl-troubleshooting.md)
 
 ---
 
