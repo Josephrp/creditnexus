@@ -2,7 +2,13 @@
 
 **"Where Legal Text Meets Ground Truth"**
 
+[![Documentation](https://img.shields.io/badge/Documentation-Read%20Docs-blue?style=flat-square)](https://docs.creditnexus.com)
+[![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://creditnexus.com)
+[![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](YOUTUBE_URL)
+
 CreditNexus is a next-generation financial operating system that bridges the gap between **Sustainabiity-Linked Loans (Legal Contracts)** and **Physical Reality (Satellite Data)**. It uses AI agents to extract covenants from PDF agreements and orchestrates "Ground Truth" verification using geospatial deep learning.
+
+> 📚 **[Full Documentation](https://docs.creditnexus.com)** | 🏢 **[Company Site](https://creditnexus.com)** | 🎥 **[Demo Video](YOUTUBE_URL)**
 
 ## 🚀 Quick Start
 
@@ -121,6 +127,16 @@ npm run dev
 
 ---
 
+## 📖 Documentation & Resources
+
+- **[📚 Full Documentation](https://docs.creditnexus.com)** - Comprehensive technical documentation, API reference, guides, and architecture details
+- **[🏢 Company Site](https://creditnexus.com)** - Learn about our team, market positioning, and business model
+- **[🎥 Demo Video](YOUTUBE_URL)** - Watch CreditNexus in action
+- **[⚖️ License](LICENSE.md)** - GPL-2 + Rail.md dual license
+- **[🤝 Contributing](docs/CONTRIBUTING.md)** - Guidelines for contributing to the project
+
+---
+
 ## 🧩 Core Modules
 
 ### 1. The Verification Demo (Live Orchestration)
@@ -163,6 +179,8 @@ Visualizes the financial impact (Margin Ratchets) of ESG performance.
 > **Access via: "Document Parser" in Top Nav**
 The foundational tool for extracting structured data from unstructured PDF legal documents.
 
+> 📖 **Learn More**: See [Documentation - Features](https://docs.creditnexus.com/features) for detailed feature descriptions and [Documentation - Guides](https://docs.creditnexus.com/guides) for step-by-step workflows.
+
 ---
 
 ## 🔗 System Interoperability (FDC3)
@@ -174,6 +192,8 @@ The platform components are designed to work as a "Chain of Command" using the *
   3.**Analyze**: **GreenLens** picks up the same signal to show the ESG Margin Ratchet and pricing impact.
   4.**Verify**: The **Verification Demo** runs the "Ground Truth" protocol. When a breach is detected, it broadcasts an updated context.
   5.**Surveil**: The **Risk War Room** listens for these alerts and automatically highlights assets in breach for immediate investigation.
+
+> 📖 **Learn More**: See [Documentation - Architecture](https://docs.creditnexus.com/architecture/overview) for detailed system design and [Documentation - FDC3 Compliance](https://docs.creditnexus.com/compliance/fdc3-compliance) for interoperability standards.
 
 ---
 
@@ -201,6 +221,8 @@ The platform components are designed to work as a "Chain of Command" using the *
 - **Testing**: `uv run pytest`
 - **Code Quality**: ruff, black, mypy (configured in `pyproject.toml`)
 
+> 📖 **Learn More**: See [Documentation - Technical](https://docs.creditnexus.com/architecture) for technology details and [Documentation - Configuration](https://docs.creditnexus.com/getting-started/configuration) for environment setup.
+
 ---
 
 ## 🎯 The "Verification Demo" Flow
@@ -217,6 +239,40 @@ To demonstrate the full power of the system:
     -   NDVI is calculated (e.g., 0.65).
     -   **Result**: Breach Detected!
   6.  See the **FDC3 Broadcast** trigger updates in the **Risk War Room** (if open) and generate a **Terms Change** event in the CDM ledger.
+
+> 📖 **Learn More**: See [Documentation - Verification Guide](https://docs.creditnexus.com/guides/verification) for detailed verification workflows.
+
+---
+
+## ⚠️ Important Disclosures
+
+### DORA Compliance Disclosure
+
+**Digital Operational Resilience Act (DORA) - European Union Regulation**
+
+This application is provided as a **non-production demonstration**. However, transactions executed through this system may be **live and executory**, with real digital signatures and legal implications for all signees based on system configuration. Users are responsible for understanding the legal and regulatory implications of their use of this system.
+
+> 📖 **Learn More**: See [Documentation - DORA Disclosure](https://docs.creditnexus.com/compliance/dora-disclosure) for complete compliance information.
+
+### Compliance Standards
+
+- **FDC3 2.0**: Full desktop interoperability compliance - [Documentation](https://docs.creditnexus.com/compliance/fdc3-compliance)
+- **OpenFin**: Native integration support - [Documentation](https://docs.creditnexus.com/compliance/openfin-compliance)
+- **FINOS CDM**: Complete Common Domain Model compliance - [Documentation](https://docs.creditnexus.com/compliance/cdm-compliance)
+- **DORA**: European cybersecurity regulation awareness - [Documentation](https://docs.creditnexus.com/compliance/dora-disclosure)
+- **Policy Engine**: Real-time compliance enforcement - [Documentation](https://docs.creditnexus.com/compliance/policy-compliance)
+
+---
+
+## 👥 Our Team
+
+Our team brings over **20 years of combined experience** in the financial industry:
+
+- **Joseph Pollack** - Chief Information Officer (Strategic technology leadership)
+- **Biniyam Ajew** - Senior Developer (Full-stack development and system architecture)
+- **Boris Li** - Junior Developer (10 years at Citibank and Mastercard in payment systems, banking operations, and financial technology)
+
+> 📖 **Learn More**: See [Company Site - Team](https://creditnexus.com) for detailed team information.
 
 ---
 

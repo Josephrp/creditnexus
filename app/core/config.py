@@ -187,6 +187,19 @@ class Settings(BaseSettings):
     SEED_ACCOUNTANT: bool = False  # Seed accountant demo user
     SEED_APPLICANT: bool = False  # Seed applicant demo user
     
+    # Security Configuration
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:8000", "https://creditnexus.com"]  # CORS allowed origins
+    CORS_ALLOW_CREDENTIALS: bool = True  # Allow credentials in CORS
+    SESSION_SAME_SITE: str = "strict"  # Session cookie same-site policy: "strict", "lax", or "none"
+    SESSION_SECURE: bool = True  # Require HTTPS for session cookies
+    SESSION_MAX_AGE: int = 86400 * 7  # Session max age in seconds (7 days)
+    RATE_LIMIT_ENABLED: bool = True  # Enable rate limiting
+    RATE_LIMIT_PER_MINUTE: int = 60  # Requests per minute per IP
+    RATE_LIMIT_PER_HOUR: int = 1000  # Requests per hour per IP (for additional protection)
+    SECURITY_HEADERS_ENABLED: bool = True  # Enable security headers middleware
+    JWT_SECRET_KEY: Optional[SecretStr] = None  # JWT secret key (required in production)
+    JWT_REFRESH_SECRET_KEY: Optional[SecretStr] = None  # JWT refresh secret key (required in production)
+    
     @field_validator('DATABASE_URL', mode='before')
     @classmethod
     def validate_database_url(cls, v):

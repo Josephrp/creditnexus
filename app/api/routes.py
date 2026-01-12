@@ -88,17 +88,29 @@ def extract_text_from_pdf(file_content: bytes) -> str:
         
     Returns:
         Extracted text from all pages.
+        
+    Raises:
+        ValueError: If file is not a valid PDF, too large, or corrupted.
     """
     import fitz
     
+    # Validate file size first
     file_size_mb = len(file_content) / (1024 * 1024)
     if file_size_mb > MAX_FILE_SIZE_MB:
         raise ValueError(f"File too large ({file_size_mb:.1f} MB). Maximum size is {MAX_FILE_SIZE_MB} MB.")
     
+    # Validate PDF magic bytes (PDF files start with %PDF-)
+    if not file_content.startswith(b'%PDF-'):
+        raise ValueError("Invalid PDF file: File does not start with PDF magic bytes.")
+    
+    # Validate PDF structure by attempting to open it
     doc = None
     text_parts = []
     try:
         doc = fitz.open(stream=file_content, filetype="pdf")
+        # Additional validation: check if document has pages
+        if doc.page_count == 0:
+            raise ValueError("Invalid PDF file: Document has no pages.")
         for page in doc:
             text_parts.append(page.get_text())
     except Exception as e:

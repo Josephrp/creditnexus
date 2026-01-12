@@ -55,3 +55,17 @@ yarn-error.log*
 .npm
 .eslintcache
 
+# Security reports and scan results
+*.sarif
+*-report.json
+bandit-report.json
+semgrep-report.json
+pip-audit-report.json
+safety-report.json
+npm-audit-report.json
+eslint-security-report.json
+ruff-security-report.json
+zap-report.json
+zap-report.html
+security-summary.md
+security-reports/
