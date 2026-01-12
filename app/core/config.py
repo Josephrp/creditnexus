@@ -131,6 +131,41 @@ class Settings(BaseSettings):
         None  # Optional directory to load documents into ChromaDB on startup
     )
 
+    # Enhanced Satellite Verification & Green Finance
+    ENHANCED_SATELLITE_ENABLED: bool = True
+    STREET_MAP_API_PROVIDER: str = "openstreetmap"  # Only OSM, no Google/Mapbox
+
+    # OpenStreetMap Configuration
+    OSM_OVERPASS_API_URL: str = "https://overpass-api.de/api/interpreter"
+    OSM_CACHE_ENABLED: bool = True
+    OSM_CACHE_TTL_HOURS: int = 24
+
+    # Air Quality Configuration
+    AIR_QUALITY_ENABLED: bool = True
+    AIR_QUALITY_API_PROVIDER: str = "openaq"  # openaq only (free)
+    AIR_QUALITY_API_KEY: Optional[str] = None  # Not required for OpenAQ free tier
+    AIR_QUALITY_CACHE_ENABLED: bool = True
+    AIR_QUALITY_CACHE_TTL_HOURS: int = 24
+
+    # Vehicle Detection (Selective - High Cost)
+    VEHICLE_DETECTION_ENABLED: bool = False  # Default: disabled, enable for high-value cases
+    VEHICLE_DETECTION_MODEL_PATH: str = "./models/vehicle_detector.pt"
+    VEHICLE_DETECTION_MIN_TRANSACTION_AMOUNT: float = 1000000.0  # Only process if amount > $1M
+    VEHICLE_DETECTION_USE_HIGH_RES_IMAGERY: bool = True
+
+    # Pollution Monitoring
+    POLLUTION_MONITORING_ENABLED: bool = True
+    METHANE_MONITORING_ENABLED: bool = True
+    METHANE_USE_SENTINEL5P: bool = True  # Free, coarse resolution
+
+    # Sustainability Scoring
+    SUSTAINABILITY_SCORING_ENABLED: bool = True
+    SUSTAINABILITY_NDVI_WEIGHT: float = 0.25
+    SUSTAINABILITY_AQI_WEIGHT: float = 0.25
+    SUSTAINABILITY_ACTIVITY_WEIGHT: float = 0.20
+    SUSTAINABILITY_GREEN_INFRA_WEIGHT: float = 0.15
+    SUSTAINABILITY_POLLUTION_WEIGHT: float = 0.15
+
     # Twilio configuration
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
@@ -151,6 +186,16 @@ class Settings(BaseSettings):
     LINK_ENCRYPTION_KEY: Optional[SecretStr] = None  # Fernet key for link encryption
     VERIFICATION_FILE_CONFIG_PATH: Optional[Path] = None  # YAML config for file whitelist
 
+    
+    # Demo Data Configuration
+    DEMO_DATA_ENABLED: bool = True  # Feature flag to enable/disable demo data generation
+    DEMO_DATA_DEAL_COUNT: int = 12  # Default number of deals to generate
+    DEMO_DATA_DEAL_TYPES: List[str] = ["loan_application", "refinancing", "restructuring"]  # Available deal types
+    DEMO_DATA_STORAGE_PATH: str = "storage/deals/demo"  # Storage path for demo deal files
+    DEMO_DATA_CACHE_ENABLED: bool = True  # Enable caching for generated CDM data
+    DEMO_DATA_CACHE_TTL: int = 86400  # Cache TTL in seconds (default: 24 hours)
+    DEMO_DATA_CACHE_PATH: Optional[str] = None  # Optional path for cache database (default: in-memory)
+    
     # Database Configuration
     DATABASE_URL: Optional[str] = None  # PostgreSQL or SQLite connection string
     DATABASE_ENABLED: bool = True  # Feature flag to enable/disable database

@@ -147,6 +147,14 @@ export const router = createBrowserRouter(
     ),
   },
   {
+    path: '/app/demo-data',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/app/risk-war-room',
     element: (
       <ProtectedRoute>
@@ -231,6 +239,14 @@ export const router = createBrowserRouter(
     ),
   },
   {
+    path: '/apply/individual',
+    element: <IndividualApplicationFlow />,
+  },
+  {
+    path: '/apply/business',
+    element: <BusinessApplicationFlow />,
+  },
+  {
     path: '/dashboard/inbox',
     element: (
       <AdminRoute>
@@ -296,10 +312,5 @@ export const router = createBrowserRouter(
       </div>
     ),
   },
-  ],
-  {
-    future: {
-      v7_startTransition: true,
-    },
-  }
+  ]
 );

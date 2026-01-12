@@ -600,17 +600,15 @@ class PolicyDecision(Base):
 
     # Foreign keys to CreditNexus entities
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
-    loan_asset_id = Column(Integer, ForeignKey("loan_assets.id"), nullable=True)
-    deal_id = Column(
-        Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    # Note: loan_asset_id is NOT a foreign key because LoanAsset uses SQLModel (separate table creation)
+    # The loan_assets table may not exist when PolicyDecision is created
+    loan_asset_id = Column(Integer, nullable=True, index=True)  # Reference without FK constraint
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
     document = relationship("Document", backref="policy_decisions")
     deal = relationship("Deal", backref="policy_decisions")
-    # Note: LoanAsset is a SQLModel in app.models.loan_asset, not in app.db.models
-    # Relationship will work if loan_assets table exists
     user = relationship("User", backref="policy_decisions")
 
     def to_dict(self):
@@ -1205,11 +1203,11 @@ class Deal(Base):
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
 
     status = Column(String(50), default=DealStatus.DRAFT.value, nullable=False, index=True)
-
-    deal_type = Column(
-        String(50), nullable=True, index=True
-    )  # loan_application, debt_sale, loan_purchase, etc.
-
+    
+    deal_type = Column(String(50), nullable=True, index=True)  # loan_application, debt_sale, loan_purchase, etc.
+    
+    is_demo = Column(Boolean, default=False, nullable=False, index=True)  # Flag for demo/seed data
+    
     deal_data = Column(JSONB, nullable=True)  # Deal parameters, metadata
 
     folder_path = Column(String(500), nullable=True)  # File system path for deal documents
@@ -1241,6 +1239,7 @@ class Deal(Base):
             "application_id": self.application_id,
             "status": self.status,
             "deal_type": self.deal_type,
+            "is_demo": self.is_demo,
             "deal_data": self.deal_data,
             "folder_path": self.folder_path,
             "verification_required": self.verification_required,
@@ -1558,6 +1557,45 @@ class VerificationRequest(Base):
     verifier = relationship("User", foreign_keys=[verifier_user_id])
     creator = relationship("User", foreign_keys=[created_by])
 
+class GreenFinanceAssessment(Base):
+    """Green Finance Assessment model for storing comprehensive green finance assessments."""
+    
+    __tablename__ = "green_finance_assessments"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Transaction/Deal reference
+    transaction_id = Column(String(255), nullable=False, index=True)  # Deal ID or transaction ID
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=True, index=True)
+    loan_asset_id = Column(Integer, ForeignKey("loan_assets.id"), nullable=True, index=True)
+    
+    # Location
+    location_lat = Column(Numeric(10, 7), nullable=False)
+    location_lon = Column(Numeric(10, 7), nullable=False)
+    location_type = Column(String(50), nullable=True)  # "urban", "suburban", "rural"
+    location_confidence = Column(Numeric(5, 4), nullable=True)  # 0.0-1.0
+    
+    # Environmental metrics (stored as JSONB for flexibility)
+    environmental_metrics = Column(JSONB, nullable=True)  # Air quality, emissions, pollution
+    urban_activity_metrics = Column(JSONB, nullable=True)  # Vehicle counts, traffic, OSM-based indicators
+    sustainability_score = Column(Numeric(5, 4), nullable=True)  # Composite score 0.0-1.0
+    sustainability_components = Column(JSONB, nullable=True)  # Component breakdown
+    sdg_alignment = Column(JSONB, nullable=True)  # SDG alignment scores
+    
+    # Policy decisions and CDM events
+    policy_decisions = Column(JSONB, nullable=True)  # List of policy decisions
+    cdm_events = Column(JSONB, nullable=True)  # List of CDM events
+    
+    # Metadata
+    assessed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", backref="green_finance_assessments")
+    # Note: LoanAsset is a SQLModel, so we can't use a string reference here
+    # Access via loan_asset_id foreign key instead, or configure relationship after models load
+    
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1572,6 +1610,21 @@ class VerificationRequest(Base):
             "declined_reason": self.declined_reason,
             "verification_metadata": self.verification_metadata,
             "created_by": self.created_by,
+            "transaction_id": self.transaction_id,
+            "deal_id": self.deal_id,
+            "loan_asset_id": self.loan_asset_id,
+            "location_lat": float(self.location_lat) if self.location_lat else None,
+            "location_lon": float(self.location_lon) if self.location_lon else None,
+            "location_type": self.location_type,
+            "location_confidence": float(self.location_confidence) if self.location_confidence else None,
+            "environmental_metrics": self.environmental_metrics,
+            "urban_activity_metrics": self.urban_activity_metrics,
+            "sustainability_score": float(self.sustainability_score) if self.sustainability_score else None,
+            "sustainability_components": self.sustainability_components,
+            "sdg_alignment": self.sdg_alignment,
+            "policy_decisions": self.policy_decisions,
+            "cdm_events": self.cdm_events,
+            "assessed_at": self.assessed_at.isoformat() if self.assessed_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -1619,6 +1672,33 @@ class NotarizationRecord(Base):
     # Relationships
     deal = relationship("Deal", backref="notarization_records")
 
+class DemoSeedingStatus(Base):
+    """Model for tracking demo data seeding progress."""
+    
+    __tablename__ = "demo_seeding_status"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    stage = Column(String(50), nullable=False, index=True)  # users, templates, deals, documents, etc.
+    
+    progress = Column(Numeric(5, 2), nullable=False, default=0.00)  # 0.00 to 100.00
+    
+    total = Column(Integer, nullable=False, default=0)
+    
+    current = Column(Integer, nullable=False, default=0)
+    
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    
+    errors = Column(JSONB, nullable=True)  # List of error messages
+    
+    started_at = Column(DateTime, nullable=True)
+    
+    completed_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
     def to_dict(self):
         """Convert model to dictionary."""
         return {
@@ -1630,6 +1710,14 @@ class NotarizationRecord(Base):
             "status": self.status,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "cdm_event_id": self.cdm_event_id,
+            "stage": self.stage,
+            "progress": float(self.progress) if self.progress else 0.0,
+            "total": self.total,
+            "current": self.current,
+            "status": self.status,
+            "errors": self.errors,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -1674,3 +1762,6 @@ class VerificationAuditLog(Base):
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+# Note: LoanAsset is a SQLModel and cannot have a direct relationship with SQLAlchemy Base models
+# Access LoanAsset via loan_asset_id foreign key using queries instead
+# Example: db.query(LoanAsset).filter(LoanAsset.id == assessment.loan_asset_id).first()
