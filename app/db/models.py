@@ -1589,6 +1589,141 @@ class VerificationRequest(Base):
     verifier = relationship("User", foreign_keys=[verifier_user_id])
     creator = relationship("User", foreign_keys=[created_by])
 
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "verification_id": self.verification_id,
+            "deal_id": self.deal_id,
+            "verifier_user_id": self.verifier_user_id,
+            "status": self.status,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
+            "declined_at": self.declined_at.isoformat() if self.declined_at else None,
+            "declined_reason": self.declined_reason,
+            "verification_metadata": self.verification_metadata,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class WorkflowDelegationStatus(str, enum.Enum):
+    """Status of workflow delegation."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+class WorkflowDelegation(Base):
+    """Workflow delegation model for link-based workflow distribution."""
+
+    __tablename__ = "workflow_delegations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    workflow_id = Column(String(255), unique=True, nullable=False, index=True)
+
+    workflow_type = Column(String(50), nullable=False, index=True)  # verification, notarization, document_review, etc.
+
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    sender_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=False, index=True)
+
+    receiver_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    receiver_email = Column(String(255), nullable=True, index=True)
+
+    link_payload = Column(Text, nullable=True)  # Encrypted payload (for reference, not decrypted)
+
+    workflow_metadata = Column(JSONB, nullable=True)  # Workflow-specific metadata
+
+    whitelist_config = Column(JSONB, nullable=True)  # Whitelist configuration used
+
+    status = Column(
+        String(20), default=WorkflowDelegationStatus.PENDING.value, nullable=False, index=True
+    )
+
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    completed_at = Column(DateTime, nullable=True)
+
+    callback_url = Column(String(500), nullable=True)  # URL for state synchronization
+
+    state_synced_at = Column(DateTime, nullable=True)  # Last state sync timestamp
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    deal = relationship("Deal", backref="workflow_delegations")
+    document = relationship("Document", backref="workflow_delegations")
+    sender = relationship("User", foreign_keys=[sender_user_id], backref="sent_workflow_delegations")
+    receiver = relationship("User", foreign_keys=[receiver_user_id], backref="received_workflow_delegations")
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "workflow_id": self.workflow_id,
+            "workflow_type": self.workflow_type,
+            "deal_id": self.deal_id,
+            "document_id": self.document_id,
+            "sender_user_id": self.sender_user_id,
+            "receiver_user_id": self.receiver_user_id,
+            "receiver_email": self.receiver_email,
+            "workflow_metadata": self.workflow_metadata,
+            "whitelist_config": self.whitelist_config,
+            "status": self.status,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "callback_url": self.callback_url,
+            "state_synced_at": self.state_synced_at.isoformat() if self.state_synced_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class WorkflowDelegationState(Base):
+    """Workflow delegation state history for tracking state transitions."""
+
+    __tablename__ = "workflow_delegation_states"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    delegation_id = Column(
+        Integer, ForeignKey("workflow_delegations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    state = Column(String(50), nullable=False, index=True)  # pending, processing, completed, etc.
+
+    state_metadata = Column(JSONB, nullable=True)  # State-specific metadata (renamed from 'metadata' to avoid SQLAlchemy reserved name)
+
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    delegation = relationship("WorkflowDelegation", backref="state_history")
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "delegation_id": self.delegation_id,
+            "state": self.state,
+            "metadata": self.state_metadata,  # Return as 'metadata' in API response
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+        }
+
+
 class GreenFinanceAssessment(Base):
     """Green Finance Assessment model for storing comprehensive green finance assessments."""
     

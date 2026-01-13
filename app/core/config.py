@@ -273,6 +273,9 @@ class Settings(BaseSettings):
     VERIFICATION_BASE_URL: Optional[str] = None
     LINK_ENCRYPTION_KEY: Optional[SecretStr] = None  # Fernet key for link encryption
     VERIFICATION_FILE_CONFIG_PATH: Optional[Path] = None  # YAML config for file whitelist
+    
+    # Workflow Delegation Configuration
+    WORKFLOW_DELEGATION_BASE_URL: Optional[str] = None  # Base URL for workflow delegation links (e.g., "https://app.creditnexus.com")
 
     
     # Demo Data Configuration

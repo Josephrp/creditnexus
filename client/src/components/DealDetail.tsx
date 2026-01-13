@@ -20,7 +20,8 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
+  Share2
 } from 'lucide-react';
 import { SkeletonDocumentList } from '@/components/ui/skeleton';
 import { DealTimeline, type TimelineEvent as DealTimelineEvent } from '@/components/DealTimeline';
@@ -265,15 +266,26 @@ export function DealDetail() {
             <p className="text-slate-400 mt-1">Deal Details</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          onClick={fetchDealDetail}
-          className="text-slate-400 hover:text-slate-100"
-          disabled={loading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(`/app/workflow/share?view=create&dealId=${deal.id}`)}
+            className="text-slate-400 hover:text-slate-100"
+            title="Share workflow link for this deal"
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            Share Workflow
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={fetchDealDetail}
+            className="text-slate-400 hover:text-slate-100"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Error Message */}

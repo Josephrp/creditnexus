@@ -24,6 +24,8 @@ from app.api.auditor_routes import router as auditor_router
 from app.api.layer_routes import router as layer_router
 from app.api.websocket_routes import router as websocket_router
 from app.api.securitization_routes import router as securitization_router
+from app.api.config_routes import router as config_router
+from app.api.workflow_delegation_routes import router as workflow_delegation_router
 from app.auth.routes import auth_router
 from app.auth.jwt_auth import jwt_router
 
@@ -540,6 +542,8 @@ app.include_router(auditor_router)
 app.include_router(layer_router)
 app.include_router(websocket_router)
 app.include_router(securitization_router)
+app.include_router(config_router)
+app.include_router(workflow_delegation_router)
 app.include_router(auth_router, prefix="/api")
 app.include_router(jwt_router, prefix="/api")
 

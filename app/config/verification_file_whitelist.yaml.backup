@@ -1,5 +1,7 @@
 # Verification File Whitelist Configuration
-# Controls which files and categories are included in verification links
+
+# File whitelist configuration for verification links
+# Controls which files and categories can be included in verification links
 
 enabled_categories:
   - legal
@@ -60,6 +62,7 @@ subdirectories:
     priority: 3
     description: "Generated documents"
   
+
   notes:
     enabled: false
     priority: 4

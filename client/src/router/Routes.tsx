@@ -16,6 +16,8 @@ import { ReceiptPage } from '@/sites/payments/ReceiptPage';
 import { MetaMaskLogin } from '@/sites/metamask/MetaMaskLogin';
 import { VerificationPage } from '@/apps/verification/VerificationPage';
 import { VerificationFileConfigEditor } from '@/apps/verification-config/VerificationFileConfigEditor';
+import { WorkflowProcessingPage } from '@/components/WorkflowProcessingPage';
+import { WorkflowShareInterface } from '@/components/WorkflowShareInterface';
 
 // Placeholder components for microsites (to be implemented)
 // Note: /project and /docs are deployed separately (GitHub Pages and Mintlify)
@@ -168,6 +170,14 @@ export const router = createBrowserRouter(
       <ProtectedRoute>
         <DesktopAppLayout />
       </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/verification-config',
+    element: (
+      <AdminRoute>
+        <DesktopAppLayout />
+      </AdminRoute>
     ),
   },
   {
@@ -364,6 +374,24 @@ export const router = createBrowserRouter(
   {
     path: '/verify/:payload',
     element: <VerificationPage />,
+  },
+  
+  // Workflow routes
+  {
+    path: '/app/workflow/process',
+    element: (
+      <ProtectedRoute>
+        <WorkflowProcessingPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/workflow/share',
+    element: (
+      <ProtectedRoute>
+        <WorkflowShareInterface />
+      </ProtectedRoute>
+    ),
   },
   
   // Admin configuration routes
