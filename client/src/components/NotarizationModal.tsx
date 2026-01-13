@@ -20,6 +20,7 @@ import {
   AlertCircle,
   CheckCircle,
   Info,
+  PenTool,
 } from 'lucide-react';
 import { fetchWithAuth, useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
@@ -52,13 +53,21 @@ export function NotarizationModal({
   const [notarizationId, setNotarizationId] = useState<number | null>(null);
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [autoHydrateDeal, setAutoHydrateDeal] = useState(true);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editedAddress, setEditedAddress] = useState<string>('');
 
   useEffect(() => {
     // Initialize with connected wallet if available
     if (isConnected && account && signers.length === 0) {
       setSigners([account]);
     }
-  }, [isConnected, account]);
+    if (!isOpen) {
+      // Reset state when modal closes
+      setEditingIndex(null);
+      setEditedAddress('');
+      setError(null);
+    }
+  }, [isOpen, isConnected, account]);
 
   const handleAddSigner = () => {
     if (!newSignerAddress.trim()) {
@@ -207,32 +216,114 @@ export function NotarizationModal({
             <div>
               <Label className="text-slate-300 mb-2 block">Required Signers</Label>
               <div className="space-y-3">
-                {signers.map((address) => (
-                  <div
-                    key={address}
-                    className="flex items-center justify-between p-3 bg-slate-900 rounded-lg border border-slate-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-mono text-slate-300">
-                        {address.slice(0, 6)}...{address.slice(-4)}
-                      </span>
-                      {address.toLowerCase() === account?.toLowerCase() && (
-                        <Badge variant="outline" className="text-xs">
-                          You
-                        </Badge>
+                {signers.map((address, index) => {
+                  const isEditing = editingIndex === index;
+                  
+                  const handleStartEdit = () => {
+                    setEditingIndex(index);
+                    setEditedAddress(address);
+                  };
+                  
+                  const handleSaveEdit = () => {
+                    if (!editedAddress.trim()) {
+                      setError('Please enter a wallet address');
+                      return;
+                    }
+                    
+                    if (!/^0x[a-fA-F0-9]{40}$/.test(editedAddress.trim())) {
+                      setError('Invalid Ethereum address format');
+                      return;
+                    }
+                    
+                    const newAddress = editedAddress.trim().toLowerCase();
+                    if (signers.some((s, i) => i !== index && s.toLowerCase() === newAddress)) {
+                      setError('Address already added');
+                      return;
+                    }
+                    
+                    const updatedSigners = [...signers];
+                    updatedSigners[index] = newAddress;
+                    setSigners(updatedSigners);
+                    setEditingIndex(null);
+                    setEditedAddress('');
+                    setError(null);
+                  };
+                  
+                  const handleCancelEdit = () => {
+                    setEditingIndex(null);
+                    setEditedAddress('');
+                    setError(null);
+                  };
+                  
+                  return (
+                    <div
+                      key={address}
+                      className="p-3 bg-slate-900 rounded-lg border border-slate-700"
+                    >
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <Input
+                            placeholder="0x..."
+                            value={editedAddress}
+                            onChange={(e) => setEditedAddress(e.target.value)}
+                            className="bg-slate-800 border-slate-600 text-slate-100 font-mono text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleSaveEdit}
+                              size="sm"
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              onClick={handleCancelEdit}
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-700"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            <Wallet className="h-4 w-4 text-slate-400" />
+                            <span className="text-sm font-mono text-slate-300">
+                              {address.slice(0, 6)}...{address.slice(-4)}
+                            </span>
+                            {address.toLowerCase() === account?.toLowerCase() && (
+                              <Badge variant="outline" className="text-xs">
+                                You
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleStartEdit}
+                              className="h-8 w-8 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                              title="Edit address"
+                            >
+                              <PenTool className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveSigner(address)}
+                              className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              title="Remove signer"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveSigner(address)}
-                      className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div className="flex gap-2">
                   <Input

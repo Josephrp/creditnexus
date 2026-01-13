@@ -59,7 +59,24 @@ class SignatureService:
 
     def _get_document_path(self, document: Document) -> Optional[str]:
         """Get document file path."""
-        # Try to get from file storage (primary method)
+        from app.db.models import DocumentVersion, GeneratedDocument
+        
+        # 1. Try to get from DocumentVersion (if document has versions)
+        if document.versions:
+            # Get the latest version
+            latest_version = sorted(document.versions, key=lambda v: v.version_number, reverse=True)[0]
+            if latest_version.file_path and Path(latest_version.file_path).exists():
+                return latest_version.file_path
+        
+        # 2. Try to get from GeneratedDocument (if document is generated)
+        if document.is_generated:
+            generated_doc = self.db.query(GeneratedDocument).filter(
+                GeneratedDocument.source_document_id == document.id
+            ).order_by(GeneratedDocument.created_at.desc()).first()
+            if generated_doc and generated_doc.file_path and Path(generated_doc.file_path).exists():
+                return generated_doc.file_path
+        
+        # 3. Try to get from file storage (primary method for uploaded documents)
         if document.deal_id:
             from app.db.models import Deal
             deal = self.db.query(Deal).filter(Deal.id == document.deal_id).first()
@@ -72,7 +89,7 @@ class SignatureService:
                 if document_path and Path(document_path).exists():
                     return document_path
         
-        # Try to get from uploaded_by user if no deal
+        # 4. Try to get from uploaded_by user if no deal
         if document.uploaded_by:
             document_path = self.file_storage.get_document_path(
                 user_id=document.uploaded_by,
@@ -166,7 +183,15 @@ class SignatureService:
         # 3. Get document file path
         document_path = self._get_document_path(document)
         if not document_path or not Path(document_path).exists():
-            raise ValueError(f"Document file not found: {document_path}")
+            # Provide helpful error message
+            error_msg = f"Document file not found for document {document_id}"
+            if document.is_generated:
+                error_msg += ". This document may need to be generated first. Please generate the document before requesting signatures."
+            elif document.versions:
+                error_msg += f". Checked {len(document.versions)} version(s) but file not found."
+            else:
+                error_msg += ". The document file may not have been uploaded or stored correctly."
+            raise ValueError(error_msg)
 
         # 4. Upload document to DigiSigner
         digisigner_document_id = self._upload_document_to_digisigner(document_path)

@@ -9932,7 +9932,8 @@ async def reset_demo_data(
             Deal, Document, DocumentVersion, Workflow, PolicyDecision,
             DealNote, GreenFinanceAssessment, Application, LoanAsset,
             SecuritizationPool, SecuritizationTranche, SecuritizationPoolAsset,
-            RegulatoryFiling, NotarizationRecord, GeneratedDocument, LMATemplate, Policy
+            RegulatoryFiling, NotarizationRecord, GeneratedDocument, LMATemplate, Policy,
+            DocumentSignature, DocumentFiling
         )
         from sqlalchemy import or_
         
@@ -9948,6 +9949,8 @@ async def reset_demo_data(
             "applications": 0,
             "documents": 0,
             "document_versions": 0,
+            "document_signatures": 0,
+            "document_filings": 0,
             "workflows": 0,
             "policy_decisions": 0,
             "green_finance_assessments": 0,
@@ -10038,6 +10041,18 @@ async def reset_demo_data(
                     GeneratedDocument.document_id.in_(doc_ids)
                 ).delete(synchronize_session=False)
                 deleted_counts["generated_documents"] = gen_docs_deleted
+                
+                # Delete document signatures
+                signatures_deleted = db.query(DocumentSignature).filter(
+                    DocumentSignature.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["document_signatures"] = signatures_deleted
+                
+                # Delete document filings
+                filings_deleted = db.query(DocumentFiling).filter(
+                    DocumentFiling.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["document_filings"] = filings_deleted
                 
                 # Delete policy decisions that reference documents
                 policy_decisions_deleted = db.query(PolicyDecision).filter(
@@ -10875,12 +10890,14 @@ async def process_payment_link(
             payer_party = Party(
                 id=link_data.get("payer_info", {}).get("wallet_address", "unknown"),
                 name=link_data.get("payer_info", {}).get("name", "Unknown"),
+                role="Payer",
                 lei=None
             )
             
             receiver_party = Party(
                 id=link_data.get("receiver_info", {}).get("wallet_address", "system"),
                 name=link_data.get("receiver_info", {}).get("name", "CreditNexus System"),
+                role="Service Provider",
                 lei=None
             )
             
@@ -11222,12 +11239,14 @@ async def notarize_document(
             payer = Party(
                 id="notarization_payer",
                 name=payer_name,
+                role="Payer",
                 lei=None
             )
             
             receiver = Party(
                 id="creditnexus_notarization_service",
                 name="CreditNexus Notarization Service",
+                role="Service Provider",
                 lei=None
             )
             

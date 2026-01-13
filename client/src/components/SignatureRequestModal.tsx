@@ -21,6 +21,7 @@ import {
   CheckCircle,
   Info,
   User,
+  Edit,
 } from 'lucide-react';
 import { fetchWithAuth, useAuth } from '@/context/AuthContext';
 
@@ -56,10 +57,18 @@ export function SignatureRequestModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detectingSigners, setDetectingSigners] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editedSigner, setEditedSigner] = useState<Signer | null>(null);
 
   useEffect(() => {
     if (isOpen && autoDetectSigners && signers.length === 0) {
       detectSigners();
+    }
+    if (!isOpen) {
+      // Reset state when modal closes
+      setEditingIndex(null);
+      setEditedSigner(null);
+      setError(null);
     }
   }, [isOpen, autoDetectSigners]);
 
@@ -213,42 +222,149 @@ export function SignatureRequestModal({
           <div>
             <Label className="text-slate-300 mb-2 block">Signers</Label>
             <div className="space-y-3">
-              {signers.map((signer, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-slate-900 rounded-lg border border-slate-700"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-700 text-slate-400">
-                      <User className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-slate-100 font-medium">{signer.name}</p>
-                      <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <Mail className="h-3 w-3" />
-                        {signer.email}
-                      </div>
-                      {signer.role && (
-                        <Badge variant="outline" className="text-xs text-slate-400 mt-1">
-                          {signer.role}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveSigner(index)}
-                    className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              {signers.map((signer, index) => {
+                const isEditing = editingIndex === index;
+                const currentEditedSigner = isEditing ? (editedSigner || signer) : signer;
+                
+                const handleStartEdit = () => {
+                  setEditingIndex(index);
+                  setEditedSigner({ ...signer });
+                };
+                
+                const handleSaveEdit = () => {
+                  if (!editedSigner || !editedSigner.name.trim() || !editedSigner.email.trim()) {
+                    setError('Name and email are required');
+                    return;
+                  }
+                  
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (!emailRegex.test(editedSigner.email.trim())) {
+                    setError('Invalid email format');
+                    return;
+                  }
+                  
+                  const updatedSigners = [...signers];
+                  updatedSigners[index] = { ...editedSigner, email: editedSigner.email.trim() };
+                  setSigners(updatedSigners);
+                  setEditingIndex(null);
+                  setEditedSigner(null);
+                  setError(null);
+                };
+                
+                const handleCancelEdit = () => {
+                  setEditingIndex(null);
+                  setEditedSigner(null);
+                  setError(null);
+                };
+                
+                return (
+                  <div
+                    key={index}
+                    className="p-3 bg-slate-900 rounded-lg border border-slate-700 space-y-2"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Name"
+                          value={editedSigner?.name || ''}
+                          onChange={(e) => setEditedSigner(editedSigner ? { ...editedSigner, name: e.target.value } : null)}
+                          className="bg-slate-800 border-slate-600 text-slate-100"
+                        />
+                        <Input
+                          placeholder="Email"
+                          type="email"
+                          value={editedSigner?.email || ''}
+                          onChange={(e) => setEditedSigner(editedSigner ? { ...editedSigner, email: e.target.value } : null)}
+                          className="bg-slate-800 border-slate-600 text-slate-100"
+                        />
+                        <Input
+                          placeholder="Role (optional)"
+                          value={editedSigner?.role || ''}
+                          onChange={(e) => setEditedSigner(editedSigner ? { ...editedSigner, role: e.target.value } : null)}
+                          className="bg-slate-800 border-slate-600 text-slate-100"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveEdit}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            onClick={handleCancelEdit}
+                            variant="outline"
+                            size="sm"
+                            className="border-slate-700"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-700 text-slate-400">
+                            <User className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-slate-100 font-medium">{signer.name}</p>
+                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                              <Mail className="h-3 w-3" />
+                              {signer.email}
+                              {signer.email.includes('@example.com') && (
+                                <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-500/50">
+                                  Placeholder
+                                </Badge>
+                              )}
+                            </div>
+                            {signer.role && (
+                              <Badge variant="outline" className="text-xs text-slate-400 mt-1">
+                                {signer.role}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleStartEdit}
+                            className="h-8 w-8 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                            title="Edit signer"
+                          >
+                            <PenTool className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveSigner(index)}
+                            className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            title="Remove signer"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
               {signers.length === 0 && !detectingSigners && (
                 <div className="text-center py-4 text-slate-400 text-sm">
                   {autoDetectSigners ? 'No signers detected. Add signers manually below.' : 'Add signers below'}
+                </div>
+              )}
+              
+              {signers.some(s => s.email.includes('@example.com')) && (
+                <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <AlertCircle className="h-4 w-4" />
+                    <p className="text-sm">
+                      Some signers have placeholder emails. Please edit them before sending.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -388,7 +504,7 @@ export function SignatureRequestModal({
             </Button>
             <Button
               onClick={handleRequestSignature}
-              disabled={loading || (signers.length === 0 && !autoDetectSigners)}
+              disabled={loading || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim() || s.email.includes('@example.com'))}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {loading ? (
