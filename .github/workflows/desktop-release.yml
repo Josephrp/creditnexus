@@ -19,15 +19,14 @@ jobs:
         cache: 'pip'
 
     - name: Install dependencies
-      shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install ".[desktop]"
+        pip install .
+        pip install pyinstaller==6.11.0
         
     - name: Build Backend (PyInstaller)
-      shell: bash
       run: |
-        ls -la
+        dir
         pyinstaller scripts/backend.spec
         
     - name: Upload Backend Artifact
