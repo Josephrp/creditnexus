@@ -59,24 +59,28 @@ class SignatureService:
 
     def _get_document_path(self, document: Document) -> Optional[str]:
         """Get document file path."""
-        # Try to get from document version
-        if document.current_version_id:
-            version = self.db.query(DocumentVersion).filter(
-                DocumentVersion.id == document.current_version_id
-            ).first()
-            if version and version.file_path:
-                return version.file_path
-
-        # Try to get from file storage
+        # Try to get from file storage (primary method)
         if document.deal_id:
             from app.db.models import Deal
             deal = self.db.query(Deal).filter(Deal.id == document.deal_id).first()
             if deal:
-                return self.file_storage.get_document_path(
+                document_path = self.file_storage.get_document_path(
                     user_id=deal.applicant_id,
                     deal_id=deal.deal_id,
                     document_id=document.id
                 )
+                if document_path and Path(document_path).exists():
+                    return document_path
+        
+        # Try to get from uploaded_by user if no deal
+        if document.uploaded_by:
+            document_path = self.file_storage.get_document_path(
+                user_id=document.uploaded_by,
+                deal_id=None,
+                document_id=document.id
+            )
+            if document_path and Path(document_path).exists():
+                return document_path
 
         return None
 
@@ -195,10 +199,13 @@ class SignatureService:
         response_data = response.json()
 
         # 6. Create DocumentSignature record
+        signature_request_id = response_data.get("signature_request_id") or response_data.get("id")
         signature = DocumentSignature(
             document_id=document_id,
             signature_provider=signature_provider,
-            signature_request_id=response_data.get("signature_request_id") or response_data.get("id"),
+            signature_request_id=signature_request_id,
+            digisigner_request_id=signature_request_id,  # Alias for webhook compatibility
+            digisigner_document_id=digisigner_document_id,  # Store DigiSigner document ID
             signature_status="pending",
             signers=signers,
             signature_provider_data=response_data,

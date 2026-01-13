@@ -63,17 +63,63 @@ export function SignatureStatus({ documentId, signatureId }: SignatureStatusProp
   }, [documentId, signatureId]);
 
   const fetchDocumentSignatures = async () => {
-    // This would need a new endpoint to get signatures for a document
-    // For now, we'll use the signature ID if provided
-    if (signatureId) {
-      fetchSignatureStatus();
-    } else {
+    if (!documentId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchWithAuth(`/api/documents/${documentId}/signatures`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch document signatures');
+      }
+      const data = await response.json();
+      
+      if (data.signatures && data.signatures.length > 0) {
+        // Get the latest signature (first in the list, as they're ordered by created_at desc)
+        const latestSignature = data.signatures[0];
+        if (latestSignature.id) {
+          // Fetch full status for the latest signature
+          await fetchSignatureStatusById(latestSignature.id);
+        } else {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load signatures');
+      setLoading(false);
+    }
+  };
+
+  const fetchSignatureStatusById = async (sigId: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchWithAuth(`/api/signatures/${sigId}/status`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch signature status');
+      }
+      const data = await response.json();
+      setSignature(data.signature);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load signature status');
+    } finally {
       setLoading(false);
     }
   };
 
   const fetchSignatureStatus = async () => {
-    if (!signatureId) return;
+    if (!signatureId) {
+      // If no signatureId but we have documentId, try to fetch from document
+      if (documentId) {
+        await fetchDocumentSignatures();
+      }
+      return;
+    }
 
     setLoading(true);
     setError(null);

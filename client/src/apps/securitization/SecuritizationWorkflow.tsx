@@ -301,15 +301,18 @@ export function SecuritizationWorkflow() {
                   </div>
                   
                   <div className="space-y-2">
-                    {availableAssets.map((asset) => {
+                    {availableAssets.map((asset, index) => {
                       const isSelected = selectedAssets.some(a =>
                         (asset.asset_type === 'deal' && a.deal_id === asset.deal_id) ||
                         (asset.asset_type === 'loan_asset' && a.loan_id === asset.loan_id)
                       );
                       
+                      // Generate unique key using asset_id or fallback to index
+                      const uniqueKey = asset.asset_id || `${asset.asset_type}_${asset.deal_id || asset.loan_id || index}`;
+                      
                       return (
                         <div
-                          key={`${asset.type}_${asset.deal_id || asset.loan_asset_id}`}
+                          key={uniqueKey}
                           className={`p-4 rounded-lg border ${
                             isSelected
                               ? 'bg-emerald-900/20 border-emerald-500/50'

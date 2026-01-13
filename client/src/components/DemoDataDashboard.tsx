@@ -74,6 +74,14 @@ export function DemoDataDashboard() {
   const [seedResults, setSeedResults] = useState<Record<string, SeedResult>>({});
   const [userCredentials, setUserCredentials] = useState<Array<{email: string; password: string; role: string; display_name: string}>>([]);
   
+  const [resetOptions, setResetOptions] = useState({
+    includeUsers: false,
+    includeTemplates: false,
+    includePolicies: false
+  });
+  
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  
   // Generated Deals state
   const [dealFilterStatus, setDealFilterStatus] = useState<string>('all');
   const [dealFilterType, setDealFilterType] = useState<string>('all');
@@ -624,60 +632,116 @@ export function DemoDataDashboard() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={handleStartSeeding}
-                    disabled={loading}
-                    className="bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Seeding...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Start Seeding
-                      </>
-                    )}
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSeedResults({});
-                      setUserCredentials([]);
-                    }}
-                    disabled={loading}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear Results
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        await resetDemoData();
-                        setSeedResults({});
-                        setStats(prev => ({
-                          ...prev,
-                          total_deals: 0,
-                          last_seeded_at: null,
-                        }));
-                        if (activeTab === 'deals') {
-                          fetchDeals();
-                        }
-                      } catch (err) {
-                        console.error('Failed to reset demo data:', err);
-                      }
-                    }}
-                    disabled={loading}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Reset All
-                  </Button>
+                <div className="flex flex-col gap-4 border-t border-slate-700 pt-6 mt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={handleStartSeeding}
+                        disabled={loading}
+                        className="bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Seeding...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-2" />
+                            Start Seeding
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSeedResults({});
+                          setUserCredentials([]);
+                        }}
+                        disabled={loading}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear Results
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-6 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                      <div className="flex flex-col gap-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reset Options</span>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={resetOptions.includeUsers}
+                              onChange={(e) => setResetOptions(prev => ({ ...prev, includeUsers: e.target.checked }))}
+                              className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                            />
+                            <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Users</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={resetOptions.includeTemplates}
+                              onChange={(e) => setResetOptions(prev => ({ ...prev, includeTemplates: e.target.checked }))}
+                              className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                            />
+                            <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Templates</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={resetOptions.includePolicies}
+                              onChange={(e) => setResetOptions(prev => ({ ...prev, includePolicies: e.target.checked }))}
+                              className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                            />
+                            <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Policies</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="h-10 w-px bg-slate-700 mx-2" />
+
+                      <Button
+                        variant="destructive"
+                        className="bg-red-900/40 hover:bg-red-900/60 text-red-200 border border-red-500/30"
+                        onClick={async () => {
+                          const warnings = [];
+                          if (resetOptions.includeUsers) warnings.push("ALL DEMO USERS");
+                          if (resetOptions.includeTemplates) warnings.push("ALL LMA TEMPLATES");
+                          if (resetOptions.includePolicies) warnings.push("ALL POLICY RULES");
+                          
+                          const warningMsg = warnings.length > 0 
+                            ? `\n\nWARNING: You have also selected to delete: ${warnings.join(", ")}.`
+                            : "";
+                            
+                          if (confirm(`Are you sure you want to reset all demo deals, documents, and related data?${warningMsg}`)) {
+                            try {
+                              await resetDemoData(resetOptions);
+                              setSeedResults({});
+                              setStats(prev => ({
+                                ...prev,
+                                total_deals: 0,
+                                last_seeded_at: null,
+                              }));
+                              if (activeTab === 'deals') {
+                                fetchDeals();
+                              }
+                            } catch (err) {
+                              console.error('Failed to reset demo data:', err);
+                            }
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Reset Data
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 italic">
+                    Note: Resetting data will delete all demo deals, documents, loan assets, and securitization pools. Check additional options to also clear users, templates, or policies.
+                  </p>
                 </div>
 
                 {/* Results Table */}

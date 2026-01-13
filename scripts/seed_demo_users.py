@@ -242,11 +242,12 @@ def _generate_company_info(role: UserRole) -> dict:
         UserRole.APPLICANT: {"street": "654 Business Road", "city": "New York", "state": "NY", "postal_code": "10020", "country": "US"}
     }
     
-    address = addresses.get(role, addresses[UserRole.APPLICANT])
-    full_address = f"{address['street']}, {address['city']}, {address['state']} {address['postal_code']}"
+    address_dict = addresses.get(role, addresses[UserRole.APPLICANT])
+    full_address = f"{address_dict['street']}, {address_dict['city']}, {address_dict['state']} {address_dict['postal_code']}"
     
     website = f"https://www.{company_name.lower().replace(' ', '').replace(',', '')}.com" if role == UserRole.APPLICANT else "https://www.creditnexus.app"
     
+    # Return CompanyInfo structure (address must match Address model)
     return {
         "name": company_name,
         "legal_name": legal_name,
@@ -256,7 +257,11 @@ def _generate_company_info(role: UserRole) -> dict:
         "industry": industry,
         "website": website,
         "address": {
-            **address,
+            "street": address_dict["street"],
+            "city": address_dict["city"],
+            "state": address_dict["state"],
+            "postal_code": address_dict["postal_code"],
+            "country": address_dict["country"],
             "full_address": full_address
         }
     }
@@ -338,12 +343,15 @@ def _generate_comprehensive_profile_data(role: UserRole, email: str) -> dict:
     financial = _generate_financial_info(role)
     role_specific = _generate_role_specific_data(role)
     
+    # Use company address as personal address for demo (must match Address structure)
+    personal_address = company.get("address") if company.get("address") else None
+    
     return {
         **personal,
         "contact": contact,
-        "personal_address": company.get("address"),  # Use company address as personal for demo
+        "personal_address": personal_address,  # Use company address as personal for demo
         "professional": professional,
-        "company": company,
+        "company": company,  # This should match CompanyInfo structure
         "financial": financial if financial else None,
         "role_specific_data": role_specific if role_specific else None,
         "extracted_from": "demo_seeding",

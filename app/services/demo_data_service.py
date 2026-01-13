@@ -195,7 +195,7 @@ class DemoDataService:
             # (API calls should seed all roles by default, not rely on environment variables)
             count = seed_demo_users(self.db, force=force, seed_all_roles=True)
             
-            # Validate profile data against UserProfileData schema for all users
+            # Validate and migrate profile data against UserProfileData schema for all users
             if not dry_run:
                 users = self.db.query(User).filter(
                     User.email.in_([u["email"] for u in DEMO_USERS])
@@ -207,8 +207,25 @@ class DemoDataService:
                             # Validate profile_data against UserProfileData schema
                             UserProfileData.model_validate(user.profile_data)
                         except Exception as e:
-                            logger.warning(f"Profile data validation warning for {user.email}: {e}")
-                            # Don't fail, just log warning - profile_data may have extra fields
+                            # Check if it's an old format issue (company as string)
+                            profile_data = user.profile_data
+                            if isinstance(profile_data.get("company"), str):
+                                # Migrate old format: convert company string to CompanyInfo structure
+                                logger.info(f"Migrating old profile_data format for {user.email}")
+                                old_company_name = profile_data.get("company", "")
+                                
+                                # Generate new comprehensive profile data
+                                from scripts.seed_demo_users import _generate_comprehensive_profile_data
+                                role = UserRole(user.role)
+                                new_profile_data = _generate_comprehensive_profile_data(role, user.email)
+                                
+                                # Update user with new profile data
+                                user.profile_data = new_profile_data
+                                self.db.commit()
+                                logger.info(f"Successfully migrated profile_data for {user.email}")
+                            else:
+                                logger.warning(f"Profile data validation warning for {user.email}: {e}")
+                                # Don't fail, just log warning - profile_data may have extra fields
             
             # Prepare user credentials list
             user_credentials = []
@@ -984,8 +1001,9 @@ class DemoDataService:
         deal_age_days = (datetime.utcnow() - (application.created_at or datetime.utcnow())).days
         
         # Base status mapping from application status
+        # Note: ApplicationStatus doesn't have PENDING, only DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
         base_status_mapping = {
-            ApplicationStatus.PENDING.value: DealStatus.DRAFT.value,
+            ApplicationStatus.DRAFT.value: DealStatus.DRAFT.value,
             ApplicationStatus.SUBMITTED.value: DealStatus.SUBMITTED.value,
             ApplicationStatus.UNDER_REVIEW.value: DealStatus.UNDER_REVIEW.value,
             ApplicationStatus.APPROVED.value: DealStatus.APPROVED.value,

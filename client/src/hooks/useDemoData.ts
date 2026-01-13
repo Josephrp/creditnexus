@@ -76,7 +76,11 @@ export interface UseDemoDataReturn {
   seedData: (request: DemoSeedRequest) => Promise<DemoSeedResponse>;
   generateDeals: (count: number) => Promise<DemoSeedResponse>;
   getSeedingStatus: (stage?: string) => Promise<SeedingStatusResponse>;
-  resetDemoData: () => Promise<{ status: string; message: string }>;
+  resetDemoData: (options?: {
+    includeUsers?: boolean;
+    includeTemplates?: boolean;
+    includePolicies?: boolean;
+  }) => Promise<{ status: string; message: string; deleted?: Record<string, number> }>;
   getGeneratedDeals: (params?: {
     page?: number;
     limit?: number;
@@ -270,13 +274,29 @@ export function useDemoData(): UseDemoDataReturn {
 
   /**
    * Reset demo data (delete all demo deals and related data).
+   * 
+   * @param options - Reset options
+   * @param options.includeUsers - Also delete demo users (default: false)
+   * @param options.includeTemplates - Also delete templates (default: false)
+   * @param options.includePolicies - Also delete policies (default: false)
    */
-  const resetDemoData = useCallback(async (): Promise<{ status: string; message: string }> => {
+  const resetDemoData = useCallback(async (options?: {
+    includeUsers?: boolean;
+    includeTemplates?: boolean;
+    includePolicies?: boolean;
+  }): Promise<{ status: string; message: string; deleted?: Record<string, number> }> => {
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetchWithAuth('/api/demo/seed/reset', {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (options?.includeUsers) params.append('include_users', 'true');
+      if (options?.includeTemplates) params.append('include_templates', 'true');
+      if (options?.includePolicies) params.append('include_policies', 'true');
+      
+      const url = `/api/demo/seed/reset${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
       

@@ -27,6 +27,9 @@ import { SkeletonDocumentList } from '@/components/ui/skeleton';
 import { DealTimeline, type TimelineEvent as DealTimelineEvent } from '@/components/DealTimeline';
 import { FilingRequirementsPanel } from '@/components/FilingRequirementsPanel';
 import { NotarizationPayment } from '@/components/NotarizationPayment';
+import { NotarizationButton } from '@/components/NotarizationButton';
+import { SignatureButton } from '@/components/SignatureButton';
+import { NotarizationStatus } from '@/components/NotarizationStatus';
 
 interface Deal {
   id: number;
@@ -276,6 +279,27 @@ export function DealDetail() {
             <Share2 className="h-4 w-4 mr-2" />
             Share Workflow
           </Button>
+          {documents.length > 0 && documents[0] && (
+            <SignatureButton
+              documentId={documents[0].id}
+              variant="ghost"
+              size="default"
+              className="text-slate-400 hover:text-slate-100"
+              onSignatureRequested={() => {
+                fetchDealDetail();
+              }}
+            />
+          )}
+          <NotarizationButton
+            dealId={deal.id}
+            variant="ghost"
+            size="default"
+            className="text-slate-400 hover:text-slate-100"
+            onNotarizationComplete={(notarizationId) => {
+              // Refresh deal data to show updated notarization status
+              fetchDealDetail();
+            }}
+          />
           <Button
             variant="ghost"
             onClick={fetchDealDetail}
@@ -411,6 +435,11 @@ export function DealDetail() {
             </CardContent>
           </Card>
 
+          {/* Notarization Status */}
+          <NotarizationStatus
+            dealId={deal.id}
+          />
+
           {/* Notarization Payment Component */}
           <NotarizationPayment
             dealId={deal.id}
@@ -456,6 +485,33 @@ export function DealDetail() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/app/workflow/share?view=create&documentId=${doc.id}`)}
+                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                        title="Share workflow link"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                      <SignatureButton
+                        documentId={doc.id}
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                        onSignatureRequested={() => {
+                          fetchDealDetail();
+                        }}
+                      />
+                      <NotarizationButton
+                        documentId={doc.id}
+                        variant="ghost"
+                        size="sm"
+                        className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                        onNotarizationComplete={() => {
+                          fetchDealDetail();
+                        }}
+                      />
                       <Button
                         variant="ghost"
                         size="sm"

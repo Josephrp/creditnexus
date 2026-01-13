@@ -878,7 +878,7 @@ class ClauseCache(Base):
 
 
 class DocumentSignature(Base):
-    """Document signature model for tracking document signatures."""
+    """Document signature model for tracking document signatures (DigiSigner requests)."""
 
     __tablename__ = "document_signatures"
 
@@ -890,15 +890,26 @@ class DocumentSignature(Base):
         Integer, ForeignKey("generated_documents.id"), nullable=True, index=True
     )
 
-    signer_name = Column(String(255), nullable=False)
+    # DigiSigner signature request fields
+    signature_provider = Column(String(50), nullable=False, server_default="digisigner", index=True)
+    signature_request_id = Column(String(255), nullable=True, unique=True, index=True)
+    digisigner_request_id = Column(String(255), nullable=True, index=True)  # Alias for signature_request_id (for webhook compatibility)
+    digisigner_document_id = Column(String(255), nullable=True, index=True)  # DigiSigner document ID
+    signature_status = Column(String(50), nullable=False, default="pending", index=True)  # pending, completed, declined, expired
+    signers = Column(JSONB, nullable=True)  # Array of signer objects with name, email, role, status
+    signature_provider_data = Column(JSONB, nullable=True)  # Full response from DigiSigner
+    signed_document_url = Column(Text, nullable=True)
+    signed_document_path = Column(Text, nullable=True)
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
 
+    # Legacy fields (for backward compatibility with old signature records)
+    signer_name = Column(String(255), nullable=True)  # Changed to nullable for DigiSigner records
     signer_role = Column(String(100), nullable=True)
-
-    signature_method = Column(String(50), nullable=False)  # "electronic", "wet_ink", "blockchain"
-
+    signature_method = Column(String(50), nullable=True)  # Changed to nullable
     signature_data = Column(JSONB, nullable=True)  # Signature metadata
-
-    signed_at = Column(DateTime, nullable=False)
+    signed_at = Column(DateTime, nullable=True)  # Changed to nullable
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -912,6 +923,19 @@ class DocumentSignature(Base):
             "id": self.id,
             "document_id": self.document_id,
             "generated_document_id": self.generated_document_id,
+            "signature_provider": self.signature_provider,
+            "signature_request_id": self.signature_request_id,
+            "signature_status": getattr(self, 'signature_status', 'pending'),
+            "digisigner_request_id": getattr(self, 'digisigner_request_id', None),
+            "digisigner_document_id": getattr(self, 'digisigner_document_id', None),
+            "signers": self.signers,
+            "signature_provider_data": self.signature_provider_data,
+            "signed_document_url": self.signed_document_url,
+            "signed_document_path": self.signed_document_path,
+            "requested_at": self.requested_at.isoformat() if self.requested_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            # Legacy fields
             "signer_name": self.signer_name,
             "signer_role": self.signer_role,
             "signature_method": self.signature_method,
