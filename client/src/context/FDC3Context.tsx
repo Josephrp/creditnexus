@@ -24,13 +24,6 @@ export interface Facility {
     payment_frequency: { period: string; period_multiplier: number };
   };
   maturity_date: string;
-  // Optional properties for CDM preview compatibility
-  facility_type?: string;
-  interest_rate?: number | string;
-  facility_identification?: {
-    facility_name?: string;
-    facility_id?: string;
-  };
 }
 
 export interface CreditAgreementData {
@@ -260,7 +253,7 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
 
     if (available && window.fdc3) {
       const fdc3 = window.fdc3 as DesktopAgent;
-      const subscriptions: Listener[] = [];
+      let subscriptions: Listener[] = [];
 
       const initializeChannels = async () => {
         try {

@@ -3,9 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
   ArrowRight,
+  CheckCircle,
+  Clock,
   Shield,
+  TrendingUp,
   DollarSign,
   User,
+  FileText,
   Zap
 } from 'lucide-react';
 
