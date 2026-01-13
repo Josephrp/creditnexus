@@ -9627,6 +9627,7 @@ class DemoSeedRequest(BaseModel):
     seed_templates: bool = True
     seed_policies: bool = True
     seed_policy_templates: bool = True
+    seed_securitization: bool = False
     generate_deals: bool = False
     deal_count: int = 12
     dry_run: bool = False
@@ -9711,7 +9712,7 @@ async def seed_demo_data(
                         results["users"]["updated"] += user_result.get("updated", 0)
                 
                 logger.info(f"Generating {request.deal_count} demo deals... (found {applicant_count} applicant users)")
-                deals = service.create_demo_deals(count=request.deal_count)
+                deals = service.create_demo_deals(count=request.deal_count, seed_securitization=request.seed_securitization)
                 results["deals"] = {
                     "created": len(deals),
                     "updated": 0,

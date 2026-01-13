@@ -26,11 +26,17 @@ class DealService:
     
     # Valid status transitions
     VALID_TRANSITIONS = {
-        DealStatus.DRAFT.value: [DealStatus.PENDING.value],
+        DealStatus.DRAFT.value: [DealStatus.SUBMITTED.value, DealStatus.WITHDRAWN.value],
+        DealStatus.SUBMITTED.value: [DealStatus.UNDER_REVIEW.value, DealStatus.WITHDRAWN.value],
+        DealStatus.UNDER_REVIEW.value: [DealStatus.APPROVED.value, DealStatus.REJECTED.value, DealStatus.WITHDRAWN.value],
+        DealStatus.APPROVED.value: [DealStatus.ACTIVE.value, DealStatus.PENDING.value],
+        DealStatus.REJECTED.value: [],  # Terminal state
         DealStatus.PENDING.value: [DealStatus.ACTIVE.value, DealStatus.CANCELLED.value],
-        DealStatus.ACTIVE.value: [DealStatus.CLOSED.value, DealStatus.CANCELLED.value],
-        DealStatus.CANCELLED.value: [],  # Terminal state
+        DealStatus.ACTIVE.value: [DealStatus.CLOSED.value, DealStatus.RESTRUCTURING.value, DealStatus.CANCELLED.value],
+        DealStatus.RESTRUCTURING.value: [DealStatus.ACTIVE.value, DealStatus.CLOSED.value],
         DealStatus.CLOSED.value: [],  # Terminal state
+        DealStatus.WITHDRAWN.value: [],  # Terminal state
+        DealStatus.CANCELLED.value: [],  # Terminal state
     }
     
     def __init__(self, db: Session):

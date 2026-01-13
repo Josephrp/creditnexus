@@ -1012,9 +1012,15 @@ class DealStatus(str, enum.Enum):
     """Status of a deal."""
 
     DRAFT = "draft"
+    SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
     PENDING = "pending"
     ACTIVE = "active"
     CLOSED = "closed"
+    RESTRUCTURING = "restructuring"
+    WITHDRAWN = "withdrawn"
     CANCELLED = "cancelled"
 
 
