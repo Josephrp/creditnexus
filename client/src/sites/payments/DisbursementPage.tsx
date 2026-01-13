@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  DollarSign, 
-  Wallet, 
-  CheckCircle, 
+import {
+  DollarSign,
+  Wallet,
+  CheckCircle,
   AlertCircle,
   Loader2,
   ExternalLink,
@@ -35,7 +35,7 @@ export function DisbursementPage() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const loanId = searchParams.get('loan_id');
-  
+
   const [loanDetails, setLoanDetails] = useState<LoanDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +71,9 @@ export function DisbursementPage() {
   const connectWallet = async () => {
     try {
       if (typeof window.ethereum !== 'undefined') {
-        const accounts = await window.ethereum.request({ 
-          method: 'eth_requestAccounts' 
-        });
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        }) as string[];
         if (accounts.length > 0) {
           setWalletAddress(accounts[0]);
           setWalletConnected(true);
@@ -115,7 +115,7 @@ export function DisbursementPage() {
 
       const data = await response.json();
       setTransactionHash(data.transaction_hash);
-      
+
       // Navigate to receipt page after successful disbursement
       setTimeout(() => {
         navigate(`/receipt?loan_id=${loanId}&tx_hash=${data.transaction_hash}`);
@@ -266,7 +266,7 @@ export function DisbursementPage() {
                       </p>
                     </div>
                   </div>
-                  
+
                   {transactionHash ? (
                     <div className="space-y-4">
                       <div className="flex items-center gap-2 text-emerald-400">
@@ -331,11 +331,4 @@ export function DisbursementPage() {
   );
 }
 
-// Extend Window interface for MetaMask
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown[]>;
-    };
-  }
-}
+// Note: window.ethereum types are declared in useMetaMask.ts

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 interface User {
   id: number;
@@ -43,6 +43,14 @@ interface AuthContextType {
 const TOKEN_KEY = 'creditnexus_access_token';
 const REFRESH_TOKEN_KEY = 'creditnexus_refresh_token';
 
+// In production (Desktop), we need to point to the local backend directly
+const API_BASE_URL = import.meta.env.PROD ? 'http://127.0.0.1:8000' : '';
+
+function getApiUrl(endpoint: string): string {
+  if (endpoint.startsWith('http')) return endpoint;
+  return `${API_BASE_URL}${endpoint}`;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getStoredToken(): string | null {
@@ -66,13 +74,13 @@ function clearTokens(): void {
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getStoredToken();
   const headers = new Headers(options.headers);
-  
+
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  
-  const response = await fetch(url, { ...options, headers });
-  
+
+  const response = await fetch(getApiUrl(url), { ...options, headers });
+
   return response;
 }
 
@@ -91,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await fetchWithAuth('/api/auth/me');
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.authenticated && data.user) {
@@ -124,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshTokens = async (refreshToken: string): Promise<boolean> => {
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch(getApiUrl('/api/auth/refresh'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -148,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     setAuthError(null);
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -190,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (data: RegisterData): Promise<boolean> => {
     setAuthError(null);
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch(getApiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

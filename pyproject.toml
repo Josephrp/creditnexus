@@ -99,6 +99,9 @@ dev = [
     "ruff",
     "mypy",
 ]
+desktop = [
+    "pyinstaller==6.11.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -112,7 +115,14 @@ dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-asyncio",
     "pytest-cov",
-    # Security scanning tools
+]
+
+[tool.uv.dependency-groups]
+desktop = [
+    "pyinstaller>=6.11.0",
+]
+# Security scanning tools
+security = [
     "bandit[toml]>=1.7.5",
     "semgrep>=1.45.0",
     "pip-audit>=2.6.0",
