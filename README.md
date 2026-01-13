@@ -96,6 +96,50 @@ uv run alembic upgrade head
 
 This will create all necessary tables (documents, workflows, policy_decisions, users, etc.) based on the migration files in `alembic/versions/`.
 
+### 0.5. External Service Configuration
+
+#### DigiSigner Webhook Setup (for Digital Signatures)
+
+CreditNexus integrates with DigiSigner for digital signature workflows. To enable webhook notifications:
+
+1. **Get your DigiSigner API key** from your DigiSigner account settings
+2. **Configure webhook callbacks** in DigiSigner:
+   - Log in to your DigiSigner account
+   - Navigate to **Account Settings → API Settings**
+   - Set both callback URLs to: `https://your-domain.com/api/signatures/webhook`
+     - "Signature Request Completed" Callback URL
+     - "Document Signed" Callback URL
+
+**For Local Development:**
+Use a tunnel service (ngrok, localtunnel) to expose your local server:
+```bash
+# Using ngrok
+ngrok http 8000
+# Then use: https://your-ngrok-url.ngrok.io/api/signatures/webhook
+```
+
+**Environment Variables:**
+Add to your `.env` file:
+```env
+DIGISIGNER_API_KEY=your_api_key_here
+DIGISIGNER_BASE_URL=https://api.digisigner.com/v1
+DIGISIGNER_WEBHOOK_SECRET=your_webhook_secret_here  # Optional but recommended
+```
+
+> 📖 **Full Setup Guide**: See [`dev/DIGISIGNER_WEBHOOK_SETUP.md`](dev/DIGISIGNER_WEBHOOK_SETUP.md) for detailed configuration, troubleshooting, and security considerations.
+
+#### Companies House API (for UK Regulatory Filings)
+
+For automated UK charge filings (MR01), configure:
+
+1. **Register for free API access** at https://developer.company-information.service.gov.uk/
+2. **Add to `.env` file:**
+```env
+COMPANIES_HOUSE_API_KEY=your_api_key_here
+```
+
+> 📖 **Environment Configuration**: See [`dev/environement.md`](dev/environement.md) for all available environment variables.
+
 ### 1. Backend (The Brain)
 
 The backend powers the AI agents, satellite imagery fetching, and FINOS CDM event generation.
@@ -134,6 +178,8 @@ npm run dev
 - **[🎥 Demo Video](YOUTUBE_URL)** - Watch CreditNexus in action
 - **[⚖️ License](LICENSE.md)** - GPL-2 + Rail.md dual license
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Guidelines for contributing to the project
+- **[🔧 Environment Configuration](dev/environement.md)** - Complete list of environment variables and configuration options
+- **[✍️ DigiSigner Webhook Setup](dev/DIGISIGNER_WEBHOOK_SETUP.md)** - Guide for configuring DigiSigner webhooks for digital signatures
 
 ---
 
