@@ -140,6 +140,122 @@ COMPANIES_HOUSE_API_KEY=your_api_key_here
 
 > 📖 **Environment Configuration**: See [`dev/environement.md`](dev/environement.md) for all available environment variables.
 
+### 0.6. Smart Contract Deployment (Optional - for Securitization Features)
+
+CreditNexus includes smart contracts for securitization workflows. To enable blockchain features:
+
+#### Prerequisites
+
+1. **Node.js & npm** - For compiling and deploying contracts
+2. **Hardhat** - Build system (installed automatically)
+3. **Base Network RPC Access** - For contract deployment
+
+#### Quick Setup
+
+**1. Install Contract Dependencies:**
+
+```bash
+cd contracts
+npm install
+```
+
+**2. Configure Network (Optional):**
+
+Create `contracts/.env` file (optional, uses environment variables):
+
+```env
+# For Base Mainnet
+BASE_RPC_URL=https://mainnet.base.org
+PRIVATE_KEY=your_deployer_private_key_here
+
+# For Base Sepolia Testnet
+BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+PRIVATE_KEY=your_deployer_private_key_here
+
+# Optional: For contract verification on BaseScan
+BASESCAN_API_KEY=your_basescan_api_key
+```
+
+**3. Compile Contracts:**
+
+```bash
+cd contracts
+npm run compile
+```
+
+This generates contract ABIs and bytecode in `contracts/artifacts/`.
+
+**4. Deploy Contracts:**
+
+**Base Sepolia (Testnet):**
+```bash
+cd contracts
+npm run deploy:base-sepolia
+```
+
+**Base Mainnet:**
+```bash
+cd contracts
+npm run deploy:base
+```
+
+**5. Update Environment Variables:**
+
+After deployment, add the contract addresses to your `.env` file:
+
+```env
+SECURITIZATION_NOTARIZATION_CONTRACT=0x...
+SECURITIZATION_TOKEN_CONTRACT=0x...
+SECURITIZATION_PAYMENT_ROUTER_CONTRACT=0x...
+X402_NETWORK_RPC_URL=https://mainnet.base.org  # or https://sepolia.base.org for testnet
+```
+
+#### Auto-Deployment (Development)
+
+If you don't manually deploy contracts, CreditNexus can auto-deploy them on first use:
+
+1. Set `BLOCKCHAIN_AUTO_DEPLOY=true` in your `.env` file
+2. Ensure `X402_NETWORK_RPC_URL` is configured
+3. Contracts will be automatically deployed when first accessed
+
+**Note:** Auto-deployment requires:
+- Valid RPC connection to Base network
+- Deployer account with sufficient ETH for gas fees
+- Compiled contracts (run `npm run compile` first)
+
+#### Manual Deployment (Production)
+
+For production, manually deploy contracts and set addresses:
+
+1. Deploy contracts using Hardhat (see steps above)
+2. Set contract addresses in `.env`:
+   ```env
+   SECURITIZATION_NOTARIZATION_CONTRACT=0x...
+   SECURITIZATION_TOKEN_CONTRACT=0x...
+   SECURITIZATION_PAYMENT_ROUTER_CONTRACT=0x...
+   BLOCKCHAIN_AUTO_DEPLOY=false  # Disable auto-deployment in production
+   ```
+
+#### Contract Verification
+
+To verify contracts on BaseScan:
+
+```bash
+cd contracts
+npx hardhat verify --network base <CONTRACT_ADDRESS> [CONSTRUCTOR_ARGS]
+```
+
+**Example:**
+```bash
+# Verify SecuritizationToken
+npx hardhat verify --network base 0x... 
+
+# Verify SecuritizationPaymentRouter (requires token address as constructor arg)
+npx hardhat verify --network base 0x... 0x[TOKEN_ADDRESS]
+```
+
+> 📖 **Smart Contract Documentation**: See [`contracts/README.md`](contracts/README.md) for detailed contract specifications and [`dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md`](dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md) for integration details.
+
 ### 1. Backend (The Brain)
 
 The backend powers the AI agents, satellite imagery fetching, and FINOS CDM event generation.
@@ -180,6 +296,8 @@ npm run dev
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Guidelines for contributing to the project
 - **[🔧 Environment Configuration](dev/environement.md)** - Complete list of environment variables and configuration options
 - **[✍️ DigiSigner Webhook Setup](dev/DIGISIGNER_WEBHOOK_SETUP.md)** - Guide for configuring DigiSigner webhooks for digital signatures
+- **[📜 Smart Contracts](contracts/README.md)** - Solidity contract documentation and specifications
+- **[🏗️ Securitization Implementation](dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md)** - Complete securitization workflow implementation plan
 
 ---
 
@@ -437,6 +555,8 @@ Then configure `openfin/app.json` to point to the production build location.
 - **Geospatial**: TorchGeo (Deep Learning), SentinelHub (Satellite Imagery)
 - **Standard**: FINOS Common Domain Model (CDM) for trade events
 - **Database**: SQLite (Development) / PostgreSQL (Production ready)
+- **Blockchain**: Web3.py for smart contract interaction (Base network)
+- **Smart Contracts**: Solidity contracts for securitization (Hardhat build system)
 
 ### Development Tools
 

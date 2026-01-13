@@ -18,7 +18,7 @@ class LinkPayloadGenerator:
 
     def __init__(self):
         """Initialize payload generator with encryption key."""
-        self._get_or_generate_key()
+        self.cipher = self._get_or_generate_key()
 
     def _get_or_generate_key(self):
         """Get encryption key from settings or generate one."""
@@ -34,7 +34,7 @@ class LinkPayloadGenerator:
         # Generate new key
         key = Fernet.generate_key()
         logger.warning("Using auto-generated encryption key (not persistent across restarts)")
-        return key
+        return Fernet(key)
 
     def generate_verification_link_payload(
         self,
@@ -120,4 +120,105 @@ class LinkPayloadGenerator:
 
         except Exception as e:
             logger.error(f"Failed to parse link payload: {e}")
+            return None
+
+    def generate_payment_link_payload(
+        self,
+        payment_id: str,
+        payment_type: str,
+        amount: float,
+        currency: str,
+        payer_info: Optional[Dict[str, Any]] = None,
+        receiver_info: Optional[Dict[str, Any]] = None,
+        notarization_id: Optional[int] = None,
+        deal_id: Optional[int] = None,
+        pool_id: Optional[int] = None,
+        tranche_id: Optional[int] = None,
+        facilitator_url: Optional[str] = None,
+        expires_in_hours: int = 24,
+    ) -> str:
+        """Generate encrypted payment link payload for x402 payment flows.
+
+        Args:
+            payment_id: Unique payment identifier
+            payment_type: Type of payment (notarization_fee, tranche_purchase, etc.)
+            amount: Payment amount
+            currency: Payment currency (USD, USDC, etc.)
+            payer_info: Optional payer metadata (wallet address, user_id, etc.)
+            receiver_info: Optional receiver metadata (wallet address, contract address, etc.)
+            notarization_id: Optional notarization record ID
+            deal_id: Optional deal ID
+            pool_id: Optional securitization pool ID
+            tranche_id: Optional tranche ID
+            facilitator_url: Optional x402 facilitator URL
+            expires_in_hours: Link expiration time
+
+        Returns:
+            Base64url-encoded encrypted payload
+        """
+        expires_at = (datetime.utcnow() + timedelta(hours=expires_in_hours)).isoformat()
+
+        payload = {
+            "payment_id": payment_id,
+            "payment_type": payment_type,
+            "amount": amount,
+            "currency": currency,
+            "payer_info": payer_info or {},
+            "receiver_info": receiver_info or {},
+            "notarization_id": notarization_id,
+            "deal_id": deal_id,
+            "pool_id": pool_id,
+            "tranche_id": tranche_id,
+            "facilitator_url": facilitator_url,
+            "expires_at": expires_at,
+            "created_at": datetime.utcnow().isoformat(),
+            "version": "1.0",
+        }
+
+        # Serialize to JSON
+        json_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+        # Encrypt
+        encrypted = self.cipher.encrypt(json_payload.encode("utf-8"))
+
+        # Base64url encode (URL-safe)
+        encoded = base64.urlsafe_b64encode(encrypted).decode("utf-8").rstrip("=")
+
+        logger.info(f"Generated encrypted payment link payload for payment {payment_id}")
+        return encoded
+
+    def parse_payment_link_payload(self, payload: str) -> Optional[Dict[str, Any]]:
+        """Parse and decrypt payment link payload.
+
+        Args:
+            payload: Base64url-encoded encrypted payload
+
+        Returns:
+            Parsed payload dictionary or None if invalid/expired
+        """
+        try:
+            # Add padding if needed
+            padding = 4 - len(payload) % 4
+            if padding != 4:
+                payload += "=" * padding
+
+            # Base64url decode
+            encrypted = base64.urlsafe_b64decode(payload)
+
+            # Decrypt
+            decrypted = self.cipher.decrypt(encrypted)
+
+            # Deserialize JSON
+            data = json.loads(decrypted.decode("utf-8"))
+
+            # Check expiration
+            expires_at = datetime.fromisoformat(data["expires_at"])
+            if datetime.utcnow() > expires_at:
+                logger.warning(f"Payment link payload expired: {data.get('payment_id')}")
+                return None
+
+            return data
+
+        except Exception as e:
+            logger.error(f"Failed to parse payment link payload: {e}")
             return None

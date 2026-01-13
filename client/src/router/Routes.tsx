@@ -171,6 +171,30 @@ export const router = createBrowserRouter(
     ),
   },
   {
+    path: '/app/securitization',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/securitization/pools/:poolId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/securitization/pools/:poolId/tranches/:trancheId/purchase',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/app/policy-editor/:policyId',
     element: (
       <ProtectedRoute>

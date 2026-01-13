@@ -24,6 +24,9 @@ import VerificationDashboard from '@/components/VerificationDashboard';
 import { DemoDataDashboard } from '@/components/DemoDataDashboard';
 import RiskWarRoom from '@/components/RiskWarRoom';
 import { AuditorRouter } from '@/apps/auditor/AuditorRouter';
+import { SecuritizationWorkflow } from '@/apps/securitization/SecuritizationWorkflow';
+import { SecuritizationPoolDetail } from '@/components/SecuritizationPoolDetail';
+import { TranchePurchase } from '@/components/TranchePurchase';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   PERMISSION_DOCUMENT_VIEW,
@@ -39,7 +42,7 @@ import {
   PERMISSION_AUDIT_VIEW,
 } from '@/utils/permissions';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor' | 'securitization';
 
 interface AppConfig {
   id: AppView;
@@ -155,6 +158,13 @@ const sidebarApps: AppConfig[] = [
     description: 'Audit dashboard & compliance monitoring',
     requiredPermission: PERMISSION_AUDIT_VIEW,
   },
+  {
+    id: 'securitization',
+    name: 'Securitization',
+    icon: <Building2 className="h-5 w-5 text-cyan-400" />,
+    description: 'Bundle deals into structured finance products',
+    requiredPermission: PERMISSION_DOCUMENT_VIEW,
+  },
 ];
 
 interface PolicyDecision {
@@ -208,7 +218,7 @@ export function DesktopAppLayout() {
       'dashboard', 'applications', 'admin-signups', 'calendar', 'deals',
       'document-parser', 'document-generator', 'trade-blotter', 'green-lens',
       'ground-truth', 'verification-demo', 'demo-data', 'risk-war-room',
-      'policy-editor', 'library', 'auditor'
+      'policy-editor', 'library', 'auditor', 'securitization'
     ];
     
     // Try to restore from sessionStorage first
@@ -437,6 +447,10 @@ export function DesktopAppLayout() {
     if (!app && basePathname.startsWith('/auditor')) {
       app = 'auditor';
     }
+    // Handle securitization routes (pool detail, tranche purchase)
+    if (!app && basePathname.startsWith('/app/securitization')) {
+      app = 'securitization';
+    }
     
     // Only sync if the pathname is actually in our mapping (not a route we don't handle)
     if (!app) {
@@ -541,6 +555,7 @@ export function DesktopAppLayout() {
       'demo-data': '/app/demo-data',
       'risk-war-room': '/app/risk-war-room',
       'policy-editor': '/app/policy-editor',
+      'securitization': '/app/securitization',
       'library': '/library',
       'auditor': '/auditor',
     };
@@ -896,6 +911,22 @@ export function DesktopAppLayout() {
           {activeApp === 'risk-war-room' && <RiskWarRoom />}
           {activeApp === 'policy-editor' && <PolicyEditor />}
           {activeApp === 'auditor' && <AuditorRouter />}
+          {activeApp === 'securitization' && (() => {
+            // Check if we're on a tranche purchase page
+            if (location.pathname.includes('/tranches/') && location.pathname.includes('/purchase')) {
+              const poolIdMatch = location.pathname.match(/\/pools\/([^/]+)/);
+              const trancheIdMatch = location.pathname.match(/\/tranches\/([^/]+)/);
+              if (poolIdMatch && trancheIdMatch) {
+                return <TranchePurchase poolId={poolIdMatch[1]} trancheId={trancheIdMatch[1]} />;
+              }
+            }
+            // Check if we're on a pool detail page
+            if (location.pathname.startsWith('/app/securitization/pools/')) {
+              return <SecuritizationPoolDetail />;
+            }
+            // Default to workflow
+            return <SecuritizationWorkflow />;
+          })()}
         </main>
       </div>
 

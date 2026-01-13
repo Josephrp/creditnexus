@@ -25,6 +25,7 @@ import {
 import { SkeletonDocumentList } from '@/components/ui/skeleton';
 import { DealTimeline, type TimelineEvent as DealTimelineEvent } from '@/components/DealTimeline';
 import { FilingRequirementsPanel } from '@/components/FilingRequirementsPanel';
+import { NotarizationPayment } from '@/components/NotarizationPayment';
 
 interface Deal {
   id: number;
@@ -371,31 +372,50 @@ export function DealDetail() {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Summary</h3>
-                <p className="text-slate-400">
-                  Deal ID: <span className="text-slate-100">{deal.deal_id}</span>
-                </p>
-                {deal.application_id && (
-                  <p className="text-slate-400 mt-2">
-                    Application ID: <span className="text-slate-100">{deal.application_id}</span>
+        <div className="space-y-4">
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Summary</h3>
+                  <p className="text-slate-400">
+                    Deal ID: <span className="text-slate-100">{deal.deal_id}</span>
                   </p>
+                  {deal.application_id && (
+                    <p className="text-slate-400 mt-2">
+                      Application ID: <span className="text-slate-100">{deal.application_id}</span>
+                    </p>
+                  )}
+                </div>
+                {deal.deal_data && Object.keys(deal.deal_data).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Data</h3>
+                    <pre className="bg-slate-900 p-4 rounded-lg text-sm text-slate-300 overflow-auto">
+                      {JSON.stringify(deal.deal_data, null, 2)}
+                    </pre>
+                  </div>
                 )}
               </div>
-              {deal.deal_data && Object.keys(deal.deal_data).length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Data</h3>
-                  <pre className="bg-slate-900 p-4 rounded-lg text-sm text-slate-300 overflow-auto">
-                    {JSON.stringify(deal.deal_data, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Notarization Payment Component */}
+          <NotarizationPayment
+            dealId={deal.id}
+            onPaymentComplete={(transactionHash) => {
+              // Refresh deal details after payment
+              fetchDealDetail();
+              console.log('Payment completed:', transactionHash);
+            }}
+            onPaymentSkipped={() => {
+              // Refresh deal details after skip
+              fetchDealDetail();
+            }}
+            onError={(error) => {
+              setError(error);
+            }}
+          />
+        </div>
       )}
 
       {activeTab === 'documents' && (
