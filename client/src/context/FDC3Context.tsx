@@ -169,6 +169,33 @@ export interface GreenFinanceAssessmentContext extends Context {
   assessedAt: string;
 }
 
+export interface WorkflowLinkContext extends Context {
+  type: 'fdc3.creditnexus.workflow';
+  id: {
+    workflowId: string;
+  };
+  workflowType: string; // verification, notarization, document_review, etc.
+  linkPayload: string; // Encrypted payload
+  metadata?: {
+    title?: string;
+    description?: string;
+    dealId?: number;
+    documentId?: number;
+    senderInfo?: {
+      user_id?: number;
+      email?: string;
+      name?: string;
+    };
+    receiverInfo?: {
+      user_id?: number;
+      email?: string;
+      name?: string;
+    };
+    expiresAt?: string;
+    filesIncluded?: number;
+  };
+}
+
 export type CreditNexusContext =
   | CreditNexusLoanContext
   | AgreementContext
@@ -177,7 +204,8 @@ export type CreditNexusContext =
   | ApprovalResultContext
   | ESGDataContext
   | LandUseContext
-  | GreenFinanceAssessmentContext;
+  | GreenFinanceAssessmentContext
+  | WorkflowLinkContext;
 
 export type IntentName =
   | 'ViewLoanAgreement'
@@ -185,7 +213,9 @@ export type IntentName =
   | 'ViewESGAnalytics'
   | 'ExtractCreditAgreement'
   | 'ViewPortfolio'
-  | 'GenerateLMATemplate';
+  | 'GenerateLMATemplate'
+  | 'ShareWorkflowLink'
+  | 'ProcessWorkflowLink';
 
 export type IntentHandler = FDC3IntentHandler;
 
@@ -207,6 +237,8 @@ interface FDC3ContextValue {
   onIntentReceived: (callback: (intent: IntentName, context: Context) => void) => void;
   pendingIntent: { intent: IntentName; context: Context } | null;
   clearPendingIntent: () => void;
+  broadcastWorkflowLink: (workflowLink: WorkflowLinkContext) => Promise<void>;
+  listenForWorkflowLinks: (callback: (context: WorkflowLinkContext) => void) => Promise<Listener | null>;
 }
 
 const FDC3Context = createContext<FDC3ContextValue | null>(null);
@@ -269,6 +301,11 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
             setContext(ctx as PortfolioContext);
           });
           subscriptions.push(portfolioListener);
+
+          const workflowLinkListener = await fdc3.addContextListener('fdc3.creditnexus.workflow', (ctx: Context) => {
+            setContext(ctx as WorkflowLinkContext);
+          });
+          subscriptions.push(workflowLinkListener);
 
           console.log('[FDC3] Context listeners registered');
         } catch (error) {
@@ -362,6 +399,39 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
     setPendingIntent(null);
   }, []);
 
+  const broadcastWorkflowLink = useCallback(async (workflowLink: WorkflowLinkContext) => {
+    if (isAvailable && window.fdc3) {
+      try {
+        await window.fdc3.broadcast(workflowLink as Context);
+        console.log('[FDC3] Workflow link broadcast successful:', workflowLink);
+      } catch (error) {
+        console.error('[FDC3] Workflow link broadcast failed:', error);
+      }
+    } else {
+      console.log('[FDC3 Mock] Broadcasting workflow link:', workflowLink);
+    }
+  }, [isAvailable]);
+
+  const listenForWorkflowLinks = useCallback(async (
+    callback: (context: WorkflowLinkContext) => void
+  ): Promise<Listener | null> => {
+    if (isAvailable && window.fdc3) {
+      try {
+        const listener = await window.fdc3.addContextListener('fdc3.creditnexus.workflow', (ctx: Context) => {
+          callback(ctx as WorkflowLinkContext);
+        });
+        console.log('[FDC3] Workflow link listener added');
+        return listener;
+      } catch (error) {
+        console.error('[FDC3] Failed to add workflow link listener:', error);
+        return null;
+      }
+    } else {
+      console.log('[FDC3 Mock] Adding workflow link listener');
+      return null;
+    }
+  }, [isAvailable]);
+
   useEffect(() => {
     if (!isAvailable || !window.fdc3) return;
 
@@ -376,6 +446,8 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
         'ExtractCreditAgreement',
         'ViewPortfolio',
         'GenerateLMATemplate',
+        'ShareWorkflowLink',
+        'ProcessWorkflowLink',
       ];
 
       for (const intent of intents) {
@@ -417,6 +489,8 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
         onIntentReceived,
         pendingIntent,
         clearPendingIntent,
+        broadcastWorkflowLink,
+        listenForWorkflowLinks,
       }}
     >
       {children}
@@ -505,5 +579,22 @@ export function createESGDataContext(
     overallScore: data.overallScore,
     greenLoanIndicators: data.greenLoanIndicators,
     sustainabilityLinkedTerms: data.sustainabilityLinkedTerms,
+  };
+}
+
+export function createWorkflowLinkContext(
+  workflowId: string,
+  workflowType: string,
+  linkPayload: string,
+  metadata?: WorkflowLinkContext['metadata']
+): WorkflowLinkContext {
+  return {
+    type: 'fdc3.creditnexus.workflow',
+    id: {
+      workflowId,
+    },
+    workflowType,
+    linkPayload,
+    metadata,
   };
 }

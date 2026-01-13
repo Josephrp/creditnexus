@@ -7,7 +7,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Request, Form, Body
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session, joinedload
 import pandas as pd
@@ -4465,6 +4465,69 @@ async def create_loan_asset(
         )
         db.commit()
         
+        # Generate satellite layers if asset has coordinates
+        asset = audit_result.loan_asset
+        if asset.geo_lat and asset.geo_lon:
+            try:
+                from app.services.layer_processing_service import LayerProcessingService
+                from app.services.layer_storage_service import LayerStorageService
+                from app.agents.verifier import fetch_sentinel_data
+                import numpy as np
+                
+                # Fetch bands for layer generation
+                bands = await fetch_sentinel_data(asset.geo_lat, asset.geo_lon)
+                
+                if bands:
+                    nir_band, red_band = bands
+                    
+                    layer_processing_service = LayerProcessingService()
+                    layer_storage_service = LayerStorageService()
+                    
+                    # Generate NDVI layer
+                    ndvi_data, ndvi_metadata = await layer_processing_service.generate_ndvi_layer(
+                        nir_band=nir_band,
+                        red_band=red_band
+                    )
+                    
+                    # Add bounds to metadata
+                    delta = 0.005  # Approximate 0.5km
+                    ndvi_metadata['bounds'] = {
+                        'north': asset.geo_lat + delta,
+                        'south': asset.geo_lat - delta,
+                        'east': asset.geo_lon + delta,
+                        'west': asset.geo_lon - delta
+                    }
+                    
+                    layer_storage_service.store_layer(
+                        db=db,
+                        loan_asset_id=asset.id,
+                        layer_type='ndvi',
+                        layer_data=ndvi_data,
+                        metadata=ndvi_metadata
+                    )
+                    
+                    # Generate false color composite
+                    false_color_data, false_color_metadata = await layer_processing_service.generate_false_color_composite(
+                        nir_band=nir_band,
+                        red_band=red_band
+                    )
+                    
+                    false_color_metadata['bounds'] = ndvi_metadata['bounds']
+                    
+                    layer_storage_service.store_layer(
+                        db=db,
+                        loan_asset_id=asset.id,
+                        layer_type='false_color',
+                        layer_data=false_color_data,
+                        metadata=false_color_metadata
+                    )
+                    
+                    db.commit()
+                    logger.info(f"Generated layers for new asset {asset.id}")
+            except Exception as e:
+                logger.warning(f"Failed to generate layers for new asset {asset.id}: {e}", exc_info=True)
+                # Don't fail the request if layer generation fails
+        
         return {
             "status": "success",
             "message": "Loan asset created and verified",
@@ -4614,19 +4677,38 @@ async def run_asset_audit(
         
         logger.info(f"Running verification for asset {asset_id}")
         
-        # Run verification
-        verification = await verify_asset_location(
-            lat=asset.geo_lat,
-            lon=asset.geo_lon,
-            threshold=asset.spt_threshold or 0.8
-        )
+        # Fetch satellite bands first (needed for layer generation)
+        from app.agents.verifier import fetch_sentinel_data, calculate_ndvi, determine_risk_status
+        import numpy as np
         
-        if verification.get("success"):
-            ndvi_score = verification["ndvi_score"]
-            asset.update_verification(ndvi_score)
-        else:
-            asset.risk_status = RiskStatus.ERROR
-            asset.verification_error = verification.get("error", "Unknown error")
+        bands = await fetch_sentinel_data(asset.geo_lat, asset.geo_lon)
+        
+        if bands is None:
+            raise HTTPException(
+                status_code=500,
+                detail={"status": "error", "message": "Failed to fetch satellite data"}
+            )
+        
+        nir_band, red_band = bands
+        
+        # Calculate NDVI
+        ndvi_score = calculate_ndvi(nir_band, red_band)
+        
+        # Determine risk status
+        risk_status = determine_risk_status(ndvi_score, asset.spt_threshold or 0.8)
+        
+        # Update asset
+        asset.update_verification(ndvi_score)
+        asset.risk_status = risk_status
+        
+        # Create verification result
+        verification = {
+            "success": True,
+            "ndvi_score": ndvi_score,
+            "risk_status": risk_status,
+            "data_source": "sentinel_hub" if bands else "synthetic",
+            "verified_at": datetime.utcnow().isoformat()
+        }
         
         # Log the audit action
         log_audit_action(
@@ -4637,8 +4719,8 @@ async def run_asset_audit(
             user_id=current_user.id if current_user else None,
             metadata={
                 "action": "verification",
-                "ndvi_score": verification.get("ndvi_score"),
-                "risk_status": asset.risk_status,
+                "ndvi_score": ndvi_score,
+                "risk_status": risk_status,
                 "data_source": verification.get("data_source")
             },
             request=request
@@ -4646,6 +4728,58 @@ async def run_asset_audit(
         
         db.commit()
         db.refresh(asset)
+        
+        # Generate satellite layers after verification
+        try:
+            from app.services.layer_processing_service import LayerProcessingService
+            from app.services.layer_storage_service import LayerStorageService
+            
+            layer_processing_service = LayerProcessingService()
+            layer_storage_service = LayerStorageService()
+            
+            # Generate NDVI layer
+            ndvi_data, ndvi_metadata = await layer_processing_service.generate_ndvi_layer(
+                nir_band=nir_band,
+                red_band=red_band
+            )
+            
+            # Add bounds to metadata
+            delta = 0.005  # Approximate 0.5km
+            ndvi_metadata['bounds'] = {
+                'north': asset.geo_lat + delta,
+                'south': asset.geo_lat - delta,
+                'east': asset.geo_lon + delta,
+                'west': asset.geo_lon - delta
+            }
+            
+            layer_storage_service.store_layer(
+                db=db,
+                loan_asset_id=asset_id,
+                layer_type='ndvi',
+                layer_data=ndvi_data,
+                metadata=ndvi_metadata
+            )
+            
+            # Generate false color composite
+            false_color_data, false_color_metadata = await layer_processing_service.generate_false_color_composite(
+                nir_band=nir_band,
+                red_band=red_band
+            )
+            
+            false_color_metadata['bounds'] = ndvi_metadata['bounds']
+            
+            layer_storage_service.store_layer(
+                db=db,
+                loan_asset_id=asset_id,
+                layer_type='false_color',
+                layer_data=false_color_data,
+                metadata=false_color_metadata
+            )
+            
+            logger.info(f"Generated layers for asset {asset_id}")
+        except Exception as e:
+            logger.warning(f"Failed to generate layers for asset {asset_id}: {e}", exc_info=True)
+            # Don't fail the request if layer generation fails
         
         return {
             "status": "success",
@@ -9872,4 +10006,805 @@ async def send_recovery_sms(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to send SMS: {str(e)}"}
+        )
+
+
+# ============================================================================
+# Digital Signature API Endpoints
+# ============================================================================
+
+class SignatureRequestModel(BaseModel):
+    """Request model for signature requests."""
+    signers: Optional[List[Dict[str, str]]] = Field(None, description="List of signers [{'name': '...', 'email': '...', 'role': '...'}]")
+    auto_detect_signers: bool = Field(True, description="Use AI to automatically detect signers from CDM data")
+    expires_in_days: int = Field(30, ge=1, le=90, description="Days until signature request expires")
+    subject: Optional[str] = Field(None, description="Email subject")
+    message: Optional[str] = Field(None, description="Email message")
+    urgency: str = Field("standard", description="Urgency level: 'standard', 'time_sensitive', 'complex'")
+
+
+@router.post("/documents/{document_id}/signatures/request")
+async def request_document_signature(
+    document_id: int,
+    request: SignatureRequestModel,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Request signatures for a document via DigiSigner."""
+    from app.services.signature_service import SignatureService
+    
+    try:
+        signature_service = SignatureService(db)
+        signature = signature_service.request_signature(
+            document_id=document_id,
+            signers=request.signers,
+            auto_detect_signers=request.auto_detect_signers,
+            expires_in_days=request.expires_in_days,
+            subject=request.subject,
+            message=request.message,
+            urgency=request.urgency
+        )
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="signature_request",
+            target_id=signature.id,
+            user_id=current_user.id,
+            metadata={"document_id": document_id, "signature_request_id": signature.signature_request_id}
+        )
+        
+        return {
+            "status": "success",
+            "signature": signature.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Error requesting signature: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to request signature: {str(e)}"}
+        )
+
+
+@router.get("/signatures/{signature_id}/status")
+async def get_signature_status(
+    signature_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get signature status."""
+    from app.services.signature_service import SignatureService
+    from app.db.models import DocumentSignature
+    
+    signature = db.query(DocumentSignature).filter(DocumentSignature.id == signature_id).first()
+    if not signature:
+        raise HTTPException(status_code=404, detail="Signature not found")
+    
+    try:
+        signature_service = SignatureService(db)
+        status = signature_service.check_signature_status(signature.signature_request_id)
+        
+        # Update local status if changed
+        if status.get("status") != signature.signature_status:
+            signature_service.update_signature_status(
+                signature_id=signature_id,
+                status=status.get("status", signature.signature_status),
+                signed_document_url=status.get("signed_document_url")
+            )
+        
+        return {
+            "status": "success",
+            "signature": signature.to_dict(),
+            "provider_status": status
+        }
+    except Exception as e:
+        logger.error(f"Error checking signature status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to check signature status: {str(e)}"}
+        )
+
+
+@router.get("/signatures/{signature_id}/download")
+async def download_signed_document(
+    signature_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Download signed document."""
+    from app.services.signature_service import SignatureService
+    from app.db.models import DocumentSignature
+    
+    signature = db.query(DocumentSignature).filter(DocumentSignature.id == signature_id).first()
+    if not signature:
+        raise HTTPException(status_code=404, detail="Signature not found")
+    
+    if signature.signature_status != "completed":
+        raise HTTPException(status_code=400, detail="Document not yet signed")
+    
+    try:
+        signature_service = SignatureService(db)
+        content = signature_service.download_signed_document(signature.signature_request_id)
+        
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=signed_document_{signature_id}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Error downloading signed document: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to download signed document: {str(e)}"}
+        )
+
+
+@router.post("/signatures/webhook")
+async def digisigner_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    DigiSigner webhook endpoint for signature status updates.
+    
+    Handles two event types:
+    - DOCUMENT_SIGNED: Triggered when an individual signer signs a document
+    - SIGNATURE_REQUEST_COMPLETED: Triggered when all signers have completed signing
+    
+    DigiSigner expects:
+    - Response code: 200
+    - Response text: 'DIGISIGNER_EVENT_ACCEPTED'
+    """
+    from app.services.signature_service import SignatureService
+    from app.db.models import DocumentSignature
+    
+    try:
+        payload = await request.json()
+        event_type = payload.get("event_type")
+        
+        logger.info(f"Received DigiSigner webhook event: {event_type}")
+        
+        # Handle DOCUMENT_SIGNED event
+        if event_type == "DOCUMENT_SIGNED":
+            document_id = payload.get("document_id")
+            signer_email = payload.get("signer_email")
+            
+            if not document_id:
+                logger.warning("DOCUMENT_SIGNED event missing document_id")
+                return Response(content="DIGISIGNER_EVENT_ACCEPTED", status_code=200)
+            
+            # Find signature by document_id (DigiSigner document ID)
+            signature = db.query(DocumentSignature).filter(
+                DocumentSignature.digisigner_document_id == document_id
+            ).first()
+            
+            if signature:
+                signature_service = SignatureService(db)
+                # Update individual signer status
+                signers = signature.signers or []
+                for signer in signers:
+                    if signer.get("email") == signer_email:
+                        signer["status"] = "signed"
+                        break
+                
+                signature.signers = signers
+                signature.status = "sent"  # Still waiting for other signers
+                db.commit()
+                
+                logger.info(f"Updated signer {signer_email} status for signature {signature.id}")
+            else:
+                logger.warning(f"Signature not found for document_id: {document_id}")
+        
+        # Handle SIGNATURE_REQUEST_COMPLETED event
+        elif event_type == "SIGNATURE_REQUEST_COMPLETED":
+            signature_request_data = payload.get("signature_request", {})
+            signature_request_id = signature_request_data.get("signature_request_id")
+            
+            if not signature_request_id:
+                logger.warning("SIGNATURE_REQUEST_COMPLETED event missing signature_request_id")
+                return Response(content="DIGISIGNER_EVENT_ACCEPTED", status_code=200)
+            
+            signature = db.query(DocumentSignature).filter(
+                DocumentSignature.digisigner_request_id == signature_request_id
+            ).first()
+            
+            if signature:
+                signature_service = SignatureService(db)
+                
+                # Update all signers to signed
+                signers = signature.signers or []
+                for signer in signers:
+                    signer["status"] = "signed"
+                
+                # Get signed document URL from first document
+                documents = signature_request_data.get("documents", [])
+                signed_document_url = None
+                if documents:
+                    # DigiSigner provides download URL in response
+                    from app.core.config import settings
+                    signed_document_url = f"{settings.DIGISIGNER_BASE_URL}/documents/{documents[0].get('document_id')}/download"
+                
+                signature_service.update_signature_status(
+                    signature_id=signature.id,
+                    status="signed",
+                    signed_document_url=signed_document_url
+                )
+                
+                logger.info(f"Signature request {signature_request_id} completed for signature {signature.id}")
+            else:
+                logger.warning(f"Signature not found for request_id: {signature_request_id}")
+        
+        else:
+            logger.warning(f"Unknown event type: {event_type}")
+        
+        # DigiSigner requires this exact response format
+        return Response(content="DIGISIGNER_EVENT_ACCEPTED", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error processing DigiSigner webhook: {e}", exc_info=True)
+        # Still return accepted to prevent retries for malformed requests
+        return Response(content="DIGISIGNER_EVENT_ACCEPTED", status_code=200)
+
+
+# ============================================================================
+# Filing API Endpoints
+# ============================================================================
+
+@router.get("/documents/{document_id}/filing/requirements")
+async def get_filing_requirements(
+    document_id: int,
+    deal_id: Optional[int] = Query(None, description="Optional deal ID for context"),
+    agreement_type: str = Query("facility_agreement", description="Type of agreement"),
+    use_ai_evaluation: bool = Query(True, description="Use AI for filing requirement evaluation"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get filing requirements for a document."""
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        requirements = filing_service.determine_filing_requirements(
+            document_id=document_id,
+            agreement_type=agreement_type,
+            deal_id=deal_id,
+            use_ai_evaluation=use_ai_evaluation
+        )
+        
+        # Convert to dict format
+        requirements_dict = [
+            {
+                "authority": req.authority,
+                "jurisdiction": req.jurisdiction,
+                "agreement_type": req.agreement_type,
+                "filing_system": req.filing_system,
+                "deadline": req.deadline.isoformat() if hasattr(req.deadline, 'isoformat') else str(req.deadline),
+                "required_fields": req.required_fields,
+                "api_available": req.api_available,
+                "api_endpoint": req.api_endpoint,
+                "penalty": req.penalty,
+                "language_requirement": req.language_requirement,
+                "form_type": req.form_type,
+                "priority": req.priority
+            }
+            for req in requirements
+        ]
+        
+        return {
+            "status": "success",
+            "document_id": document_id,
+            "required_filings": requirements_dict
+        }
+    except Exception as e:
+        logger.error(f"Error getting filing requirements: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get filing requirements: {str(e)}"}
+        )
+
+
+class FilingPrepareRequest(BaseModel):
+    """Request model for creating and preparing a filing from a requirement."""
+    document_id: int = Field(..., description="Document ID")
+    filing_requirement: Dict[str, Any] = Field(..., description="Filing requirement data")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID")
+
+
+@router.post("/filings/prepare")
+async def create_and_prepare_filing(
+    request: FilingPrepareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Create a filing from a requirement and prepare it with AI-generated form data."""
+    from app.services.filing_service import FilingService
+    from app.services.policy_service import FilingRequirement
+    
+    try:
+        filing_service = FilingService(db)
+        
+        # Convert dict to FilingRequirement
+        req_data = request.filing_requirement
+        filing_requirement = FilingRequirement(
+            authority=req_data.get("authority", ""),
+            jurisdiction=req_data.get("jurisdiction", ""),
+            agreement_type=req_data.get("agreement_type", "facility_agreement"),
+            filing_system=req_data.get("filing_system", "manual_ui"),
+            deadline=datetime.fromisoformat(req_data["deadline"]) if isinstance(req_data.get("deadline"), str) else req_data.get("deadline", datetime.utcnow()),
+            required_fields=req_data.get("required_fields", []),
+            api_available=req_data.get("api_available", False),
+            api_endpoint=req_data.get("api_endpoint"),
+            penalty=req_data.get("penalty"),
+            language_requirement=req_data.get("language_requirement"),
+            form_type=req_data.get("form_type"),
+            priority=req_data.get("priority", "medium")
+        )
+        
+        # Create and prepare the filing
+        filing = filing_service.prepare_manual_filing(
+            document_id=request.document_id,
+            filing_requirement=filing_requirement
+        )
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="document_filing",
+            target_id=filing.id,
+            user_id=current_user.id,
+            metadata={
+                "document_id": request.document_id,
+                "deal_id": request.deal_id,
+                "authority": filing_requirement.authority,
+                "jurisdiction": filing_requirement.jurisdiction
+            }
+        )
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": "Filing created and prepared",
+            "filing": filing.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Error creating and preparing filing: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to create and prepare filing: {str(e)}"}
+        )
+
+
+@router.post("/filings/{filing_id}/submit-automatic")
+async def submit_automatic_filing(
+    filing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Submit filing automatically via API (UK Companies House)."""
+    from app.services.filing_service import FilingService
+    from app.db.models import DocumentFiling
+    from app.services.policy_service import FilingRequirement
+    
+    filing = db.query(DocumentFiling).filter(DocumentFiling.id == filing_id).first()
+    if not filing:
+        raise HTTPException(status_code=404, detail="Filing not found")
+    
+    if filing.filing_system != "companies_house_api":
+        raise HTTPException(status_code=400, detail="Automatic filing only available for Companies House")
+    
+    try:
+        filing_service = FilingService(db)
+        
+        # Convert DocumentFiling to FilingRequirement
+        requirement = FilingRequirement(
+            authority=filing.filing_authority,
+            filing_system=filing.filing_system,
+            deadline=filing.deadline or datetime.utcnow(),
+            required_fields=[],
+            api_available=True,
+            jurisdiction=filing.jurisdiction,
+            agreement_type=filing.agreement_type
+        )
+        
+        result = filing_service.file_document_automatically(
+            document_id=filing.document_id,
+            filing_requirement=requirement
+        )
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="filing_submission",
+            target_id=result.id,
+            user_id=current_user.id,
+            metadata={"filing_id": filing_id, "filing_reference": result.filing_reference}
+        )
+        
+        return {
+            "status": "success",
+            "filing": result.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Error submitting automatic filing: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to submit filing: {str(e)}"}
+        )
+
+
+@router.post("/filings/{filing_id}/prepare")
+async def prepare_manual_filing(
+    filing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Prepare manual filing with AI-generated pre-filled form data."""
+    from app.services.filing_service import FilingService
+    from app.db.models import DocumentFiling
+    from app.services.policy_service import FilingRequirement
+    
+    filing = db.query(DocumentFiling).filter(DocumentFiling.id == filing_id).first()
+    if not filing:
+        raise HTTPException(status_code=404, detail="Filing not found")
+    
+    try:
+        filing_service = FilingService(db)
+        
+        # Convert DocumentFiling to FilingRequirement
+        requirement = FilingRequirement(
+            authority=filing.filing_authority,
+            filing_system=filing.filing_system,
+            deadline=filing.deadline or datetime.utcnow(),
+            required_fields=[],
+            api_available=False,
+            jurisdiction=filing.jurisdiction,
+            agreement_type=filing.agreement_type,
+            form_type=None,
+            language_requirement=None
+        )
+        
+        result = filing_service.prepare_manual_filing(
+            document_id=filing.document_id,
+            filing_requirement=requirement
+        )
+        
+        return {
+            "status": "success",
+            "filing": result.to_dict(),
+            "form_data": result.filing_payload
+        }
+    except Exception as e:
+        logger.error(f"Error preparing manual filing: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to prepare filing: {str(e)}"}
+        )
+
+
+class ManualFilingSubmissionModel(BaseModel):
+    """Request model for manual filing submission."""
+    filing_reference: str = Field(..., description="External filing reference from portal")
+    submission_notes: Optional[str] = Field(None, description="Notes from manual submission")
+
+
+@router.post("/filings/{filing_id}/submit-manual")
+async def submit_manual_filing(
+    filing_id: int,
+    request: ManualFilingSubmissionModel,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Update manual filing status after user submits via external portal."""
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        result = filing_service.update_manual_filing_status(
+            filing_id=filing_id,
+            filing_reference=request.filing_reference,
+            submission_notes=request.submission_notes,
+            submitted_by=current_user.id
+        )
+        
+        log_audit_action(
+            db=db,
+            action=AuditAction.UPDATE,
+            target_type="filing_submission",
+            target_id=filing_id,
+            user_id=current_user.id,
+            metadata={"filing_reference": request.filing_reference}
+        )
+        
+        return {
+            "status": "success",
+            "filing": result.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Error updating manual filing status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to update filing status: {str(e)}"}
+        )
+
+
+@router.get("/filings/{filing_id}")
+async def get_filing_status(
+    filing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get filing status."""
+    from app.db.models import DocumentFiling
+    
+    filing = db.query(DocumentFiling).filter(DocumentFiling.id == filing_id).first()
+    if not filing:
+        raise HTTPException(status_code=404, detail="Filing not found")
+    
+    return {
+        "status": "success",
+        "filing": filing.to_dict()
+    }
+
+
+@router.post("/payments/process/{payload}")
+async def process_payment_link(
+    payload: str,
+    payment_payload: Optional[Dict[str, Any]] = Body(None, description="x402 payment payload from wallet"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Process payment link and complete payment flow.
+    
+    This endpoint:
+    1. Parses the encrypted payment link payload
+    2. Extracts payment information (amount, currency, type, etc.)
+    3. Processes payment via x402 if payment_payload provided
+    4. Updates related records (notarization, tranche purchase, etc.)
+    5. Creates CDM PaymentEvent
+    
+    Args:
+        payload: Encrypted payment link payload
+        payment_payload: Optional x402 payment payload from wallet
+        db: Database session
+        current_user: Current authenticated user (optional for public links)
+    
+    Returns:
+        Payment processing result or 402 Payment Required
+    """
+    from app.utils.link_payload import LinkPayloadGenerator
+    from app.services.x402_payment_service import X402PaymentService, get_x402_payment_service
+    from app.services.notarization_payment_service import NotarizationPaymentService
+    from app.models.cdm import Party, Money, Currency
+    from app.models.cdm_payment import PaymentEvent, PaymentType, PaymentMethod
+    from app.db.models import PaymentEvent as PaymentEventModel, NotarizationRecord
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # Parse payload
+        payload_generator = LinkPayloadGenerator()
+        link_data = payload_generator.parse_payment_link_payload(payload)
+        
+        if not link_data:
+            raise HTTPException(status_code=400, detail="Invalid or expired payment link")
+        
+        payment_id = link_data["payment_id"]
+        payment_type = link_data["payment_type"]
+        amount = link_data["amount"]
+        currency = link_data["currency"]
+        notarization_id = link_data.get("notarization_id")
+        deal_id = link_data.get("deal_id")
+        pool_id = link_data.get("pool_id")
+        tranche_id = link_data.get("tranche_id")
+        facilitator_url = link_data.get("facilitator_url")
+        
+        # Get payment service
+        payment_service = get_x402_payment_service(request) if request else None
+        if not payment_service:
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": "x402 payment service is not available"}
+            )
+        
+        # Process payment based on type
+        if payment_type == "notarization_fee":
+            if not notarization_id:
+                raise HTTPException(status_code=400, detail="Notarization ID missing from payment link")
+            
+            notarization = db.query(NotarizationRecord).filter(
+                NotarizationRecord.id == notarization_id
+            ).first()
+            
+            if not notarization:
+                raise HTTPException(status_code=404, detail="Notarization not found")
+            
+            # Process notarization payment
+            notarization_payment_service = NotarizationPaymentService(db, payment_service)
+            
+            payer_party = Party(
+                id=link_data.get("payer_info", {}).get("wallet_address", "unknown"),
+                name=link_data.get("payer_info", {}).get("name", "Unknown"),
+                lei=None
+            )
+            
+            receiver_party = Party(
+                id=link_data.get("receiver_info", {}).get("wallet_address", "system"),
+                name=link_data.get("receiver_info", {}).get("name", "CreditNexus System"),
+                lei=None
+            )
+            
+            if not payment_payload:
+                # Return 402 Payment Required
+                fee = notarization_payment_service.get_notarization_fee()
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "status": "Payment Required",
+                        "payment_id": payment_id,
+                        "notarization_id": notarization_id,
+                        "amount": str(fee.amount),
+                        "currency": fee.currency.value,
+                        "payment_type": payment_type,
+                        "facilitator_url": facilitator_url or payment_service.facilitator_url
+                    }
+                )
+            
+            # Process payment
+            payment_result = await notarization_payment_service.request_notarization_payment(
+                notarization=notarization,
+                payer=payer_party,
+                receiver=receiver_party,
+                payment_payload=payment_payload
+            )
+            
+            if payment_result.get("status") == "paid":
+                # Update notarization record
+                payment_event_data = payment_result.get("payment_event_data")
+                if payment_event_data:
+                    payment_event = PaymentEventModel(**payment_event_data)
+                    payment_event.related_notarization_id = notarization_id
+                    db.add(payment_event)
+                    db.flush()
+                    
+                    notarization.payment_event_id = payment_event.id
+                    notarization.payment_status = "paid"
+                    notarization.payment_transaction_hash = payment_event.transaction_hash
+                    db.commit()
+                
+                return {
+                    "status": "success",
+                    "payment_id": payment_id,
+                    "notarization_id": notarization_id,
+                    "transaction_hash": payment_result.get("transaction_hash"),
+                    "message": "Payment processed successfully"
+                }
+            else:
+                return JSONResponse(
+                    status_code=402,
+                    content=payment_result
+                )
+        
+        elif payment_type == "tranche_purchase":
+            # Handle tranche purchase payment
+            if not pool_id or not tranche_id:
+                raise HTTPException(status_code=400, detail="Pool ID or Tranche ID missing from payment link")
+            
+            from app.services.securitization_service import SecuritizationService
+            
+            service = SecuritizationService(db)
+            
+            # Get pool to find pool_id string
+            from app.db.models import SecuritizationPool, SecuritizationTranche
+            pool = db.query(SecuritizationPool).filter(SecuritizationPool.id == pool_id).first()
+            if not pool:
+                raise HTTPException(status_code=404, detail="Securitization pool not found")
+            
+            tranche_db = db.query(SecuritizationTranche).filter(
+                SecuritizationTranche.id == tranche_id
+            ).first()
+            if not tranche_db:
+                raise HTTPException(status_code=404, detail="Tranche not found")
+            
+            if not payment_payload:
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "status": "Payment Required",
+                        "payment_id": payment_id,
+                        "pool_id": pool_id,
+                        "tranche_id": tranche_id,
+                        "amount": str(tranche_db.size),
+                        "currency": tranche_db.currency,
+                        "payment_type": payment_type,
+                        "facilitator_url": facilitator_url or payment_service.facilitator_url
+                    }
+                )
+            
+            # Process tranche purchase
+            buyer_id = link_data.get("payer_info", {}).get("user_id")
+            if not buyer_id and current_user:
+                buyer_id = current_user.id
+            
+            if not buyer_id:
+                raise HTTPException(status_code=400, detail="Buyer user ID required")
+            
+            result = service.purchase_tranche_with_payment(
+                pool_id=pool.pool_id,
+                tranche_id=tranche_db.tranche_name,
+                buyer_id=buyer_id,
+                payment_payload=payment_payload,
+                payment_service=payment_service
+            )
+            
+            if result.get("status") == "payment_required":
+                return JSONResponse(status_code=402, content=result)
+            
+            return {
+                "status": "success",
+                "payment_id": payment_id,
+                "pool_id": pool_id,
+                "tranche_id": tranche_id,
+                "transaction_hash": result.get("transaction_hash"),
+                "message": "Tranche purchase completed successfully"
+            }
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported payment type: {payment_type}"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process payment link: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to process payment: {str(e)}"}
+        )
+
+
+@router.get("/filings/deadline-alerts")
+async def get_deadline_alerts(
+    deal_id: Optional[int] = Query(None, description="Optional deal ID to filter"),
+    document_id: Optional[int] = Query(None, description="Optional document ID to filter"),
+    days_ahead: int = Query(7, ge=1, le=365, description="Number of days ahead to check (max 365)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get deadline alerts for approaching filing deadlines."""
+    from app.services.policy_service import PolicyService
+    from app.services.policy_engine_factory import get_policy_engine
+    
+    try:
+        policy_service = PolicyService(get_policy_engine())
+        alerts = policy_service.check_filing_deadlines(
+            deal_id=deal_id,
+            document_id=document_id,
+            days_ahead=days_ahead
+        )
+        
+        alerts_dict = [
+            {
+                "filing_id": alert.filing_id,
+                "document_id": alert.document_id,
+                "deal_id": alert.deal_id,
+                "authority": alert.authority,
+                "deadline": alert.deadline.isoformat() if hasattr(alert.deadline, 'isoformat') else str(alert.deadline),
+                "days_remaining": alert.days_remaining,
+                "urgency": alert.urgency,
+                "penalty": alert.penalty
+            }
+            for alert in alerts
+        ]
+        
+        return {
+            "status": "success",
+            "alerts": alerts_dict
+        }
+    except Exception as e:
+        logger.error(f"Error getting deadline alerts: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get deadline alerts: {str(e)}"}
         )

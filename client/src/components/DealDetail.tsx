@@ -20,10 +20,13 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
+  Share2
 } from 'lucide-react';
 import { SkeletonDocumentList } from '@/components/ui/skeleton';
 import { DealTimeline, type TimelineEvent as DealTimelineEvent } from '@/components/DealTimeline';
+import { FilingRequirementsPanel } from '@/components/FilingRequirementsPanel';
+import { NotarizationPayment } from '@/components/NotarizationPayment';
 
 interface Deal {
   id: number;
@@ -81,7 +84,7 @@ export function DealDetail() {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteType, setNewNoteType] = useState('general');
   const [submittingNote, setSubmittingNote] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'notes' | 'timeline'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'notes' | 'timeline' | 'filings'>('overview');
 
   useEffect(() => {
     if (dealId) {
@@ -263,15 +266,26 @@ export function DealDetail() {
             <p className="text-slate-400 mt-1">Deal Details</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          onClick={fetchDealDetail}
-          className="text-slate-400 hover:text-slate-100"
-          disabled={loading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(`/app/workflow/share?view=create&dealId=${deal.id}`)}
+            className="text-slate-400 hover:text-slate-100"
+            title="Share workflow link for this deal"
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            Share Workflow
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={fetchDealDetail}
+            className="text-slate-400 hover:text-slate-100"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -356,35 +370,64 @@ export function DealDetail() {
         >
           Timeline ({timeline?.length || 0})
         </button>
+        <button
+          onClick={() => setActiveTab('filings')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'filings'
+              ? 'text-emerald-400 border-b-2 border-emerald-400'
+              : 'text-slate-400 hover:text-slate-100'
+          }`}
+        >
+          Filings
+        </button>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Summary</h3>
-                <p className="text-slate-400">
-                  Deal ID: <span className="text-slate-100">{deal.deal_id}</span>
-                </p>
-                {deal.application_id && (
-                  <p className="text-slate-400 mt-2">
-                    Application ID: <span className="text-slate-100">{deal.application_id}</span>
+        <div className="space-y-4">
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Summary</h3>
+                  <p className="text-slate-400">
+                    Deal ID: <span className="text-slate-100">{deal.deal_id}</span>
                   </p>
+                  {deal.application_id && (
+                    <p className="text-slate-400 mt-2">
+                      Application ID: <span className="text-slate-100">{deal.application_id}</span>
+                    </p>
+                  )}
+                </div>
+                {deal.deal_data && Object.keys(deal.deal_data).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Data</h3>
+                    <pre className="bg-slate-900 p-4 rounded-lg text-sm text-slate-300 overflow-auto">
+                      {JSON.stringify(deal.deal_data, null, 2)}
+                    </pre>
+                  </div>
                 )}
               </div>
-              {deal.deal_data && Object.keys(deal.deal_data).length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Deal Data</h3>
-                  <pre className="bg-slate-900 p-4 rounded-lg text-sm text-slate-300 overflow-auto">
-                    {JSON.stringify(deal.deal_data, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Notarization Payment Component */}
+          <NotarizationPayment
+            dealId={deal.id}
+            onPaymentComplete={(transactionHash) => {
+              // Refresh deal details after payment
+              fetchDealDetail();
+              console.log('Payment completed:', transactionHash);
+            }}
+            onPaymentSkipped={() => {
+              // Refresh deal details after skip
+              fetchDealDetail();
+            }}
+            onError={(error) => {
+              setError(error);
+            }}
+          />
+        </div>
       )}
 
       {activeTab === 'documents' && (
@@ -548,6 +591,38 @@ export function DealDetail() {
             dealStatus={deal?.status}
             className="w-full"
           />
+        </div>
+      )}
+
+      {activeTab === 'filings' && (
+        <div className="space-y-4">
+          {documents.length === 0 ? (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardContent className="p-6 text-center text-slate-400">
+                No documents available for filing requirements
+              </CardContent>
+            </Card>
+          ) : (
+            documents.map((doc) => (
+              <div key={doc.id} className="space-y-4">
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardHeader>
+                    <CardTitle className="text-slate-100 flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      {doc.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FilingRequirementsPanel
+                      documentId={doc.id}
+                      dealId={deal.id}
+                      agreementType="facility_agreement"
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
