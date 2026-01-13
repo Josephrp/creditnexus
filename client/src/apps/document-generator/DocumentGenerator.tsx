@@ -112,7 +112,7 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
               if (cdmResponse.ok) {
                 const responseData = await cdmResponse.json();
                 // Include document even if CDM data is missing (show with 0 completeness)
-                let cdmData = responseData.cdm_data;
+                const cdmData = responseData.cdm_data;
                 let completenessScore = 0;
                 
                 if (cdmData) {

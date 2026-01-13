@@ -140,7 +140,7 @@ def create_messenger(
         return None
 
 
-def send_verification_link(
+async def send_verification_link(
     messenger: MessengerInterface,
     recipient: str,
     verification_id: str,

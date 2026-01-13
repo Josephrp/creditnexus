@@ -6,7 +6,6 @@ import {
   TrendingDown,
   TrendingUp,
   Building2,
-  DollarSign,
   Shield,
   CheckCircle,
   BarChart3

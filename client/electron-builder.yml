@@ -1,0 +1,37 @@
+appId: com.creditnexus.desktop
+productName: CreditNexus
+files:
+  - filter:
+      - "dist/**"
+      - "electron/**"
+extraMetadata:
+  main: electron/main.mjs
+asar: true
+directories:
+  output: dist/desktop
+  buildResources: electron/resources
+extraResources:
+  - from: ../dist/creditnexus-backend
+    to: creditnexus-backend
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - nsis
+  artifactName: "${productName}-${version}-win.${ext}"
+mac:
+  target:
+    - dmg
+  category: public.app-category.finance
+linux:
+  target:
+    - AppImage
+    - tar.xz
+  category: Finance
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+publish: null

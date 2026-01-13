@@ -6,14 +6,27 @@ type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 interface Toast {
   id: string;
-  message: string;
+  message?: string;
+  title?: string;
+  description?: string;
   type: ToastType;
   duration?: number;
 }
 
+type ToastOptions = {
+  title?: string;
+  description?: string;
+  message?: string;
+  type?: ToastType;
+  duration?: number;
+};
+
 interface ToastContextType {
   toasts: Toast[];
-  addToast: (message: string, type?: ToastType, duration?: number) => void;
+  addToast: {
+    (message: string, type?: ToastType, duration?: number): void;
+    (options: ToastOptions): void;
+  };
   removeToast: (id: string) => void;
 }
 
@@ -48,7 +61,13 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
       role="alert"
     >
       {toastIcons[toast.type]}
-      <p className="text-sm text-slate-100 flex-1">{toast.message}</p>
+      <div className="flex-1">
+        {toast.title && <p className="text-sm font-semibold text-slate-100">{toast.title}</p>}
+        {toast.description && <p className="text-sm text-slate-300">{toast.description}</p>}
+        {!toast.title && !toast.description && (
+          <p className="text-sm text-slate-100">{toast.message}</p>
+        )}
+      </div>
       <button
         onClick={onRemove}
         className="text-slate-400 hover:text-white transition-colors"
@@ -63,18 +82,39 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType = 'info', duration = 5000) => {
-    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newToast: Toast = { id, message, type, duration };
-    
-    setToasts(prev => [...prev, newToast]);
-    
-    if (duration > 0) {
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-      }, duration);
-    }
-  }, []);
+  const addToast = useCallback(
+    (arg1: string | ToastOptions, arg2: ToastType = 'info', arg3 = 5000) => {
+      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      let toast: Toast;
+
+      if (typeof arg1 === 'string') {
+        toast = {
+          id,
+          message: arg1,
+          type: arg2,
+          duration: arg3,
+        };
+      } else {
+        toast = {
+          id,
+          title: arg1.title,
+          description: arg1.description ?? arg1.message,
+          message: arg1.message,
+          type: arg1.type ?? 'info',
+          duration: arg1.duration ?? 5000,
+        };
+      }
+
+      setToasts(prev => [...prev, toast]);
+
+      if ((toast.duration ?? 0) > 0) {
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, toast.duration);
+      }
+    },
+    []
+  );
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

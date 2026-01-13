@@ -17,28 +17,20 @@ interface UseMetaMaskReturn {
 declare global {
   interface Window {
     ethereum?: any
-  web3?: any
-  injectedWeb3?: any
-  web3_currentProvider?: any
-  ethereum_autoRefreshOnNetworkChange?: boolean
-  ethereum_isMetaMask?: boolean
-  ethereum_selectedAddress?: string
-  ethereum_chainId?: string
-  ethereum_requestAccounts?: () => Promise<any>
-  ethereum_sendAsync?: (payload: any) => Promise<any>
-  ethereum_signMessage?: (params: { from: string; data: string }) => Promise<any>
-  ethereum_on?: { (event: string, handler: (args: any) => void) => void }
-  ethereum_removeListener?: (event: string, handler: (args: any) => void) => void
-  ethereum_autoRefreshOnNetworkChange?: boolean
-  ethereum_isMetaMask?: boolean
-  ethereum_networkVersion?: string
-  ethereum_selectedAddress?: string
-  ethereum_chainId?: string
-  ethereum_requestAccounts?: () => Promise<any>
-  ethereum_sendAsync?: (payload: any) => Promise<any>
-  ethereum_signMessage?: (params: { from: string; data: string }) => Promise<any>
-  ethereum_on?: { (event: string, handler: (args: any) => void) => void }
-  ethereum_removeListener?: (event: string, handler: (args: any) => void) => void }
+    web3?: any
+    injectedWeb3?: any
+    web3_currentProvider?: any
+    ethereum_autoRefreshOnNetworkChange?: boolean
+    ethereum_isMetaMask?: boolean
+    ethereum_selectedAddress?: string
+    ethereum_chainId?: string
+    ethereum_requestAccounts?: () => Promise<any>
+    ethereum_sendAsync?: (payload: any) => Promise<any>
+    ethereum_signMessage?: (params: { from: string; data: string }) => Promise<any>
+    ethereum_on?: (event: string, handler: (args: any) => void) => void
+    ethereum_removeListener?: (event: string, handler: (args: any) => void) => void
+    ethereum_networkVersion?: string
+  }
 }
 
 export function useMetaMask(): UseMetaMaskReturn {
