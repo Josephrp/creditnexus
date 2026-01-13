@@ -1,12 +1,13 @@
 # PowerShell script to run CreditNexus in OpenFin
 # This script starts the backend server and frontend, then launches OpenFin
+# Usage: .\scripts\run_openfin.ps1
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "CreditNexus OpenFin Startup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Get the project root directory
-$projectRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
+# Get project root (one level up from scripts directory)
+$projectRoot = if ($PSScriptRoot) { Split-Path $PSScriptRoot -Parent } else { Get-Location }
 Write-Host "`nProject root: $projectRoot" -ForegroundColor Yellow
 
 # Check if .env exists

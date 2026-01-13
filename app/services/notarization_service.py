@@ -15,6 +15,7 @@ from app.utils.crypto_verification import (
     compute_payload_hash,
 )
 from app.models.cdm_events import generate_cdm_notarization_event
+from app.services.cdm_payload_generator import get_deal_cdm_payload
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class NotarizationService:
             raise ValueError(f"Deal {deal_id} not found")
 
         # Get or create CDM payload
-        cdm_payload = self._get_deal_cdm_payload(deal)
+        cdm_payload = get_deal_cdm_payload(self.db, deal)
 
         # Generate hash
         notarization_hash = compute_payload_hash(cdm_payload)
@@ -234,14 +235,4 @@ class NotarizationService:
 
         return notarization
 
-    def _get_deal_cdm_payload(self, deal: Deal) -> Dict[str, Any]:
-        """Get CDM payload for deal."""
-        # TODO: Implement full CDM payload generation from deal.deal_data
-        return {
-            "deal_id": deal.id,
-            "deal_id_str": deal.deal_id,
-            "borrower_name": "",  # TODO: Extract from deal data
-            "total_commitment": "",  # TODO: Extract from deal data
-            "currency": "",  # TODO: Extract from deal data
-            "sustainability_covenants": [],  # TODO: Extract from deal data
-        }
+

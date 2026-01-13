@@ -1,10 +1,11 @@
 # Quick launcher for OpenFin after backend/frontend are running
-# Usage: .\launch_openfin.ps1
+# Usage: .\scripts\launch_openfin.ps1
 
 Write-Host "CreditNexus OpenFin Launcher" -ForegroundColor Cyan
 Write-Host "=============================" -ForegroundColor Cyan
 
-$projectRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
+# Get project root (one level up from scripts directory)
+$projectRoot = if ($PSScriptRoot) { Split-Path $PSScriptRoot -Parent } else { Get-Location }
 
 # Check if OpenFin CLI is installed
 if (-not (Get-Command openfin -ErrorAction SilentlyContinue)) {

@@ -1,11 +1,14 @@
 #!/bin/bash
 # Bash script to run CreditNexus backend and frontend for OpenFin (for Unix/Linux/Mac)
+# Usage: ./scripts/run_openfin.sh
 
 echo "========================================"
 echo "CreditNexus OpenFin Startup"
 echo "========================================"
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get project root (one level up from scripts directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo ""
 echo "Project root: $PROJECT_ROOT"
 

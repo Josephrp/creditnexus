@@ -197,6 +197,180 @@ The platform components are designed to work as a "Chain of Command" using the *
 
 ---
 
+## 🖥️ OpenFin Desktop Integration
+
+CreditNexus supports **OpenFin Runtime** for enterprise desktop deployment with FDC3 2.0 interoperability. This enables seamless integration with other financial applications in a desktop environment.
+
+### Prerequisites
+
+1. **OpenFin Runtime** - Install the OpenFin Runtime:
+   ```powershell
+   # Using OpenFin CLI
+   npm install -g @openfin/cli
+   ```
+   
+   Or download from: https://openfin.co/
+
+2. **Node.js & npm** - For running the frontend
+3. **Python 3.10+** - For running the backend
+4. **.env file** - Already configured in the project root
+
+### Quick Start
+
+**Windows (PowerShell):**
+```powershell
+# Make sure you're in the project root
+.\scripts\run_openfin.ps1
+```
+
+**Mac/Linux:**
+```bash
+cd /path/to/creditnexus
+bash scripts/run_openfin.sh
+```
+
+This script automatically:
+1. Starts the backend server on `http://127.0.0.1:8000`
+2. Starts the frontend dev server on `http://localhost:5173`
+3. Launches OpenFin with the configured app manifest
+
+**Quick Launch (if services already running):**
+```powershell
+.\scripts\launch_openfin.ps1
+```
+
+### Manual Startup (Advanced)
+
+If you prefer to run services separately, open multiple terminals:
+
+**Terminal 1 - Backend Server:**
+```powershell
+python scripts/run_dev.py
+# Server runs at: http://127.0.0.1:8000
+```
+
+**Terminal 2 - Frontend Dev Server:**
+```powershell
+cd client
+npm run dev
+# Frontend runs at: http://localhost:5173
+```
+
+**Terminal 3 - Launch OpenFin:**
+```powershell
+openfin launch --config openfin/app.json
+```
+
+### What Happens
+
+1. **Backend Server** starts on `http://127.0.0.1:8000`
+   - FastAPI application
+   - Hot reload enabled
+   - Serves API endpoints and static files
+
+2. **Frontend Dev Server** starts on `http://localhost:5173`
+   - Vite development server
+   - Hot module replacement (HMR) enabled
+   - React application with TypeScript
+
+3. **OpenFin Runtime** launches the application
+   - Configured in `openfin/app.json`
+   - Platform UUID: `creditnexus-platform`
+   - Loads frontend from `http://localhost:8000` (redirected from Vite)
+   - Includes FDC3 interoperability
+
+### Configuration
+
+The configuration is in `openfin/app.json`:
+
+- **Platform**: creditnexus-platform
+- **Default Window**: 1400×900 pixels
+- **Entry Point**: http://localhost:8000
+- **Security Realm**: creditnexus
+- **FDC3 Interop**: 2.0
+
+**Configuration Files:**
+- **App Manifest**: `openfin/app.json` - Platform configuration, window layout, FDC3 settings
+- **FDC3 Intents**: `openfin/fdc3-intents.json` - Intent declarations and context types
+- **Provider Config**: `openfin/provider.json` - Service provider setup
+
+### Troubleshooting
+
+**Backend Won't Start:**
+```powershell
+# Check if port 8000 is in use
+netstat -ano | findstr :8000
+
+# Install Python dependencies
+uv sync
+```
+
+**Frontend Won't Start:**
+```powershell
+# Install Node dependencies
+cd client
+npm install
+```
+
+**OpenFin Won't Launch:**
+```powershell
+# Verify OpenFin CLI is installed
+openfin --version
+
+# Install if needed
+npm install -g @openfin/cli
+```
+
+**Cannot Connect to Services:**
+- Ensure firewall allows localhost traffic
+- Check that ports 8000 and 5173 are available
+- Verify .env file has correct DATABASE_URL
+
+### Stopping Services
+
+**From the startup script:**
+Press `Ctrl+C` in each service window
+
+**Manual cleanup:**
+- Close OpenFin applications
+- Stop frontend terminal with Ctrl+C
+- Stop backend terminal with Ctrl+C
+
+### Production Build
+
+To build the frontend for production:
+
+```powershell
+cd client
+npm run build
+# Output goes to: client/dist
+```
+
+Then configure `openfin/app.json` to point to the production build location.
+
+### Development Tips
+
+- **Hot Reload**: Both backend and frontend support hot reload during development
+- **FDC3 Messages**: Use FDC3 2.0 for inter-window communication
+- **Redux DevTools**: Available in Chrome DevTools for the React app
+- **API Debugging**: Backend API available at http://127.0.0.1:8000/docs (OpenAPI)
+
+### Features
+
+- **FDC3 2.0 Interoperability**: Native support for context broadcasting and intent handling
+- **Desktop Integration**: Seamless integration with other OpenFin applications
+- **Platform Management**: Multi-window platform with workspace support
+- **Security**: Configurable security realms and CORS policies
+
+### More Information
+
+- [OpenFin Documentation](https://developers.openfin.co/)
+- [FDC3 Specification](https://fdc3.finos.org/)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [Vite Documentation](https://vitejs.dev/)
+
+---
+
 ## 🏗️ Architecture Stack
 
 ### Frontend

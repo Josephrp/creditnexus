@@ -7992,6 +7992,20 @@ class WalletAuthRequest(BaseModel):
     message: str = Field(..., description="Message that was signed")
 
 
+class AutoLoginRequest(BaseModel):
+    """Request model for wallet auto-login (hot login)."""
+    wallet_address: str = Field(..., description="Ethereum wallet address")
+
+
+class WalletSignupRequest(BaseModel):
+    """Request model for wallet signup with enhanced user information."""
+    wallet_address: str = Field(..., description="Ethereum wallet address")
+    signature: str = Field(..., description="Signed message signature")
+    message: str = Field(..., description="Message that was signed")
+    email: Optional[str] = Field(None, description="User email address (optional but recommended)")
+    display_name: Optional[str] = Field(None, description="User display name (optional but recommended)")
+
+
 @router.post("/auth/wallet/nonce")
 async def get_wallet_nonce(
     request: dict,
@@ -8026,19 +8040,45 @@ async def wallet_authentication(
     request: WalletAuthRequest,
     db: Session = Depends(get_db)
 ):
-    """Authenticate using wallet signature (placeholder - requires cryptographic verification)."""
-    # TODO: Implement cryptographic signature verification
-    # For now, this is a placeholder that finds or creates a user by wallet address
+    """Authenticate using wallet signature with cryptographic verification."""
+    from app.utils.crypto_verification import (
+        verify_ethereum_signature,
+        normalize_wallet_address,
+        validate_wallet_address
+    )
+    
+    # Normalize wallet address to checksum format
+    normalized_address = normalize_wallet_address(request.wallet_address)
+    
+    # Validate wallet address format
+    if not validate_wallet_address(normalized_address):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid wallet address format"
+        )
+    
+    # Verify signature cryptographically
+    is_valid = verify_ethereum_signature(
+        message=request.message,
+        signature=request.signature,
+        wallet_address=normalized_address
+    )
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid signature. Signature does not match wallet address."
+        )
     
     # Find existing user by wallet address
-    user = db.query(User).filter(User.wallet_address == request.wallet_address.lower()).first()
+    user = db.query(User).filter(User.wallet_address == normalized_address.lower()).first()
     
     if not user:
         # Create new user with wallet address
         user = User(
-            email=f"{request.wallet_address[:8]}@wallet.local",
-            display_name=f"Wallet {request.wallet_address[:8]}",
-            wallet_address=request.wallet_address.lower(),
+            email=f"{normalized_address[:8]}@wallet.local",
+            display_name=f"Wallet {normalized_address[:8]}",
+            wallet_address=normalized_address.lower(),
             role="viewer",
             is_active=True
         )
@@ -8059,6 +8099,218 @@ async def wallet_authentication(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": user.to_dict()
+    }
+
+
+@router.post("/auth/wallet/auto-login")
+async def wallet_auto_login(
+    request: AutoLoginRequest,
+    db: Session = Depends(get_db)
+):
+    """Auto-login endpoint for wallet-based hot login (session persistence).
+    
+    This endpoint allows users to automatically log in if they have a valid
+    refresh token. If no valid token exists, returns signup_required status
+    to prompt for full authentication.
+    
+    Args:
+        request: AutoLoginRequest with wallet_address
+        
+    Returns:
+        - If user exists and has valid refresh token: tokens and user data
+        - If user doesn't exist: signup_required status
+        - If no valid token: authentication_required status
+    """
+    from app.utils.crypto_verification import normalize_wallet_address, validate_wallet_address
+    from app.auth.jwt_auth import create_access_token, create_refresh_token
+    from app.db.models import RefreshToken
+    from datetime import datetime
+    
+    # Normalize and validate wallet address
+    normalized_address = normalize_wallet_address(request.wallet_address)
+    
+    if not validate_wallet_address(normalized_address):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid wallet address format"
+        )
+    
+    # Find user by wallet address
+    user = db.query(User).filter(User.wallet_address == normalized_address.lower()).first()
+    
+    if not user:
+        # User doesn't exist - requires signup
+        return {
+            "status": "signup_required",
+            "message": "Wallet not registered. Please complete signup.",
+            "wallet_address": normalized_address
+        }
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="User account is inactive"
+        )
+    
+    # Check for valid refresh token (not revoked and not expired)
+    valid_refresh_token = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.is_revoked == False,
+        RefreshToken.expires_at > datetime.utcnow()
+    ).order_by(RefreshToken.expires_at.desc()).first()
+    
+    if valid_refresh_token:
+        # User has valid session - generate new tokens
+        access_token = create_access_token({"sub": str(user.id), "email": user.email})
+        refresh_token = create_refresh_token({"sub": str(user.id)}, db)
+        
+        log_audit_action(
+            db, 
+            AuditAction.LOGIN, 
+            "user", 
+            user.id, 
+            user.id, 
+            metadata={"method": "wallet_auto_login"}
+        )
+        
+        return {
+            "status": "success",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": user.to_dict()
+        }
+    else:
+        # No valid session - requires full authentication
+        return {
+            "status": "authentication_required",
+            "message": "No valid session found. Please sign in with your wallet.",
+            "wallet_address": normalized_address
+        }
+
+
+@router.post("/auth/wallet/signup")
+async def wallet_signup(
+    request: WalletSignupRequest,
+    db: Session = Depends(get_db)
+):
+    """Signup endpoint for wallet-based authentication with enhanced user information.
+    
+    This endpoint allows new users to create an account using their wallet address.
+    Users can optionally provide email and display_name for a better experience.
+    
+    Args:
+        request: WalletSignupRequest with wallet_address, signature, message, and optional email/display_name
+        
+    Returns:
+        - If successful: tokens and user data
+        - If user already exists: error indicating user exists
+        - If signature invalid: authentication error
+    """
+    from app.utils.crypto_verification import (
+        verify_ethereum_signature,
+        normalize_wallet_address,
+        validate_wallet_address
+    )
+    from app.auth.jwt_auth import create_access_token, create_refresh_token
+    
+    # Normalize wallet address to checksum format
+    normalized_address = normalize_wallet_address(request.wallet_address)
+    
+    # Validate wallet address format
+    if not validate_wallet_address(normalized_address):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid wallet address format"
+        )
+    
+    # Verify signature cryptographically
+    is_valid = verify_ethereum_signature(
+        message=request.message,
+        signature=request.signature,
+        wallet_address=normalized_address
+    )
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid signature. Signature does not match wallet address."
+        )
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.wallet_address == normalized_address.lower()).first()
+    
+    if existing_user:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "user_exists",
+                "message": "A user with this wallet address already exists. Please use login instead.",
+                "wallet_address": normalized_address
+            }
+        )
+    
+    # Validate email format if provided
+    email = request.email
+    if email:
+        # Basic email validation
+        if "@" not in email or "." not in email.split("@")[1]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid email format"
+            )
+        # Check if email is already in use
+        email_user = db.query(User).filter(User.email == email.lower()).first()
+        if email_user:
+            raise HTTPException(
+                status_code=409,
+                detail="Email address is already registered"
+            )
+    else:
+        # Generate default email if not provided
+        email = f"{normalized_address[:8]}@wallet.local"
+    
+    # Use provided display_name or generate default
+    display_name = request.display_name or f"Wallet {normalized_address[:8]}"
+    
+    # Create new user
+    user = User(
+        email=email.lower() if email else f"{normalized_address[:8]}@wallet.local",
+        display_name=display_name,
+        wallet_address=normalized_address.lower(),
+        role="viewer",  # Default role
+        is_active=True
+    )
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Generate JWT tokens
+    access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    refresh_token = create_refresh_token({"sub": str(user.id)}, db)
+    
+    # Log signup action
+    log_audit_action(
+        db,
+        AuditAction.CREATE,
+        "user",
+        user.id,
+        user.id,
+        metadata={
+            "method": "wallet_signup",
+            "email_provided": bool(request.email),
+            "display_name_provided": bool(request.display_name)
+        }
+    )
+    
+    return {
+        "status": "success",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user.to_dict(),
+        "message": "Account created successfully"
     }
 
 
