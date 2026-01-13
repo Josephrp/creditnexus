@@ -3886,7 +3886,7 @@ async def list_audit_logs(
     try:
         query = db.query(AuditLog).options(joinedload(AuditLog.user))
         
-        if current_user.role not in ["admin", "reviewer"]:
+        if current_user.role not in ["admin", "reviewer", "auditor"]:
             query = query.filter(AuditLog.user_id == current_user.id)
         
         if action:
@@ -3905,7 +3905,7 @@ async def list_audit_logs(
             query = query.filter(AuditLog.target_id == target_id)
         
         if user_id:
-            if current_user.role in ["admin", "reviewer"]:
+            if current_user.role in ["admin", "reviewer", "auditor"]:
                 query = query.filter(AuditLog.user_id == user_id)
         
         if start_date:
