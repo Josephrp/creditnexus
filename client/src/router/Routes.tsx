@@ -14,6 +14,8 @@ import { BusinessLanding } from '@/sites/businesses/BusinessLanding';
 import { DisbursementPage } from '@/sites/payments/DisbursementPage';
 import { ReceiptPage } from '@/sites/payments/ReceiptPage';
 import { MetaMaskLogin } from '@/sites/metamask/MetaMaskLogin';
+import { VerificationPage } from '@/apps/verification/VerificationPage';
+import { VerificationFileConfigEditor } from '@/apps/verification-config/VerificationFileConfigEditor';
 
 // Placeholder components for microsites (to be implemented)
 // Note: /project and /docs are deployed separately (GitHub Pages and Mintlify)
@@ -185,6 +187,56 @@ export const router = createBrowserRouter(
     ),
   },
   
+  // Auditor routes
+  {
+    path: '/auditor',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/logs/:id',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/deals/:dealId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/loans/:loanId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/filings/:filingId',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/reports',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  
   // Application routes
   {
     path: '/apply/individual',
@@ -279,9 +331,25 @@ export const router = createBrowserRouter(
       </ProtectedRoute>
     ),
   },
-  {
+{
     path: '/metamask',
     element: <MetaMaskLogin />,
+  },
+  
+  // Verification routes (public - no auth required for link viewing)
+  {
+    path: '/verify/:payload',
+    element: <VerificationPage />,
+  },
+  
+  // Admin configuration routes
+  {
+    path: '/config/verification-files',
+    element: (
+      <AdminRoute>
+        <VerificationFileConfigEditor />
+      </AdminRoute>
+    ),
   },
   
   // 404 route
