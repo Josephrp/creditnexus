@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface WalletState {
   isConnected: boolean;
@@ -29,7 +29,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Check if wallet is already connected on mount
   useEffect(() => {
     checkConnection();
-
+    
     // Listen for account changes
     if (typeof window.ethereum !== 'undefined') {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
@@ -266,4 +266,13 @@ export function useWallet() {
   return context;
 }
 
-// Note: window.ethereum types are declared in useMetaMask.ts
+// Extend Window interface for MetaMask
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
+      removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
+    };
+  }
+}

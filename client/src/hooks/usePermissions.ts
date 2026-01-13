@@ -11,6 +11,7 @@ import {
   getRolePermissions,
   roleHasPermission,
   roleHasAnyPermission,
+  roleHasAllPermissions,
 } from '@/utils/permissions';
 
 interface UsePermissionsReturn {
@@ -51,7 +52,7 @@ export function usePermissions(): UsePermissionsReturn {
 
   // Get user's explicit permissions from profile_data or permissions field
   // Note: Backend may store explicit permissions in user.permissions (JSONB) or user.profile_data
-  const explicitPermissions = useMemo<string[]>(() => {
+  const explicitPermissions = useMemo(() => {
     if (!user) return [];
     
     // Check if user has explicit permissions stored
