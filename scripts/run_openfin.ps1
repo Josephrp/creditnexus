@@ -39,29 +39,142 @@ Start-Sleep -Seconds 5
 
 Write-Host "`n3. Launching OpenFin..." -ForegroundColor Green
 
-# Launch OpenFin with the app.json configuration
+# Launch OpenFin using RVM (Runtime Version Manager) via manifest URL
+# This method eliminates the need for the deprecated openfin-cli package
 try {
     $appConfigPath = Join-Path $projectRoot "openfin\app.json"
     
     if (-not (Test-Path $appConfigPath)) {
         Write-Host "   ERROR: OpenFin app.json not found at $appConfigPath" -ForegroundColor Red
+        
+        # #region agent log
+        $logData = @{
+            sessionId = "openfin-migration"
+            runId = "run-script"
+            hypothesisId = "B"
+            location = "run_openfin.ps1:46"
+            message = "Manifest file not found"
+            data = @{
+                expectedPath = $appConfigPath
+            }
+            timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        }
+        $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+        Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+        # #endregion
+        
         exit 1
     }
     
-    # Try to launch with OpenFin Launcher if available
-    if (Get-Command openfin -ErrorAction SilentlyContinue) {
-        Write-Host "   Using OpenFin CLI launcher..." -ForegroundColor Gray
-        & openfin launch --config "$appConfigPath"
-    } else {
-        Write-Host "   WARNING: OpenFin CLI not found." -ForegroundColor Yellow
-        Write-Host "   Install with: npm install -g @openfin/cli" -ForegroundColor Gray
-        Write-Host "   Attempting to serve manifest via backend..." -ForegroundColor Gray
-        # The backend should be serving this from openfin/ directory
-        Start-Process "http://localhost:8000/openfin/app.json"
+    $manifestUrl = "http://localhost:8000/openfin/app.json"
+    
+    # #region agent log
+    $logData = @{
+        sessionId = "openfin-migration"
+        runId = "run-script"
+        hypothesisId = "B"
+        location = "run_openfin.ps1:60"
+        message = "Preparing OpenFin launch"
+        data = @{
+            manifestUrl = $manifestUrl
+            launchMethod = "RVM_URL"
+        }
+        timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+    Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+    # #endregion
+    
+    # Verify backend is serving the manifest
+    try {
+        $response = Invoke-WebRequest -Uri $manifestUrl -Method Head -TimeoutSec 2 -ErrorAction Stop
+        Write-Host "   Backend manifest accessible. Launching via RVM..." -ForegroundColor Gray
+        
+        # #region agent log
+        $logData = @{
+            sessionId = "openfin-migration"
+            runId = "run-script"
+            hypothesisId = "B"
+            location = "run_openfin.ps1:75"
+            message = "Backend manifest check successful"
+            data = @{
+                statusCode = $response.StatusCode
+            }
+            timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        }
+        $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+        Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+        # #endregion
+        
+        # Launch via URL - RVM handles runtime download and app launch
+        Start-Process $manifestUrl
+        
+        # #region agent log
+        $logData = @{
+            sessionId = "openfin-migration"
+            runId = "run-script"
+            hypothesisId = "B"
+            location = "run_openfin.ps1:88"
+            message = "OpenFin launch initiated via RVM"
+            data = @{
+                manifestUrl = $manifestUrl
+            }
+            timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        }
+        $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+        Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+        # #endregion
+        
+        Write-Host "   OpenFin application launch initiated." -ForegroundColor Green
+        Write-Host "   Note: If this is the first launch, OpenFin Runtime may download automatically." -ForegroundColor Yellow
+    } catch {
+        Write-Host "   WARNING: Backend may not be ready yet. Retrying in 2 seconds..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        
+        try {
+            $response = Invoke-WebRequest -Uri $manifestUrl -Method Head -TimeoutSec 2 -ErrorAction Stop
+            Start-Process $manifestUrl
+            Write-Host "   OpenFin application launch initiated (retry successful)." -ForegroundColor Green
+        } catch {
+            Write-Host "   ERROR: Backend server is not accessible at $manifestUrl" -ForegroundColor Red
+            Write-Host "   Please ensure the backend is running on http://localhost:8000" -ForegroundColor Yellow
+            
+            # #region agent log
+            $logData = @{
+                sessionId = "openfin-migration"
+                runId = "run-script"
+                hypothesisId = "B"
+                location = "run_openfin.ps1:110"
+                message = "Backend manifest check failed after retry"
+                data = @{
+                    error = $_.Exception.Message
+                }
+                timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            }
+            $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+            Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+            # #endregion
+        }
     }
 } catch {
     Write-Host "   ERROR launching OpenFin: $_" -ForegroundColor Red
-    Write-Host "   Make sure OpenFin Runtime is installed." -ForegroundColor Yellow
+    Write-Host "   Make sure OpenFin Runtime is installed (RVM will download it automatically)." -ForegroundColor Yellow
+    
+    # #region agent log
+    $logData = @{
+        sessionId = "openfin-migration"
+        runId = "run-script"
+        hypothesisId = "B"
+        location = "run_openfin.ps1:125"
+        message = "OpenFin launch error"
+        data = @{
+            error = $_.Exception.Message
+        }
+        timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $logJson = $logData | ConvertTo-Json -Compress -Depth 10
+    Add-Content -Path "$projectRoot\.cursor\debug.log" -Value $logJson -ErrorAction SilentlyContinue
+    # #endregion
 }
 
 Write-Host "`n========================================" -ForegroundColor Cyan

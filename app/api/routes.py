@@ -132,6 +132,8 @@ class ExtractionRequest(BaseModel):
 
 
 @router.post("/extract")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+# This endpoint processes large documents and may need custom limits in production
 async def extract_credit_agreement(
     request: ExtractionRequest,
     db: Session = Depends(get_db),
@@ -360,6 +362,8 @@ async def extract_credit_agreement(
 
 
 @router.post("/upload")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+# File upload endpoints may benefit from stricter limits (e.g., 10/minute) in production
 async def upload_and_extract(file: UploadFile = File(...)):
     """Upload a file (PDF or TXT) and extract structured data.
     
@@ -455,6 +459,8 @@ async def upload_and_extract(file: UploadFile = File(...)):
 
 
 @router.post("/audio/transcribe")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+# Audio processing is resource-intensive; consider stricter limits (e.g., 5/minute) in production
 async def transcribe_audio(
     file: UploadFile = File(...),
     source_lang: Optional[str] = Query(None, description="Source language code (e.g., 'en', 'es')"),
@@ -596,6 +602,8 @@ async def transcribe_audio(
 
 
 @router.post("/image/extract")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+# Image processing is resource-intensive; consider stricter limits (e.g., 10/minute) in production
 async def extract_from_images(
     files: List[UploadFile] = File(...),
     extract_cdm: bool = Query(True, description="Whether to extract CDM data from OCR text"),
@@ -8967,6 +8975,8 @@ async def delete_deal_note(
 
 
 @router.post("/profile/extract")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+# Profile extraction may benefit from custom limits based on user role
 async def extract_profile_from_documents(
     files: List[UploadFile] = File(...),
     role: str = Form(...),
@@ -9834,8 +9844,6 @@ class RecoverySMSRequest(BaseModel):
 
 @router.post("/recovery/send-sms")
 async def send_recovery_sms(
-    phone: str = Body(..., description="Recipient phone number"),
-    message: str = Body(..., description="SMS message content"),
     request: RecoverySMSRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth)

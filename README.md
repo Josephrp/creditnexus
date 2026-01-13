@@ -258,7 +258,10 @@ npm run dev
 
 **Terminal 3 - Launch OpenFin:**
 ```powershell
-openfin launch --config openfin/app.json
+# Launch via RVM (no CLI needed - deprecated dependency removed)
+.\scripts\launch_openfin.ps1
+# Or simply open the manifest URL in your browser:
+# http://localhost:8000/openfin/app.json
 ```
 
 ### What Happens

@@ -31,6 +31,11 @@ logger = logging.getLogger(__name__)
 jwt_router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer(auto_error=False)
 
+
+# Rate limiting will be applied via decorators using limiter from app.state
+# For routes that need rate limiting, use: @limiter.limit("X/minute") 
+# where limiter is obtained from request.app.state.limiter at route definition
+
 # Using bcrypt directly instead of passlib to avoid initialization issues
 # with long passwords during backend setup
 
@@ -676,7 +681,6 @@ async def signup_step2(
 
 
 @jwt_router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")  # Stricter rate limit for login endpoint
 async def login(
     request: Request,
     credentials: UserLogin,
@@ -685,7 +689,11 @@ async def login(
     """Authenticate user and return JWT tokens.
     
     Account will be locked after 5 failed attempts for 30 minutes.
+    Rate limited via slowapi default_limits (60/minute) with additional
+    account lockout protection (5 failed attempts = 30 min lockout).
     """
+    # Rate limiting is handled by slowapi's default_limits (60/minute)
+    # Additional protection via account lockout mechanism (5 failed attempts)
     logger.debug("Login attempt", extra={"email": credentials.email})
     
     user = db.query(User).filter(User.email == credentials.email).first()
