@@ -1765,3 +1765,53 @@ class VerificationAuditLog(Base):
 # Note: LoanAsset is a SQLModel and cannot have a direct relationship with SQLAlchemy Base models
 # Access LoanAsset via loan_asset_id foreign key using queries instead
 # Example: db.query(LoanAsset).filter(LoanAsset.id == assessment.loan_asset_id).first()
+
+
+class SatelliteLayer(Base):
+    """Satellite layer data for visualization and analysis."""
+
+    __tablename__ = "satellite_layers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Reference to loan asset (no FK constraint since LoanAsset is SQLModel)
+    loan_asset_id = Column(Integer, nullable=False, index=True)
+    
+    # Layer identification
+    layer_type = Column(String(50), nullable=False, index=True)  # ndvi, false_color, classification, sentinel_band
+    band_number = Column(String(10), nullable=True)  # B01, B02, etc. for Sentinel-2 bands
+    
+    # Storage
+    file_path = Column(String(1000), nullable=False)  # Relative path from storage base
+    layer_metadata = Column(JSONB, name="metadata", nullable=True)  # Layer metadata (resolution, bounds, etc.)
+    
+    # Geographic information
+    resolution = Column(Integer, nullable=True)  # Resolution in meters
+    bounds_north = Column(Numeric(10, 7), nullable=True)
+    bounds_south = Column(Numeric(10, 7), nullable=True)
+    bounds_east = Column(Numeric(10, 7), nullable=True)
+    bounds_west = Column(Numeric(10, 7), nullable=True)
+    crs = Column(String(50), default='EPSG:4326')  # Coordinate reference system
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "loan_asset_id": self.loan_asset_id,
+            "layer_type": self.layer_type,
+            "band_number": self.band_number,
+            "file_path": self.file_path,
+            "metadata": self.layer_metadata,
+            "resolution": self.resolution,
+            "bounds": {
+                "north": float(self.bounds_north) if self.bounds_north else None,
+                "south": float(self.bounds_south) if self.bounds_south else None,
+                "east": float(self.bounds_east) if self.bounds_east else None,
+                "west": float(self.bounds_west) if self.bounds_west else None,
+            },
+            "crs": self.crs,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

@@ -4465,6 +4465,69 @@ async def create_loan_asset(
         )
         db.commit()
         
+        # Generate satellite layers if asset has coordinates
+        asset = audit_result.loan_asset
+        if asset.geo_lat and asset.geo_lon:
+            try:
+                from app.services.layer_processing_service import LayerProcessingService
+                from app.services.layer_storage_service import LayerStorageService
+                from app.agents.verifier import fetch_sentinel_data
+                import numpy as np
+                
+                # Fetch bands for layer generation
+                bands = await fetch_sentinel_data(asset.geo_lat, asset.geo_lon)
+                
+                if bands:
+                    nir_band, red_band = bands
+                    
+                    layer_processing_service = LayerProcessingService()
+                    layer_storage_service = LayerStorageService()
+                    
+                    # Generate NDVI layer
+                    ndvi_data, ndvi_metadata = await layer_processing_service.generate_ndvi_layer(
+                        nir_band=nir_band,
+                        red_band=red_band
+                    )
+                    
+                    # Add bounds to metadata
+                    delta = 0.005  # Approximate 0.5km
+                    ndvi_metadata['bounds'] = {
+                        'north': asset.geo_lat + delta,
+                        'south': asset.geo_lat - delta,
+                        'east': asset.geo_lon + delta,
+                        'west': asset.geo_lon - delta
+                    }
+                    
+                    layer_storage_service.store_layer(
+                        db=db,
+                        loan_asset_id=asset.id,
+                        layer_type='ndvi',
+                        layer_data=ndvi_data,
+                        metadata=ndvi_metadata
+                    )
+                    
+                    # Generate false color composite
+                    false_color_data, false_color_metadata = await layer_processing_service.generate_false_color_composite(
+                        nir_band=nir_band,
+                        red_band=red_band
+                    )
+                    
+                    false_color_metadata['bounds'] = ndvi_metadata['bounds']
+                    
+                    layer_storage_service.store_layer(
+                        db=db,
+                        loan_asset_id=asset.id,
+                        layer_type='false_color',
+                        layer_data=false_color_data,
+                        metadata=false_color_metadata
+                    )
+                    
+                    db.commit()
+                    logger.info(f"Generated layers for new asset {asset.id}")
+            except Exception as e:
+                logger.warning(f"Failed to generate layers for new asset {asset.id}: {e}", exc_info=True)
+                # Don't fail the request if layer generation fails
+        
         return {
             "status": "success",
             "message": "Loan asset created and verified",
@@ -4614,19 +4677,38 @@ async def run_asset_audit(
         
         logger.info(f"Running verification for asset {asset_id}")
         
-        # Run verification
-        verification = await verify_asset_location(
-            lat=asset.geo_lat,
-            lon=asset.geo_lon,
-            threshold=asset.spt_threshold or 0.8
-        )
+        # Fetch satellite bands first (needed for layer generation)
+        from app.agents.verifier import fetch_sentinel_data, calculate_ndvi, determine_risk_status
+        import numpy as np
         
-        if verification.get("success"):
-            ndvi_score = verification["ndvi_score"]
-            asset.update_verification(ndvi_score)
-        else:
-            asset.risk_status = RiskStatus.ERROR
-            asset.verification_error = verification.get("error", "Unknown error")
+        bands = await fetch_sentinel_data(asset.geo_lat, asset.geo_lon)
+        
+        if bands is None:
+            raise HTTPException(
+                status_code=500,
+                detail={"status": "error", "message": "Failed to fetch satellite data"}
+            )
+        
+        nir_band, red_band = bands
+        
+        # Calculate NDVI
+        ndvi_score = calculate_ndvi(nir_band, red_band)
+        
+        # Determine risk status
+        risk_status = determine_risk_status(ndvi_score, asset.spt_threshold or 0.8)
+        
+        # Update asset
+        asset.update_verification(ndvi_score)
+        asset.risk_status = risk_status
+        
+        # Create verification result
+        verification = {
+            "success": True,
+            "ndvi_score": ndvi_score,
+            "risk_status": risk_status,
+            "data_source": "sentinel_hub" if bands else "synthetic",
+            "verified_at": datetime.utcnow().isoformat()
+        }
         
         # Log the audit action
         log_audit_action(
@@ -4637,8 +4719,8 @@ async def run_asset_audit(
             user_id=current_user.id if current_user else None,
             metadata={
                 "action": "verification",
-                "ndvi_score": verification.get("ndvi_score"),
-                "risk_status": asset.risk_status,
+                "ndvi_score": ndvi_score,
+                "risk_status": risk_status,
                 "data_source": verification.get("data_source")
             },
             request=request
@@ -4646,6 +4728,58 @@ async def run_asset_audit(
         
         db.commit()
         db.refresh(asset)
+        
+        # Generate satellite layers after verification
+        try:
+            from app.services.layer_processing_service import LayerProcessingService
+            from app.services.layer_storage_service import LayerStorageService
+            
+            layer_processing_service = LayerProcessingService()
+            layer_storage_service = LayerStorageService()
+            
+            # Generate NDVI layer
+            ndvi_data, ndvi_metadata = await layer_processing_service.generate_ndvi_layer(
+                nir_band=nir_band,
+                red_band=red_band
+            )
+            
+            # Add bounds to metadata
+            delta = 0.005  # Approximate 0.5km
+            ndvi_metadata['bounds'] = {
+                'north': asset.geo_lat + delta,
+                'south': asset.geo_lat - delta,
+                'east': asset.geo_lon + delta,
+                'west': asset.geo_lon - delta
+            }
+            
+            layer_storage_service.store_layer(
+                db=db,
+                loan_asset_id=asset_id,
+                layer_type='ndvi',
+                layer_data=ndvi_data,
+                metadata=ndvi_metadata
+            )
+            
+            # Generate false color composite
+            false_color_data, false_color_metadata = await layer_processing_service.generate_false_color_composite(
+                nir_band=nir_band,
+                red_band=red_band
+            )
+            
+            false_color_metadata['bounds'] = ndvi_metadata['bounds']
+            
+            layer_storage_service.store_layer(
+                db=db,
+                loan_asset_id=asset_id,
+                layer_type='false_color',
+                layer_data=false_color_data,
+                metadata=false_color_metadata
+            )
+            
+            logger.info(f"Generated layers for asset {asset_id}")
+        except Exception as e:
+            logger.warning(f"Failed to generate layers for asset {asset_id}: {e}", exc_info=True)
+            # Don't fail the request if layer generation fails
         
         return {
             "status": "success",
