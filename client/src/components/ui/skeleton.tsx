@@ -1,17 +1,23 @@
+import * as React from "react";
 import type { ReactNode } from 'react';
 
 interface SkeletonProps {
   className?: string;
 }
 
-export function Skeleton({ className = '' }: SkeletonProps) {
-  return (
+const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
+  ({ className, ...props }, ref) => (
     <div
-      className={`animate-pulse bg-slate-700/50 rounded ${className}`}
+      ref={ref}
+      className={`animate-pulse bg-[var(--color-skeleton)] rounded ${className}`}
       aria-hidden="true"
+      {...props}
     />
-  );
-}
+  )
+)
+Skeleton.displayName = "Skeleton"
+
+export { Skeleton }
 
 export function SkeletonText({ lines = 3, className = '' }: { lines?: number; className?: string }) {
   return (

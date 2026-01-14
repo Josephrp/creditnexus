@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Progress } from './ui/progress';
 import { useDemoData } from '@/hooks/useDemoData';
 import { DealDetailModal } from './DealDetailModal';
-import { DemoDealCard, type DemoDeal } from './DemoDealCard';
+import { type DemoDeal } from './DemoDealCard';
 import { fetchWithAuth } from '@/context/AuthContext';
 import { useFDC3, createAgreementContext, createDocumentContext, createPortfolioContext, type AgreementContext, type DocumentContext, type PortfolioContext } from '@/context/FDC3Context';
 import { useToast } from '@/components/ui/toast';
@@ -37,20 +37,6 @@ interface SeedResult {
   errors: string[];
 }
 
-interface DemoDeal {
-  id: number;
-  deal_id: string;
-  deal_type: string;
-  status: string;
-  borrower_name?: string;
-  total_commitment?: number;
-  currency?: string;
-  created_at: string;
-  deal_data?: {
-    loan_amount?: number;
-    interest_rate?: number;
-  };
-}
 
 export function DemoDataDashboard() {
   const navigate = useNavigate();
@@ -61,7 +47,7 @@ export function DemoDataDashboard() {
     total_applications: 0,
     last_seeded_at: null
   });
-  
+
   const [seedOptions, setSeedOptions] = useState<SeedOptions>({
     seed_users: true,
     seed_templates: true,
@@ -72,25 +58,24 @@ export function DemoDataDashboard() {
     dry_run: false,
     complete_partial_data: false
   });
-  
+
   const [seedResults, setSeedResults] = useState<Record<string, SeedResult>>({});
-  const [userCredentials, setUserCredentials] = useState<Array<{email: string; password: string; role: string; display_name: string}>>([]);
-  
+  const [userCredentials, setUserCredentials] = useState<Array<{ email: string; password: string; role: string; display_name: string }>>([]);
+
   const [resetOptions, setResetOptions] = useState({
     includeUsers: false,
     includeTemplates: false,
     includePolicies: false
   });
-  
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  
+
+
   // Generated Deals state
   const [dealFilterStatus, setDealFilterStatus] = useState<string>('all');
   const [dealFilterType, setDealFilterType] = useState<string>('all');
   const [dealSearchQuery, setDealSearchQuery] = useState('');
   const [dealPage, setDealPage] = useState(1);
   const dealsPerPage = 10;
-  
+
   // Use the useDemoData hook
   const {
     seedData,
@@ -106,11 +91,11 @@ export function DemoDataDashboard() {
     startPolling,
     stopPolling,
   } = useDemoData();
-  
+
   // FDC3 and Toast
   const { broadcast, broadcastOnChannel, isAvailable } = useFDC3();
   const { addToast } = useToast();
-  
+
   // Fetch demo deals using the hook
   const fetchDeals = useCallback(async () => {
     try {
@@ -129,23 +114,29 @@ export function DemoDataDashboard() {
       console.error('Failed to fetch deals:', err);
     }
   }, [getGeneratedDeals, dealFilterStatus, dealFilterType, dealSearchQuery, dealPage]);
-  
+
   useEffect(() => {
     if (activeTab === 'deals') {
       fetchDeals();
     }
   }, [activeTab, fetchDeals]);
-  
-  const formatCurrency = (amount: number | undefined, currency: string = 'USD') => {
+
+  const formatCurrency = (amount: number | undefined, currencyCode?: string | null) => {
     if (!amount) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    const currency = currencyCode || 'USD';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch (err) {
+      console.warn(`Invalid currency code: ${currency}`, err);
+      return `${currency} ${amount.toLocaleString()}`;
+    }
   };
-  
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -153,7 +144,7 @@ export function DemoDataDashboard() {
       day: 'numeric'
     });
   };
-  
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       draft: 'bg-slate-500/20 text-slate-300',
@@ -166,15 +157,15 @@ export function DemoDataDashboard() {
     };
     return colors[status] || 'bg-slate-500/20 text-slate-300';
   };
-  
+
   // Fetch deals when tab is active or filters change
   const [deals, setDeals] = useState<DemoDeal[]>([]);
   const [dealTotal, setDealTotal] = useState(0);
-  
+
   // Deal detail modal state
   const [selectedDeal, setSelectedDeal] = useState<DemoDeal | null>(null);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
-  
+
   // Documents state
   const [documents, setDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
@@ -184,12 +175,12 @@ export function DemoDataDashboard() {
   const [documentPage, setDocumentPage] = useState(1);
   const [documentTotal, setDocumentTotal] = useState(0);
   const documentsPerPage = 20;
-  
+
   // Fetch deals data
   useEffect(() => {
     const loadDeals = async () => {
       if (activeTab !== 'deals') return;
-      
+
       try {
         const result = await getGeneratedDeals({
           page: dealPage,
@@ -208,48 +199,48 @@ export function DemoDataDashboard() {
         console.error('Failed to load deals:', err);
       }
     };
-    
+
     loadDeals();
   }, [activeTab, dealPage, dealFilterStatus, dealFilterType, dealSearchQuery, getGeneratedDeals]);
-  
+
   const totalPages = Math.ceil(dealTotal / dealsPerPage);
-  
+
   // Fetch documents when documents tab is active
   useEffect(() => {
     const loadDocuments = async () => {
       if (activeTab !== 'documents') return;
-      
+
       setDocumentsLoading(true);
       setDocumentsError(null);
-      
+
       try {
         const params = new URLSearchParams();
         params.append('limit', documentsPerPage.toString());
         params.append('offset', ((documentPage - 1) * documentsPerPage).toString());
         params.append('is_demo', 'true'); // Request only demo documents from API
-        
+
         if (documentSearchQuery.trim()) {
           params.append('search', documentSearchQuery.trim());
         }
-        
+
         const response = await fetchWithAuth(`/api/documents?${params.toString()}`);
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch documents');
         }
-        
+
         const data = await response.json();
-        
+
         // Filter by workflow state (is_demo filtering is now done by API)
         let filteredDocs = data.documents || [];
-        
+
         // Filter by workflow state
         if (documentWorkflowFilter !== 'all') {
-          filteredDocs = filteredDocs.filter((doc: any) => 
+          filteredDocs = filteredDocs.filter((doc: any) =>
             doc.workflow_state === documentWorkflowFilter
           );
         }
-        
+
         setDocuments(filteredDocs);
         setDocumentTotal(filteredDocs.length);
         setStats(prev => ({
@@ -262,15 +253,15 @@ export function DemoDataDashboard() {
         setDocumentsLoading(false);
       }
     };
-    
+
     loadDocuments();
   }, [activeTab, documentPage, documentSearchQuery, documentWorkflowFilter]);
-  
+
   // Fetch seeding status when status tab is active
   useEffect(() => {
     if (activeTab === 'status') {
       getSeedingStatus();
-      
+
       // Start polling if any stage is running
       const hasRunning = Object.values(seedingStatus).some(s => s.status === 'running');
       if (hasRunning && !isPolling) {
@@ -279,14 +270,14 @@ export function DemoDataDashboard() {
         stopPolling();
       }
     }
-    
+
     return () => {
       if (activeTab !== 'status') {
         stopPolling();
       }
     };
   }, [activeTab, seedingStatus, isPolling, startPolling, stopPolling, getSeedingStatus]);
-  
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -299,7 +290,7 @@ export function DemoDataDashboard() {
         return <Clock className="w-5 h-5 text-slate-400" />;
     }
   };
-  
+
   const getStatusColorForCard = (status: string) => {
     switch (status) {
       case 'completed':
@@ -312,18 +303,18 @@ export function DemoDataDashboard() {
         return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };
-  
+
   // Handle seeding
   const handleStartSeeding = async () => {
     try {
       // Start polling for status updates
       startPolling();
-      
+
       if (seedOptions.generate_deals) {
         // Generate deals separately
         await generateDeals(seedOptions.deal_count);
       }
-      
+
       // Seed other data
       const result = await seedData({
         seed_users: seedOptions.seed_users,
@@ -334,12 +325,12 @@ export function DemoDataDashboard() {
         dry_run: seedOptions.dry_run,
         complete_partial_data: seedOptions.complete_partial_data || false,
       });
-      
+
       // Store user credentials if available
       if (result.user_credentials && Array.isArray(result.user_credentials)) {
         setUserCredentials(result.user_credentials);
       }
-      
+
       // Convert result to SeedResult format
       const results: Record<string, SeedResult> = {};
       Object.entries(result.created).forEach(([stage, count]) => {
@@ -351,13 +342,13 @@ export function DemoDataDashboard() {
         };
       });
       setSeedResults(results);
-      
+
       // Update stats
       setStats(prev => ({
         ...prev,
         last_seeded_at: new Date().toISOString(),
       }));
-      
+
       // Refresh deals if on deals tab
       if (activeTab === 'deals') {
         const result = await getGeneratedDeals({
@@ -407,10 +398,10 @@ export function DemoDataDashboard() {
                     },
                     agreementCount: deals.length
                   });
-                  
+
                   await broadcast(portfolioContext);
                   await broadcastOnChannel('portfolio', portfolioContext);
-                  
+
                   addToast(`Broadcasted ${deals.length} deals to FDC3 network`, 'success');
                 } else {
                   addToast('No deals available to broadcast. Generate deals first.', 'warning');
@@ -478,7 +469,7 @@ export function DemoDataDashboard() {
               {stats.last_seeded_at ? 'Yes' : 'Never'}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              {stats.last_seeded_at 
+              {stats.last_seeded_at
                 ? new Date(stats.last_seeded_at).toLocaleDateString()
                 : 'No data seeded yet'}
             </p>
@@ -524,7 +515,7 @@ export function DemoDataDashboard() {
                 {/* Seed Options */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-white">Seed Options</h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
@@ -535,7 +526,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Seed Users</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -545,7 +536,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Seed Templates</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -555,7 +546,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Seed Policies</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -565,7 +556,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Seed Policy Templates</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -575,7 +566,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Generate Deals</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -585,7 +576,7 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Dry Run (Preview Only)</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -596,7 +587,7 @@ export function DemoDataDashboard() {
                       <span className="text-sm text-slate-300">Complete Partial Data</span>
                     </label>
                   </div>
-                  
+
                   {seedOptions.generate_deals && (
                     <div className="flex items-center gap-4">
                       <label className="text-sm text-slate-300">Deal Count:</label>
@@ -620,20 +611,20 @@ export function DemoDataDashboard() {
                       <span className="text-slate-400">
                         {Object.values(seedingStatus).length > 0
                           ? `${Math.round(
-                              Object.values(seedingStatus).reduce((sum, s) => sum + s.progress, 0) /
-                              Object.values(seedingStatus).length * 100
-                            )}%`
+                            Object.values(seedingStatus).reduce((sum, s) => sum + s.progress, 0) /
+                            Object.values(seedingStatus).length * 100
+                          )}%`
                           : '0%'}
                       </span>
                     </div>
-                    <Progress 
+                    <Progress
                       value={
                         Object.values(seedingStatus).length > 0
                           ? Object.values(seedingStatus).reduce((sum, s) => sum + s.progress, 0) /
-                            Object.values(seedingStatus).length * 100
+                          Object.values(seedingStatus).length * 100
                           : 0
-                      } 
-                      className="h-2" 
+                      }
+                      className="h-2"
                     />
                   </div>
                 )}
@@ -666,7 +657,7 @@ export function DemoDataDashboard() {
                           </>
                         )}
                       </Button>
-                      
+
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -678,7 +669,7 @@ export function DemoDataDashboard() {
                         <Trash2 className="w-4 h-4 mr-2" />
                         Clear Results
                       </Button>
-                      
+
                       <Button
                         variant="outline"
                         onClick={async () => {
@@ -759,11 +750,11 @@ export function DemoDataDashboard() {
                           if (resetOptions.includeUsers) warnings.push("ALL DEMO USERS");
                           if (resetOptions.includeTemplates) warnings.push("ALL LMA TEMPLATES");
                           if (resetOptions.includePolicies) warnings.push("ALL POLICY RULES");
-                          
-                          const warningMsg = warnings.length > 0 
+
+                          const warningMsg = warnings.length > 0
                             ? `\n\nWARNING: You have also selected to delete: ${warnings.join(", ")}.`
                             : "";
-                            
+
                           if (confirm(`Are you sure you want to reset all demo deals, documents, and related data?${warningMsg}`)) {
                             try {
                               await resetDemoData(resetOptions);
@@ -897,7 +888,7 @@ export function DemoDataDashboard() {
                       className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <Filter className="h-4 w-4 text-slate-400" />
                     <select
@@ -918,7 +909,7 @@ export function DemoDataDashboard() {
                       <option value="closed">Closed</option>
                     </select>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <select
                       value={dealFilterType}
@@ -934,7 +925,7 @@ export function DemoDataDashboard() {
                       <option value="restructuring">Restructuring</option>
                     </select>
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -1033,7 +1024,7 @@ export function DemoDataDashboard() {
                                         if (response.ok) {
                                           const data = await response.json();
                                           const dealData = data.deal;
-                                          
+
                                           // Create AgreementContext for FDC3
                                           const agreementContext: AgreementContext = createAgreementContext(
                                             deal.deal_id,
@@ -1043,9 +1034,9 @@ export function DemoDataDashboard() {
                                               agreementDate: deal.created_at,
                                               totalCommitment: deal.total_commitment || deal.deal_data?.loan_amount
                                                 ? {
-                                                    amount: deal.total_commitment || deal.deal_data?.loan_amount || 0,
-                                                    currency: deal.currency || 'USD'
-                                                  }
+                                                  amount: deal.total_commitment || deal.deal_data?.loan_amount || 0,
+                                                  currency: deal.currency || 'USD'
+                                                }
                                                 : undefined,
                                               workflowStatus: deal.status as any,
                                               parties: dealData?.deal_data?.parties?.map((p: any) => ({
@@ -1074,10 +1065,10 @@ export function DemoDataDashboard() {
                                               })) || []
                                             }
                                           );
-                                          
+
                                           await broadcast(agreementContext);
                                           await broadcastOnChannel('portfolio', agreementContext);
-                                          
+
                                           addToast(`Broadcasted ${deal.deal_id} to FDC3 network`, 'success');
                                         }
                                       } catch (err) {
@@ -1151,7 +1142,7 @@ export function DemoDataDashboard() {
                       className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <Filter className="h-4 w-4 text-slate-400" />
                     <select
@@ -1169,7 +1160,7 @@ export function DemoDataDashboard() {
                       <option value="rejected">Rejected</option>
                     </select>
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -1188,7 +1179,7 @@ export function DemoDataDashboard() {
                             const data = await response.json();
                             let filteredDocs = data.documents?.filter((doc: any) => doc.is_demo === true) || [];
                             if (documentWorkflowFilter !== 'all') {
-                              filteredDocs = filteredDocs.filter((doc: any) => 
+                              filteredDocs = filteredDocs.filter((doc: any) =>
                                 doc.workflow_state === documentWorkflowFilter
                               );
                             }
@@ -1242,15 +1233,14 @@ export function DemoDataDashboard() {
                                 {doc.borrower_name || 'N/A'}
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  doc.workflow_state === 'completed' 
-                                    ? 'bg-green-500/20 text-green-300'
-                                    : doc.workflow_state === 'in_progress'
+                                <span className={`text-xs px-2 py-1 rounded ${doc.workflow_state === 'completed'
+                                  ? 'bg-green-500/20 text-green-300'
+                                  : doc.workflow_state === 'in_progress'
                                     ? 'bg-blue-500/20 text-blue-300'
                                     : doc.workflow_state === 'rejected'
-                                    ? 'bg-red-500/20 text-red-300'
-                                    : 'bg-yellow-500/20 text-yellow-300'
-                                }`}>
+                                      ? 'bg-red-500/20 text-red-300'
+                                      : 'bg-yellow-500/20 text-yellow-300'
+                                  }`}>
                                   {doc.workflow_state?.replace('_', ' ') || 'N/A'}
                                 </span>
                               </td>
@@ -1293,7 +1283,7 @@ export function DemoDataDashboard() {
                                         if (response.ok) {
                                           const data = await response.json();
                                           const document = data.document;
-                                          
+
                                           // Get document text from latest version or extracted_text
                                           let content = '';
                                           if (document.latest_version?.extracted_text) {
@@ -1303,17 +1293,17 @@ export function DemoDataDashboard() {
                                           } else {
                                             content = JSON.stringify(document.extracted_data || {}, null, 2);
                                           }
-                                          
+
                                           // Create DocumentContext for FDC3
                                           const documentContext: DocumentContext = createDocumentContext(
                                             content,
                                             doc.id.toString(),
                                             doc.title || 'Untitled Document'
                                           );
-                                          
+
                                           await broadcast(documentContext);
                                           await broadcastOnChannel('extraction', documentContext);
-                                          
+
                                           addToast(`Broadcasted document "${doc.title || 'Untitled'}" to FDC3 network`, 'success');
                                         }
                                       } catch (err) {
@@ -1375,7 +1365,7 @@ export function DemoDataDashboard() {
                                             const data = await refreshResponse.json();
                                             let filteredDocs = data.documents?.filter((d: any) => d.is_demo === true) || [];
                                             if (documentWorkflowFilter !== 'all') {
-                                              filteredDocs = filteredDocs.filter((d: any) => 
+                                              filteredDocs = filteredDocs.filter((d: any) =>
                                                 d.workflow_state === documentWorkflowFilter
                                               );
                                             }
@@ -1471,8 +1461,8 @@ export function DemoDataDashboard() {
                                   {status.status === 'running' && status.total > 0
                                     ? `Processing ${status.current} of ${status.total} items`
                                     : status.status === 'completed'
-                                    ? `Completed ${status.total} items`
-                                    : status.status}
+                                      ? `Completed ${status.total} items`
+                                      : status.status}
                                 </CardDescription>
                               </div>
                             </div>
@@ -1561,7 +1551,7 @@ export function DemoDataDashboard() {
                 {/* Deal Generation Settings */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-white">Deal Generation Settings</h3>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1577,7 +1567,7 @@ export function DemoDataDashboard() {
                       />
                       <p className="text-xs text-slate-500 mt-1">Number of deals to generate (1-50)</p>
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
                         Deal Types
@@ -1588,7 +1578,7 @@ export function DemoDataDashboard() {
                             <input
                               type="checkbox"
                               checked={true} // TODO: Add state for selected deal types
-                              onChange={() => {}}
+                              onChange={() => { }}
                               className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="text-sm text-slate-300 capitalize">{type.replace('_', ' ')}</span>
@@ -1602,43 +1592,43 @@ export function DemoDataDashboard() {
                 {/* Document Generation Options */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-white">Document Generation Options</h3>
-                  
+
                   <div className="space-y-3">
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={true} // TODO: Add state
-                        onChange={() => {}}
+                        onChange={() => { }}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-sm text-slate-300">Generate documents from templates</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={true} // TODO: Add state
-                        onChange={() => {}}
+                        onChange={() => { }}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-sm text-slate-300">Create document revision history</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={true} // TODO: Add state
-                        onChange={() => {}}
+                        onChange={() => { }}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-sm text-slate-300">Generate deal notes</span>
                     </label>
-                    
+
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={true} // TODO: Add state
-                        onChange={() => {}}
+                        onChange={() => { }}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-sm text-slate-300">Create policy decisions</span>
@@ -1649,7 +1639,7 @@ export function DemoDataDashboard() {
                 {/* Cache Management */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-white">Cache Management</h3>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-700">
                       <div>
@@ -1658,7 +1648,7 @@ export function DemoDataDashboard() {
                       </div>
                       <span className="text-sm text-green-400">Enabled</span>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -1670,7 +1660,7 @@ export function DemoDataDashboard() {
                         <Trash2 className="w-4 h-4 mr-2" />
                         Clear Cache
                       </Button>
-                      
+
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -1688,13 +1678,13 @@ export function DemoDataDashboard() {
                 {/* Storage Settings */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-white">Storage Settings</h3>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                       <span className="text-sm text-slate-300">Storage Path</span>
                       <span className="text-sm font-mono text-slate-400">storage/deals/demo</span>
                     </div>
-                    
+
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                       <span className="text-sm text-slate-300">ChromaDB Indexing</span>
                       <span className="text-sm text-green-400">Enabled</span>

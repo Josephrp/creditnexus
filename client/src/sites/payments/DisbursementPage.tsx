@@ -133,7 +133,7 @@ export function DisbursementPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
     );
@@ -141,13 +141,13 @@ export function DisbursementPage() {
 
   if (error && !loanDetails) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 py-12 px-4">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
         <div className="max-w-4xl mx-auto">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="surface-panel">
             <CardContent className="p-8 text-center">
               <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
               <h1 className="text-2xl font-bold mb-2">Error</h1>
-              <p className="text-slate-400 mb-6">{error}</p>
+              <p className="text-[var(--color-muted-foreground)] mb-6">{error}</p>
               <Button onClick={() => navigate('/dashboard')}>
                 Go to Dashboard
               </Button>
@@ -159,17 +159,17 @@ export function DisbursementPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 py-12 px-4">
+    <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Loan Disbursement</h1>
-          <p className="text-slate-400">Complete the disbursement process using x402 payment protocol</p>
+          <p className="text-[var(--color-muted-foreground)]">Complete the disbursement process using x402 payment protocol</p>
         </div>
 
         {loanDetails && (
           <>
             {/* Loan Details Card */}
-            <Card className="bg-slate-800 border-slate-700 mb-6">
+            <Card className="surface-panel mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5 text-emerald-400" />
@@ -179,25 +179,25 @@ export function DisbursementPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-slate-400">Borrower</p>
+                    <p className="text-sm text-[var(--color-muted-foreground)]">Borrower</p>
                     <p className="text-lg font-semibold">{loanDetails.borrower}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">Amount</p>
+                    <p className="text-sm text-[var(--color-muted-foreground)]">Amount</p>
                     <p className="text-lg font-semibold">
                       {loanDetails.currency} {loanDetails.amount.toLocaleString()}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">Interest Rate</p>
+                    <p className="text-sm text-[var(--color-muted-foreground)]">Interest Rate</p>
                     <p className="text-lg font-semibold">{loanDetails.interest_rate}%</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">Term</p>
+                    <p className="text-sm text-[var(--color-muted-foreground)]">Term</p>
                     <p className="text-lg font-semibold">{loanDetails.term_months} months</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-400">Disbursement Date</p>
+                    <p className="text-sm text-[var(--color-muted-foreground)]">Disbursement Date</p>
                     <p className="text-lg font-semibold">
                       {new Date(loanDetails.disbursement_date).toLocaleDateString()}
                     </p>
@@ -207,7 +207,7 @@ export function DisbursementPage() {
             </Card>
 
             {/* Wallet Connection Card */}
-            <Card className="bg-slate-800 border-slate-700 mb-6">
+            <Card className="surface-panel mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Wallet className="h-5 w-5 text-blue-400" />
@@ -217,14 +217,14 @@ export function DisbursementPage() {
               <CardContent>
                 {!walletConnected ? (
                   <div className="space-y-4">
-                    <p className="text-slate-400">
+                    <p className="text-[var(--color-muted-foreground)]">
                       Connect your MetaMask wallet to proceed with the disbursement
                     </p>
                     <Button
                       onClick={connectWallet}
-                      className="bg-blue-600 hover:bg-blue-500 text-white"
+                      className="gap-2"
                     >
-                      <Wallet className="h-4 w-4 mr-2" />
+                      <Wallet className="h-4 w-4" />
                       Connect MetaMask
                     </Button>
                   </div>
@@ -234,10 +234,10 @@ export function DisbursementPage() {
                       <CheckCircle className="h-5 w-5" />
                       <span>Wallet Connected</span>
                     </div>
-                    <div className="bg-slate-900 rounded-lg p-4">
+                    <div className="bg-[var(--color-panel-deep)] rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm text-slate-400 mb-1">Wallet Address</p>
+                          <p className="text-sm text-[var(--color-muted-foreground)] mb-1">Wallet Address</p>
                           <p className="font-mono text-sm break-all">{walletAddress}</p>
                         </div>
                         <Button
@@ -256,11 +256,11 @@ export function DisbursementPage() {
 
             {/* Disbursement Action */}
             {walletConnected && (
-              <Card className="bg-slate-800 border-slate-700 mb-6">
+              <Card className="surface-panel mb-6">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <p className="text-sm text-slate-400">Disbursement Amount</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)]">Disbursement Amount</p>
                       <p className="text-3xl font-bold text-emerald-400">
                         {loanDetails.currency} {loanDetails.amount.toLocaleString()}
                       </p>
@@ -273,8 +273,8 @@ export function DisbursementPage() {
                         <CheckCircle className="h-5 w-5" />
                         <span>Transaction Submitted</span>
                       </div>
-                      <div className="bg-slate-900 rounded-lg p-4">
-                        <p className="text-sm text-slate-400 mb-1">Transaction Hash</p>
+                      <div className="bg-[var(--color-panel-deep)] rounded-lg p-4">
+                        <p className="text-sm text-[var(--color-muted-foreground)] mb-1">Transaction Hash</p>
                         <div className="flex items-center gap-2">
                           <p className="font-mono text-sm break-all">{transactionHash}</p>
                           <Button
@@ -286,7 +286,7 @@ export function DisbursementPage() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-[var(--color-muted-foreground)]">
                         Redirecting to receipt page...
                       </p>
                     </div>
@@ -294,17 +294,17 @@ export function DisbursementPage() {
                     <Button
                       onClick={handleDisbursement}
                       disabled={processing}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+                      className="w-full gap-2"
                       size="lg"
                     >
                       {processing ? (
                         <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                           Processing...
                         </>
                       ) : (
                         <>
-                          <DollarSign className="h-4 w-4 mr-2" />
+                          <DollarSign className="h-4 w-4" />
                           Confirm Disbursement
                         </>
                       )}
@@ -315,9 +315,9 @@ export function DisbursementPage() {
             )}
 
             {error && (
-              <Card className="bg-red-900/20 border-red-500/50">
+              <Card className="bg-[var(--color-error-bg)] border-[var(--color-error-border)]">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-red-400">
+                  <div className="flex items-center gap-2 text-[var(--color-error-foreground)]">
                     <AlertCircle className="h-5 w-5" />
                     <p>{error}</p>
                   </div>

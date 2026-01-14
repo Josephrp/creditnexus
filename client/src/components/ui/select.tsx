@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 export interface SelectProps
   extends React.SelectHTMLAttributes<HTMLSelectElement> {
   onValueChange?: (value: string) => void
+  value?: string
 }
 
 const SelectContext = React.createContext<{
@@ -26,7 +27,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       <SelectContext.Provider value={{ value, onValueChange }}>
         <select
           className={cn(
-            "flex h-10 w-full rounded-md border border-[var(--color-input)] bg-[var(--color-background)] px-3 py-2 text-sm ring-offset-[var(--color-background)] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-10 w-full rounded-md border border-[var(--color-input-border)] bg-[var(--color-input-bg)] px-3 py-2 text-sm ring-offset-[var(--color-background)] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
             className
           )}
           ref={ref}
@@ -71,7 +72,11 @@ const SelectItem = React.forwardRef<
   React.OptionHTMLAttributes<HTMLOptionElement>
 >(({ className, children, ...props }, ref) => {
   return (
-    <option ref={ref} className={cn("", className)} {...props}>
+    <option 
+      ref={ref} 
+      className={cn("text-[var(--color-foreground)] hover:bg-[var(--color-accent)] px-3 py-2", className)} 
+      {...props}
+    >
       {children}
     </option>
   )

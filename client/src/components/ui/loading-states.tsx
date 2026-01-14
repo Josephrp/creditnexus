@@ -1,5 +1,4 @@
 import { Loader2 } from 'lucide-react';
-import { Skeleton } from './skeleton';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
@@ -15,7 +14,7 @@ export function LoadingSpinner({ size = 'md', className = '' }: LoadingSpinnerPr
 
   return (
     <Loader2
-      className={`animate-spin text-emerald-400 ${sizeClasses[size]} ${className}`}
+      className={`animate-spin text-[var(--color-primary)] ${sizeClasses[size]} ${className}`}
       aria-label="Loading"
     />
   );
@@ -28,10 +27,10 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ message = 'Loading...', className = '' }: LoadingOverlayProps) {
   return (
-    <div className={`absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 ${className}`}>
+    <div className={`absolute inset-0 bg-[var(--color-overlay)] backdrop-blur-[8px] flex items-center justify-center z-50 ${className}`}>
       <div className="flex flex-col items-center gap-3">
         <LoadingSpinner size="lg" />
-        <p className="text-sm text-slate-300">{message}</p>
+        <p className="text-sm text-[var(--color-overlay-text)]">{message}</p>
       </div>
     </div>
   );
@@ -164,3 +163,13 @@ export function TimeoutHandler({ timeout = 30000, onTimeout, children }: Timeout
 }
 
 import React from 'react';
+
+interface SkeletonProps {
+  className?: string
+}
+
+export function Skeleton({ className = '' }: SkeletonProps) {
+  return (
+    <div className={`animate-pulse bg-[var(--color-skeleton)] rounded ${className}`} />
+  );
+}

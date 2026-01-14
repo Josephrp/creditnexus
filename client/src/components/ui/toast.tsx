@@ -28,17 +28,17 @@ export function useToast() {
 }
 
 const toastIcons = {
-  success: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
-  error: <AlertCircle className="h-5 w-5 text-red-400" />,
-  info: <Info className="h-5 w-5 text-blue-400" />,
-  warning: <AlertTriangle className="h-5 w-5 text-yellow-400" />,
+  success: <CheckCircle2 className="h-5 w-5 text-[var(--color-success)]" />,
+  error: <AlertCircle className="h-5 w-5 text-[var(--color-error)]" />,
+  info: <Info className="h-5 w-5 text-[var(--color-info)]" />,
+  warning: <AlertTriangle className="h-5 w-5 text-[var(--color-warning)]" />,
 };
 
 const toastStyles = {
-  success: 'border-emerald-500/30 bg-emerald-500/10',
-  error: 'border-red-500/30 bg-red-500/10',
-  info: 'border-blue-500/30 bg-blue-500/10',
-  warning: 'border-yellow-500/30 bg-yellow-500/10',
+  success: 'border-[var(--color-success-border)] bg-[var(--color-success-bg)]',
+  error: 'border-[var(--color-error-border)] bg-[var(--color-error-bg)]',
+  info: 'border-[var(--color-info-border)] bg-[var(--color-info-bg)]',
+  warning: 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]',
 };
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
@@ -48,10 +48,10 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
       role="alert"
     >
       {toastIcons[toast.type]}
-      <p className="text-sm text-slate-100 flex-1">{toast.message}</p>
+      <p className="text-sm text-[var(--color-foreground)] flex-1">{toast.message}</p>
       <button
         onClick={onRemove}
-        className="text-slate-400 hover:text-white transition-colors"
+        className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
         aria-label="Dismiss"
       >
         <X className="h-4 w-4" />

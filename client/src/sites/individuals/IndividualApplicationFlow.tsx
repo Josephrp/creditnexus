@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IndividualApplicationForm } from '@/apps/application/IndividualApplicationForm';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { CheckCircle, ArrowRight } from 'lucide-react';
 
 type FlowStep = 'intro' | 'form' | 'success';
@@ -18,9 +19,9 @@ export function IndividualApplicationFlow() {
 
   if (currentStep === 'intro') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 py-12 px-4">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
         <div className="max-w-4xl mx-auto">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="surface-panel">
             <CardContent className="p-12 text-center">
               <h1 className="text-4xl font-bold mb-4">Individual Credit Application</h1>
               <p className="text-xl text-slate-400 mb-8 max-w-2xl mx-auto">
@@ -54,19 +55,22 @@ export function IndividualApplicationFlow() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button
+                <Button
                   onClick={() => setCurrentStep('form')}
-                  className="inline-flex items-center px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                  className="gap-2"
+                  size="lg"
                 >
                   Start Application
-                  <ArrowRight className="h-5 w-5 ml-2" />
-                </button>
-                <button
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => navigate('/individuals')}
-                  className="inline-flex items-center px-8 py-3 border border-slate-600 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
+                  size="lg"
+                  className="gap-2"
                 >
                   Back to Information
-                </button>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -77,9 +81,9 @@ export function IndividualApplicationFlow() {
 
   if (currentStep === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 py-12 px-4">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
         <div className="max-w-4xl mx-auto">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="surface-panel">
             <CardContent className="p-12 text-center">
               <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle className="h-12 w-12 text-emerald-400" />
@@ -90,7 +94,7 @@ export function IndividualApplicationFlow() {
               </p>
               
               {applicationId && (
-                <div className="bg-slate-900 rounded-lg p-6 mb-8">
+                <div className="surface-panel rounded-lg p-6 mb-8">
                   <p className="text-slate-300 mb-2">Application ID</p>
                   <p className="text-2xl font-bold text-emerald-400">#{applicationId}</p>
                 </div>
@@ -115,18 +119,21 @@ export function IndividualApplicationFlow() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-                <button
+                <Button
                   onClick={() => navigate('/dashboard/applications')}
-                  className="inline-flex items-center px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                  className="gap-2"
+                  size="lg"
                 >
                   View My Applications
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => navigate('/dashboard')}
-                  className="inline-flex items-center px-8 py-3 border border-slate-600 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
+                  size="lg"
+                  className="gap-2"
                 >
                   Go to Dashboard
-                </button>
+                </Button>
               </div>
             </CardContent>
           </Card>
