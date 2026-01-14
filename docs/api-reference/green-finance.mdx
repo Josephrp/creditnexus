@@ -1,0 +1,75 @@
+---
+title: Green Finance API
+description: API endpoints for green finance assessments and ESG metrics
+---
+
+## Green Finance API
+
+API endpoints for green finance assessments, sustainability scoring, SDG alignment, and ESG compliance monitoring.
+
+**Base Path**: `/api/green-finance`  
+**Code Reference**: `app/api/green_finance_routes.py`
+
+---
+
+## Green Finance Assessment
+
+### Assess Green Finance
+
+<Endpoint method="POST" path="/api/green-finance/assess" />
+
+Perform comprehensive green finance assessment for a location.
+
+**Query Parameters**:
+- `location_lat`: Location latitude (required)
+- `location_lon`: Location longitude (required)
+- `transaction_id`: Optional transaction/deal ID
+- `deal_id`: Optional deal ID
+- `loan_asset_id`: Optional loan asset ID
+
+**Response**: Green finance assessment including:
+- Location type
+- Air quality index
+- Composite sustainability score
+- SDG alignment
+- Policy compliance evaluation
+- CDM events
+
+**Code Reference**: `app/api/green_finance_routes.py` (assess_green_finance endpoint)
+
+---
+
+## Assessment Components
+
+### Sustainability Metrics
+
+- **NDVI Score**: Vegetation health index
+- **Air Quality Index**: Air quality measurement
+- **Green Infrastructure**: Green infrastructure presence
+- **Pollution Levels**: Pollution monitoring data
+- **Composite Score**: Overall sustainability score
+
+### SDG Alignment
+
+- **SDG Evaluation**: UN Sustainable Development Goals alignment
+- **SDG Scores**: Individual SDG scores
+- **Alignment Percentage**: Overall SDG alignment percentage
+
+### Policy Compliance
+
+- **Green Finance Policies**: Evaluation against green finance policy rules
+- **Compliance Status**: Compliance or breach status
+- **Policy Decisions**: Policy evaluation results
+
+---
+
+## Additional Resources
+
+- [Verification Feature](/features/verification)
+- [Configuration Guide](/getting-started/configuration#enhanced-satellite-verification--green-finance)
+- [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/green_finance_routes.py`

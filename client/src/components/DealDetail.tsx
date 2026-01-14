@@ -30,6 +30,8 @@ import { NotarizationPayment } from '@/components/NotarizationPayment';
 import { NotarizationButton } from '@/components/NotarizationButton';
 import { SignatureButton } from '@/components/SignatureButton';
 import { NotarizationStatus } from '@/components/NotarizationStatus';
+import { LoanRecoverySidebar } from '@/components/LoanRecoverySidebar';
+import { BorrowerContactManager } from '@/components/BorrowerContactManager';
 
 interface Deal {
   id: number;
@@ -87,7 +89,7 @@ export function DealDetail() {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteType, setNewNoteType] = useState('general');
   const [submittingNote, setSubmittingNote] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'notes' | 'timeline' | 'filings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'notes' | 'timeline' | 'filings' | 'recovery'>('overview');
 
   useEffect(() => {
     if (dealId) {
@@ -404,6 +406,16 @@ export function DealDetail() {
         >
           Filings
         </button>
+        <button
+          onClick={() => setActiveTab('recovery')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'recovery'
+              ? 'text-emerald-400 border-b-2 border-emerald-400'
+              : 'text-slate-400 hover:text-slate-100'
+          }`}
+        >
+          Recovery
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -437,6 +449,7 @@ export function DealDetail() {
 
           {/* Notarization Status */}
           <NotarizationStatus
+            key={`notarization-${deal.id}`}
             dealId={deal.id}
           />
 
@@ -456,6 +469,19 @@ export function DealDetail() {
               setError(error);
             }}
           />
+
+          {/* Borrower Contact Management */}
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <BorrowerContactManager
+                dealId={deal.id}
+                onContactUpdate={() => {
+                  // Refresh deal details if needed
+                  fetchDealDetail();
+                }}
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -679,6 +705,19 @@ export function DealDetail() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {activeTab === 'recovery' && deal && (
+        <div className="space-y-4">
+          <div className="h-[600px]">
+            <LoanRecoverySidebar
+              dealId={deal.id}
+              onDefaultSelect={(defaultId) => {
+                console.log('Default selected:', defaultId);
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -1,0 +1,1 @@
+This is an urgent notice for {{borrower_name}}. Your loan {{loan_id}} payment of {{amount_overdue}} is {{days_past_due}} days overdue. This matter requires immediate attention. Please contact us immediately at +1-800-XXX-XXXX.

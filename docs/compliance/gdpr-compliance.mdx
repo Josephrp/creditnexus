@@ -1,0 +1,151 @@
+---
+title: GDPR Compliance
+description: General Data Protection Regulation (GDPR) compliance
+---
+
+## GDPR Compliance
+
+CreditNexus implements GDPR-compliant data protection measures to ensure user privacy and data rights.
+
+**Code Reference**: `app/api/gdpr_routes.py`, `docs/SECURITY.md` (lines 232-248)
+
+---
+
+## GDPR Rights Implementation
+
+### Right to Access (Article 15)
+
+Users can export their personal data:
+
+<Endpoint method="POST" path="/api/gdpr/export" />
+
+**Request**:
+```json
+{
+  "user_id": 123,
+  "format": "json"  // or "csv"
+}
+```
+
+**Response**: Exported user data in requested format
+
+**Code Reference**: `app/api/gdpr_routes.py` (export endpoint)
+
+### Right to Deletion (Article 17)
+
+Users can request deletion of their personal data:
+
+<Endpoint method="POST" path="/api/gdpr/delete" />
+
+**Request**:
+```json
+{
+  "user_id": 123,
+  "confirm_deletion": true
+}
+```
+
+**Response**: Confirmation of data deletion
+
+**Code Reference**: `app/api/gdpr_routes.py` (delete endpoint)
+
+### Compliance Status
+
+Check GDPR compliance status:
+
+<Endpoint method="GET" path="/api/gdpr/status" />
+
+**Response**: Compliance status and implemented features
+
+**Code Reference**: `app/api/gdpr_routes.py` (status endpoint)
+
+---
+
+## Data Protection Measures
+
+### Encryption
+
+- **In Transit**: SSL/TLS encryption for all API communications
+- **At Rest**: Database server encryption (PostgreSQL)
+- **Secrets**: Pydantic `SecretStr` for API keys
+
+**Code Reference**: `docs/SECURITY.md` (Data Protection section)
+
+### Access Controls
+
+- **Role-Based Permissions**: Granular access control
+- **Audit Logging**: All data access logged
+- **Data Minimization**: Only necessary data collected
+
+**Code Reference**: `app/core/permissions.py`, `app/utils/audit.py`
+
+### Data Retention
+
+**Current Policy**:
+- **Audit Logs**: 7 years (regulatory requirement)
+- **User Data**: Until deletion requested (GDPR)
+- **Documents**: Until deletion requested
+- **Financial Data**: Per regulatory requirements
+
+**Code Reference**: `docs/SECURITY.md` (Data Retention section)
+
+---
+
+## GDPR Compliance Status
+
+### ✅ Implemented
+
+- Right to access (data export endpoint)
+- Right to deletion (data erasure endpoint)
+- Audit logging
+- Data minimization principles
+- SSL/TLS encryption
+
+### ⚠️ In Progress
+
+- Data retention policies (automated)
+- Encryption at rest for PII
+- Breach notification automation
+
+**Code Reference**: `docs/SECURITY.md` (lines 232-248)
+
+---
+
+## Breach Notification
+
+### GDPR Requirements
+
+- **Supervisory Authority**: Within 72 hours
+- **Users**: Without undue delay if high risk
+- **Documentation**: Maintain records of all breaches
+
+**Code Reference**: `docs/INCIDENT_RESPONSE.md` (GDPR section)
+
+---
+
+## Data Processing Principles
+
+CreditNexus adheres to GDPR data processing principles:
+
+1. **Lawfulness, fairness, and transparency**
+2. **Purpose limitation**
+3. **Data minimization**
+4. **Accuracy**
+5. **Storage limitation**
+6. **Integrity and confidentiality**
+7. **Accountability**
+
+---
+
+## Additional Resources
+
+- [Security Documentation](/docs/SECURITY.md)
+- [Incident Response Plan](/docs/INCIDENT_RESPONSE.md)
+- [GDPR API Reference](/api-reference/gdpr)
+- [Configuration Guide](/getting-started/configuration#authentication-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Regulation**: Regulation (EU) 2016/679 (GDPR)  
+**Code Reference**: `app/api/gdpr_routes.py`, `docs/SECURITY.md`, `docs/INCIDENT_RESPONSE.md`

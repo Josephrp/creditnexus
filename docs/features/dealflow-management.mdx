@@ -1,0 +1,228 @@
+---
+title: Dealflow Management
+description: Comprehensive deal tracking and collaboration platform
+---
+
+## Overview
+
+The Dealflow Management system provides comprehensive deal tracking, timeline visualization, collaborative note-taking, and deal detail management for credit agreements and loan applications.
+
+**Code Reference**: `app/services/deal_service.py`, `app/api/routes.py` (deal endpoints)  
+**Frontend**: `client/src/components/DealDashboard.tsx`, `client/src/components/DealDetail.tsx`
+
+---
+
+## Key Features
+
+### Deal Dashboard
+
+- **Portfolio Overview**: View all deals with filtering and search
+- **Status Filtering**: Filter by deal status (draft, submitted, approved, etc.)
+- **Type Filtering**: Filter by deal type (loan_application, refinancing, etc.)
+- **Search Functionality**: Search deals by ID, applicant, or keywords
+- **Pagination**: Efficient pagination for large deal portfolios
+
+**Code Reference**: `client/src/components/DealDashboard.tsx`
+
+### Deal Timeline
+
+- **Visual Timeline**: Visual representation of deal events and milestones
+- **Event Tracking**: Track all deal state changes and updates
+- **Milestone Markers**: Mark important deal milestones
+- **Chronological View**: View events in chronological order
+
+**Code Reference**: `client/src/components/DealDetail.tsx` (timeline view)
+
+### Deal Notes
+
+- **Collaborative Notes**: Add notes and comments to deals
+- **User Attribution**: Track which user added each note
+- **Timestamp Tracking**: Automatic timestamp for all notes
+- **Rich Text Support**: Support for formatted text in notes
+
+**Code Reference**: `app/db/models.py` (DealNote model)
+
+### Deal Detail View
+
+- **Comprehensive Information**: Complete deal information and metadata
+- **Document Management**: View and manage deal documents
+- **Status Tracking**: Track deal status and state changes
+- **Application Link**: Link to associated application
+
+**Code Reference**: `client/src/components/DealDetail.tsx`
+
+---
+
+## Deal Statuses
+
+### Status Values
+
+- **`draft`**: Deal is in draft state
+- **`submitted`**: Deal has been submitted for review
+- **`under_review`**: Deal is under review
+- **`approved`**: Deal has been approved
+- **`rejected`**: Deal has been rejected
+- **`active`**: Deal is active
+- **`closed`**: Deal is closed
+- **`restructuring`**: Deal is being restructured
+- **`withdrawn`**: Deal has been withdrawn
+
+**Code Reference**: `app/db/models.py` (Deal model)
+
+---
+
+## Workflow
+
+### 1. Create Deal
+
+1. **From Application**: Create deal from loan application
+2. **Manual Creation**: Manually create new deal
+3. **Deal Configuration**: Set deal type, status, and metadata
+4. **Folder Creation**: Automatic folder creation for deal documents
+5. **Initial Note**: Add initial deal note
+
+### 2. Deal Management
+
+1. **Update Status**: Change deal status as it progresses
+2. **Add Documents**: Upload and attach documents to deal
+3. **Add Notes**: Add collaborative notes and comments
+4. **Timeline Updates**: Automatic timeline event creation
+5. **Status Tracking**: Monitor deal progress
+
+### 3. Deal Completion
+
+1. **Final Status**: Set deal to approved, rejected, or closed
+2. **Documentation**: Ensure all documents are attached
+3. **Notes Summary**: Review all deal notes
+4. **Archive**: Archive completed deals
+
+---
+
+## API Endpoints
+
+### List Deals
+
+<Endpoint method="GET" path="/api/deals" />
+
+List all deals with filtering and pagination.
+
+**Query Parameters**:
+- `status`: Filter by deal status
+- `deal_type`: Filter by deal type
+- `search`: Search query
+- `limit`: Items per page (default: 50)
+- `offset`: Pagination offset
+
+**Response**: Paginated list of deals
+
+**Code Reference**: `app/api/routes.py` (deal endpoints)
+
+### Get Deal Details
+
+<Endpoint method="GET" path="/api/deals/{deal_id}" />
+
+Get detailed information about a specific deal.
+
+**Response**: Complete deal information including notes, documents, and timeline
+
+### Create Deal Note
+
+<Endpoint method="POST" path="/api/deals/{deal_id}/notes" />
+
+Add a note to a deal.
+
+**Request Body**:
+```json
+{
+  "note": "Deal approved by credit committee",
+  "note_type": "status_update"
+}
+```
+
+**Response**: Created note with timestamp and user attribution
+
+### Get Deal Timeline
+
+<Endpoint method="GET" path="/api/deals/{deal_id}/timeline" />
+
+Get timeline of events for a deal.
+
+**Response**: Chronological list of deal events
+
+---
+
+## Database Models
+
+### Deal
+
+**Location**: `app/db/models.py`
+
+**Fields**:
+- `deal_id`: Unique deal identifier
+- `applicant_id`: User ID of applicant
+- `application_id`: Associated application ID
+- `status`: Current deal status
+- `deal_type`: Type of deal
+- `deal_data`: JSON metadata
+- `folder_path`: Storage folder path
+
+### DealNote
+
+**Location**: `app/db/models.py`
+
+**Fields**:
+- `deal_id`: Associated deal ID
+- `user_id`: User who created note
+- `note`: Note content
+- `note_type`: Type of note
+- `created_at`: Creation timestamp
+
+**Code Reference**: `app/db/models.py` (Deal, DealNote models)
+
+---
+
+## User Interface
+
+### Deal Dashboard
+
+**Location**: `client/src/components/DealDashboard.tsx`
+
+**Features**:
+- **Deal List**: Table view of all deals
+- **Filtering**: Status and type filters
+- **Search**: Real-time search functionality
+- **Pagination**: Efficient pagination controls
+- **Quick Actions**: Quick access to deal actions
+
+### Deal Detail
+
+**Location**: `client/src/components/DealDetail.tsx`
+
+**Features**:
+- **Deal Information**: Complete deal details
+- **Timeline View**: Visual timeline of events
+- **Notes Section**: Collaborative notes interface
+- **Documents Section**: Document management
+- **Status Updates**: Status change interface
+
+---
+
+## Best Practices
+
+1. **Status Management**: Keep deal status updated as it progresses
+2. **Document Organization**: Organize documents in deal folders
+3. **Note Documentation**: Document important decisions in notes
+4. **Timeline Accuracy**: Ensure timeline events are accurate
+5. **Collaboration**: Use notes for team collaboration
+
+---
+
+## Additional Resources
+
+- [Documentation Guide](/guides/document-extraction)
+- [Configuration Guide](/getting-started/configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/deal_service.py`, `app/api/routes.py`, `client/src/components/DealDashboard.tsx`

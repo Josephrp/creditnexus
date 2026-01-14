@@ -1,0 +1,854 @@
+---
+title: Configuration
+description: Complete environment variable reference and configuration guide for CreditNexus
+---
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Setup"
+    icon="rocket"
+    href="/getting-started/quickstart"
+  >
+    Get started with minimal configuration
+  </Card>
+  <Card
+    title="External Services"
+    icon="settings"
+    href="/guides/twilio-setup"
+  >
+    Configure Twilio, DigiSigner, and more
+  </Card>
+</CardGroup>
+
+## Overview
+
+CreditNexus uses environment variables for all configuration. Create a `.env` file in the project root directory with your settings. All sensitive values (API keys, secrets) are stored as `SecretStr` types in Pydantic settings for security.
+
+**Configuration File**: `app/core/config.py`
+
+---
+
+## LLM Provider Configuration
+
+CreditNexus supports multiple LLM providers: OpenAI (default), vLLM, and HuggingFace. You can also use local models with HuggingFace.
+
+### OpenAI Configuration
+
+**Required for all providers** (used as fallback):
+
+<ParamField body="OPENAI_API_KEY" type="string" required>
+  Your OpenAI API key. Get from https://platform.openai.com/api-keys
+</ParamField>
+
+<ParamField body="LLM_PROVIDER" type="string">
+  LLM provider: `"openai"`, `"vllm"`, or `"huggingface"`. Default: `"openai"`
+</ParamField>
+
+<ParamField body="LLM_MODEL" type="string">
+  Model identifier. OpenAI: `"gpt-4o"`, `"gpt-4o-mini"`, `"gpt-3.5-turbo"`. Default: `"gpt-4o"`
+</ParamField>
+
+<ParamField body="LLM_TEMPERATURE" type="float">
+  Temperature for generation (0.0 = deterministic, 1.0 = creative). Default: `0.0`
+</ParamField>
+
+**Code Reference**: `app/core/llm_client.py` - `get_chat_model()`
+
+### vLLM Configuration
+
+For self-hosted vLLM servers:
+
+<ParamField body="VLLM_BASE_URL" type="string">
+  Base URL for your vLLM server (e.g., `"http://localhost:8000"`)
+</ParamField>
+
+<ParamField body="VLLM_API_KEY" type="string">
+  Optional API key if your vLLM server requires authentication
+</ParamField>
+
+**Example**:
+```env
+LLM_PROVIDER=vllm
+VLLM_BASE_URL=http://localhost:8000
+LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
+```
+
+### HuggingFace Configuration
+
+HuggingFace supports both inference endpoints (API-based) and local models.
+
+<ParamField body="HUGGINGFACE_API_KEY" type="string">
+  HuggingFace API token. Get from https://huggingface.co/settings/tokens
+</ParamField>
+
+<ParamField body="HUGGINGFACE_BASE_URL" type="string">
+  Custom base URL. Default: `https://api-inference.huggingface.co/v1`
+  
+  For Inference Providers router: `https://router.huggingface.co/{provider}/v3/openai`
+</ParamField>
+
+<ParamField body="HUGGINGFACE_INFERENCE_PROVIDER" type="string">
+  Inference provider selection. Options:
+  - `"auto"` (default): Selects first available provider from your preferences
+  - `"novita"`, `"together"`, `"sambanova"`, `"fireworks-ai"`, `"cohere"`, `"fal-ai"`, `"groq"`, `"replicate"`, `"hf-inference"`, `"black-forest-labs"`, `"cerebras"`, `"featherless-ai"`, `"hyperbolic"`, `"nebius"`, `"novita"`, `"nscale"`, `"openai"`
+  
+  Default: `"novita"` (preferred provider)
+</ParamField>
+
+<ParamField body="HUGGINGFACE_USE_LOCAL" type="boolean">
+  Set to `true` to load models locally using transformers (requires GPU/CPU resources).
+  Set to `false` to use inference endpoints (API-based, no local resources needed).
+  
+  Default: `false`
+</ParamField>
+
+**Recommended Models for Novita**:
+- `meta-llama/Llama-3.1-8B-Instruct`
+- `microsoft/Phi-3.5-mini-instruct`
+- `deepseek-ai/DeepSeek-V3.2-Exp`
+
+**Code Reference**: `app/core/llm_client.py` - `get_chat_model()`
+
+---
+
+## Embeddings Configuration
+
+<ParamField body="EMBEDDINGS_MODEL" type="string">
+  Embeddings model identifier.
+  
+  **OpenAI**: `"text-embedding-3-small"`, `"text-embedding-3-large"`, `"text-embedding-ada-002"`
+  
+  **HuggingFace**: `"sentence-transformers/all-MiniLM-L6-v2"` (22.7M params, lightweight), `"BAAI/bge-small-en-v1.5"` (33.4M params)
+  
+  Default: `"text-embedding-3-small"`
+</ParamField>
+
+<ParamField body="EMBEDDINGS_PROVIDER" type="string">
+  Embeddings provider: `"openai"`, `"huggingface"`, or leave empty to use `LLM_PROVIDER`.
+  
+  Default: `"huggingface"`
+</ParamField>
+
+<ParamField body="EMBEDDINGS_USE_LOCAL" type="boolean">
+  Use local embeddings model instead of API (HuggingFace only). Default: `false`
+</ParamField>
+
+<ParamField body="EMBEDDINGS_DEVICE" type="string">
+  Device for local embeddings: `"cpu"`, `"cuda"`, `"cuda:0"`, or `"auto"`. Default: `"cpu"`
+</ParamField>
+
+<ParamField body="EMBEDDINGS_MODEL_KWARGS" type="string">
+  Additional model kwargs as JSON string. Examples:
+  - `'{"device_map":"auto"}'`
+  - `'{"trust_remote_code":true}'`
+  - `'{"device":"cuda","model_kwargs":{"torch_dtype":"float16"}}'`
+</ParamField>
+
+**Code Reference**: `app/core/llm_client.py` - `get_embeddings_model()`
+
+---
+
+## SentinelHub Configuration
+
+SentinelHub provides satellite imagery for verification workflows.
+
+<ParamField body="SENTINELHUB_KEY" type="string">
+  SentinelHub OAuth client ID. Get from https://www.sentinel-hub.com/
+</ParamField>
+
+<ParamField body="SENTINELHUB_SECRET" type="string">
+  SentinelHub OAuth client secret. Get from https://www.sentinel-hub.com/
+</ParamField>
+
+**Setup Guide**: See [SentinelHub Setup Guide](/guides/sentinelhub-setup)
+
+**Code Reference**: `app/agents/verifier.py`
+
+---
+
+## Policy Engine Configuration
+
+<ParamField body="POLICY_ENABLED" type="boolean">
+  Enable policy engine for real-time compliance enforcement. Default: `true`
+</ParamField>
+
+<ParamField body="POLICY_RULES_DIR" type="string">
+  Directory containing policy rule YAML files. Default: `app/policies`
+</ParamField>
+
+<ParamField body="POLICY_RULES_PATTERN" type="string">
+  File pattern for policy rules. Default: `*.yaml`
+</ParamField>
+
+<ParamField body="POLICY_ENGINE_VENDOR" type="string">
+  Policy engine vendor (optional). Default: `""` (uses default engine)
+</ParamField>
+
+<ParamField body="POLICY_AUTO_RELOAD" type="boolean">
+  Auto-reload policy rules on file changes (development only). Default: `false`
+</ParamField>
+
+**Code Reference**: `app/core/policy_config.py`, `app/services/policy_service.py`
+
+---
+
+## Database Configuration
+
+<ParamField body="DATABASE_URL" type="string" required>
+  PostgreSQL connection string:
+  
+  Format: `postgresql://user:password@localhost:5432/creditnexus`
+  
+  For SQLite (development fallback): `sqlite:///./creditnexus.db`
+</ParamField>
+
+<ParamField body="DATABASE_ENABLED" type="boolean">
+  Enable database connection. Default: `true`
+</ParamField>
+
+### Database SSL/TLS Configuration
+
+For production, SSL/TLS encryption is required:
+
+<ParamField body="DB_SSL_REQUIRED" type="boolean">
+  Require SSL/TLS for database connections. Default: `false` (development), `true` (production)
+</ParamField>
+
+<ParamField body="DB_SSL_MODE" type="string">
+  SSL mode: `"prefer"`, `"require"`, `"verify-ca"`, `"verify-full"`. Default: `"prefer"`
+</ParamField>
+
+<ParamField body="DB_SSL_CERT" type="string">
+  Path to SSL client certificate file (optional)
+</ParamField>
+
+<ParamField body="DB_SSL_KEY" type="string">
+  Path to SSL client key file (optional)
+</ParamField>
+
+<ParamField body="DB_SSL_CA" type="string">
+  Path to SSL CA certificate file (optional)
+</ParamField>
+
+**Code Reference**: `app/core/config.py` (lines 129-227), `docs/SECURITY.md` (Database SSL section)
+
+---
+
+## Authentication Configuration
+
+<ParamField body="JWT_SECRET_KEY" type="string" required>
+  Secret key for JWT token generation. Generate a secure random string.
+  
+  **Security**: Never commit this to version control!
+</ParamField>
+
+<ParamField body="JWT_ALGORITHM" type="string">
+  JWT algorithm. Default: `"HS256"`
+</ParamField>
+
+<ParamField body="JWT_ACCESS_TOKEN_EXPIRE_MINUTES" type="integer">
+  Access token expiration in minutes. Default: `30`
+</ParamField>
+
+<ParamField body="JWT_REFRESH_TOKEN_EXPIRE_DAYS" type="integer">
+  Refresh token expiration in days. Default: `7`
+</ParamField>
+
+**Code Reference**: `app/auth/jwt_auth.py`
+
+---
+
+## Twilio Configuration (Loan Recovery)
+
+Twilio integration enables SMS and voice communication for loan recovery workflows.
+
+<ParamField body="TWILIO_ENABLED" type="boolean">
+  Enable Twilio integration. Default: `false`
+</ParamField>
+
+<ParamField body="TWILIO_ACCOUNT_SID" type="string">
+  Twilio Account SID. Get from https://console.twilio.com/
+</ParamField>
+
+<ParamField body="TWILIO_AUTH_TOKEN" type="string">
+  Twilio Auth Token. Get from https://console.twilio.com/
+  
+  **Security**: Never commit this to version control!
+</ParamField>
+
+<ParamField body="TWILIO_PHONE_NUMBER" type="string">
+  Twilio phone number in E.164 format (e.g., `+1234567890`).
+  
+  Purchase from https://console.twilio.com/us1/develop/phone-numbers/manage/search
+</ParamField>
+
+<ParamField body="TWILIO_SMS_ENABLED" type="boolean">
+  Enable SMS functionality. Default: `true`
+</ParamField>
+
+<ParamField body="TWILIO_VOICE_ENABLED" type="boolean">
+  Enable voice call functionality. Default: `true`
+</ParamField>
+
+<ParamField body="TWILIO_WEBHOOK_URL" type="string">
+  Webhook URL for Twilio status callbacks.
+  
+  Format: `https://your-domain.com/api/twilio/webhook/status`
+  
+  For local development with tunneling: `https://your-tunnel-url.loca.lt/api/twilio/webhook/status`
+</ParamField>
+
+**Setup Guide**: See [Twilio Setup Guide](/guides/twilio-setup)
+
+**Code Reference**: `app/services/twilio_service.py`, `app/services/loan_recovery_service.py`
+
+---
+
+## DigiSigner Configuration (Digital Signatures)
+
+<ParamField body="DIGISIGNER_API_KEY" type="string">
+  DigiSigner API key. Get from https://www.digisigner.com/
+</ParamField>
+
+<ParamField body="DIGISIGNER_BASE_URL" type="string">
+  DigiSigner API base URL. Default: `https://api.digisigner.com/v1`
+</ParamField>
+
+<ParamField body="DIGISIGNER_WEBHOOK_SECRET" type="string">
+  Webhook secret for verifying DigiSigner webhook signatures (optional but recommended for production)
+</ParamField>
+
+**Setup Guide**: See [DigiSigner Setup Guide](/guides/digisigner-setup)
+
+**Code Reference**: `app/services/signature_service.py`
+
+---
+
+## Companies House API Configuration (UK Regulatory Filings)
+
+<ParamField body="COMPANIES_HOUSE_API_KEY" type="string">
+  Companies House API key. Free registration at https://developer.company-information.service.gov.uk/
+  
+  Required for automated UK charge filings (MR01)
+</ParamField>
+
+**Code Reference**: `app/services/filing_service.py`
+
+---
+
+## Blockchain & Smart Contract Configuration
+
+CreditNexus uses Base network (Coinbase Layer 2) for blockchain operations.
+
+### Network Configuration
+
+<ParamField body="X402_ENABLED" type="boolean">
+  Enable x402 payment protocol. Default: `true`
+</ParamField>
+
+<ParamField body="X402_FACILITATOR_URL" type="string">
+  x402 facilitator URL. Default: `https://facilitator.x402.org`
+</ParamField>
+
+<ParamField body="X402_NETWORK" type="string">
+  Blockchain network. Default: `"base"`
+</ParamField>
+
+<ParamField body="X402_NETWORK_RPC_URL" type="string">
+  RPC URL for Base network:
+  
+  **Mainnet**: `https://mainnet.base.org`
+  
+  **Sepolia Testnet**: `https://sepolia.base.org` (recommended for development)
+  
+  **Local Hardhat**: `http://127.0.0.1:8545`
+</ParamField>
+
+<ParamField body="X402_TOKEN" type="string">
+  Token symbol. Default: `"USDC"`
+</ParamField>
+
+<ParamField body="USDC_TOKEN_ADDRESS" type="string">
+  USDC token address on Base network.
+  
+  **Base Mainnet**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+  
+  **Base Sepolia**: Check Base Sepolia documentation for testnet USDC address
+</ParamField>
+
+### Smart Contract Configuration
+
+<ParamField body="SECURITIZATION_NOTARIZATION_CONTRACT" type="string">
+  SecuritizationNotarization contract address (Base network).
+  
+  Leave empty to auto-deploy on first use (requires `BLOCKCHAIN_AUTO_DEPLOY=true`)
+</ParamField>
+
+<ParamField body="SECURITIZATION_TOKEN_CONTRACT" type="string">
+  SecuritizationToken (ERC-721) contract address (Base network).
+  
+  Leave empty to auto-deploy on first use (requires `BLOCKCHAIN_AUTO_DEPLOY=true`)
+</ParamField>
+
+<ParamField body="SECURITIZATION_PAYMENT_ROUTER_CONTRACT" type="string">
+  SecuritizationPaymentRouter contract address (Base network).
+  
+  Leave empty to auto-deploy on first use (requires `BLOCKCHAIN_AUTO_DEPLOY=true`)
+</ParamField>
+
+<ParamField body="BLOCKCHAIN_DEPLOYER_PRIVATE_KEY" type="string">
+  Private key for contract deployment (optional, auto-generated in dev if not provided).
+  
+  **Security**: Never commit private keys to version control!
+  
+  Format: `0x...` (64 hex characters, no 0x prefix in .env)
+</ParamField>
+
+<ParamField body="BLOCKCHAIN_AUTO_DEPLOY" type="boolean">
+  Auto-deploy contracts if addresses not in config.
+  
+  Default: `true` (development), `false` (production - manually deploy contracts)
+</ParamField>
+
+<ParamField body="WALLET_AUTO_GENERATE_DEMO" type="boolean">
+  Auto-generate demo wallet addresses for users without wallets.
+  
+  Default: `true` (useful for development and demos)
+</ParamField>
+
+**Setup Guide**: See [MetaMask Setup Guide](/guides/metamask-setup)
+
+**Code Reference**: `app/core/config.py` (lines 143-172), `contracts/hardhat.config.js`
+
+---
+
+## Enhanced Satellite Verification & Green Finance
+
+<ParamField body="ENHANCED_SATELLITE_ENABLED" type="boolean">
+  Enable enhanced satellite features (green finance metrics, OSM, air quality). Default: `true`
+</ParamField>
+
+### OpenStreetMap Configuration
+
+<ParamField body="STREET_MAP_API_PROVIDER" type="string">
+  Street map API provider. Only `"openstreetmap"` supported.
+</ParamField>
+
+<ParamField body="OSM_OVERPASS_API_URL" type="string">
+  OpenStreetMap Overpass API URL. Default: `https://overpass-api.de/api/interpreter`
+</ParamField>
+
+<ParamField body="OSM_CACHE_ENABLED" type="boolean">
+  Enable OSM data caching. Default: `true`
+</ParamField>
+
+<ParamField body="OSM_CACHE_TTL_HOURS" type="integer">
+  OSM cache TTL in hours. Default: `24`
+</ParamField>
+
+### Air Quality Configuration
+
+<ParamField body="AIR_QUALITY_ENABLED" type="boolean">
+  Enable air quality monitoring. Default: `true`
+</ParamField>
+
+<ParamField body="AIR_QUALITY_API_PROVIDER" type="string">
+  Air quality API provider. Default: `"openaq"`
+</ParamField>
+
+<ParamField body="AIR_QUALITY_API_KEY" type="string">
+  Air quality API key (not required for OpenAQ free tier)
+</ParamField>
+
+<ParamField body="AIR_QUALITY_CACHE_ENABLED" type="boolean">
+  Enable air quality data caching. Default: `true`
+</ParamField>
+
+<ParamField body="AIR_QUALITY_CACHE_TTL_HOURS" type="integer">
+  Air quality cache TTL in hours. Default: `24`
+</ParamField>
+
+### Vehicle Detection (Selective - High Cost)
+
+<ParamField body="VEHICLE_DETECTION_ENABLED" type="boolean">
+  Enable vehicle detection (default: disabled, enable for high-value cases only). Default: `false`
+</ParamField>
+
+<ParamField body="VEHICLE_DETECTION_MODEL_PATH" type="string">
+  Path to vehicle detection model. Default: `./models/vehicle_detector.pt`
+</ParamField>
+
+<ParamField body="VEHICLE_DETECTION_MIN_TRANSACTION_AMOUNT" type="float">
+  Only process if transaction amount exceeds this value. Default: `1000000.0` ($1M)
+</ParamField>
+
+<ParamField body="VEHICLE_DETECTION_USE_HIGH_RES_IMAGERY" type="boolean">
+  Use high-resolution imagery for vehicle detection. Default: `true`
+</ParamField>
+
+### Pollution Monitoring
+
+<ParamField body="POLLUTION_MONITORING_ENABLED" type="boolean">
+  Enable pollution monitoring. Default: `true`
+</ParamField>
+
+<ParamField body="METHANE_MONITORING_ENABLED" type="boolean">
+  Enable methane monitoring. Default: `true`
+</ParamField>
+
+<ParamField body="METHANE_USE_SENTINEL5P" type="boolean">
+  Use Sentinel-5P for methane detection (free, coarse resolution). Default: `true`
+</ParamField>
+
+### Sustainability Scoring
+
+<ParamField body="SUSTAINABILITY_SCORING_ENABLED" type="boolean">
+  Enable sustainability scoring. Default: `true`
+</ParamField>
+
+<ParamField body="SUSTAINABILITY_NDVI_WEIGHT" type="float">
+  NDVI component weight (must sum to 1.0). Default: `0.25`
+</ParamField>
+
+<ParamField body="SUSTAINABILITY_AQI_WEIGHT" type="float">
+  Air Quality Index weight. Default: `0.25`
+</ParamField>
+
+<ParamField body="SUSTAINABILITY_ACTIVITY_WEIGHT" type="float">
+  Activity weight. Default: `0.20`
+</ParamField>
+
+<ParamField body="SUSTAINABILITY_GREEN_INFRA_WEIGHT" type="float">
+  Green infrastructure weight. Default: `0.15`
+</ParamField>
+
+<ParamField body="SUSTAINABILITY_POLLUTION_WEIGHT" type="float">
+  Pollution weight. Default: `0.15`
+</ParamField>
+
+**Code Reference**: `app/agents/verifier.py`, `app/services/green_finance_service.py`
+
+---
+
+## LangChain Configuration
+
+<ParamField body="FILING_CHAIN_TEMPERATURE" type="float">
+  Temperature for filing requirement evaluation chains (0.0 = deterministic). Default: `0.0`
+</ParamField>
+
+<ParamField body="SIGNATURE_CHAIN_TEMPERATURE" type="float">
+  Temperature for signature request generation chains (0.0 = deterministic). Default: `0.0`
+</ParamField>
+
+<ParamField body="FILING_CHAIN_MAX_RETRIES" type="integer">
+  Maximum retry attempts for filing chains. Default: `3`
+</ParamField>
+
+<ParamField body="SIGNATURE_CHAIN_MAX_RETRIES" type="integer">
+  Maximum retry attempts for signature chains. Default: `3`
+</ParamField>
+
+---
+
+## Audio & Image Processing Configuration
+
+### Speech-to-Text (STT)
+
+<ParamField body="STT_API_URL" type="string">
+  Gradio Space URL for speech-to-text. Default: `https://nvidia-canary-1b-v2.hf.space`
+</ParamField>
+
+<ParamField body="STT_SOURCE_LANG" type="string">
+  Source language code. Default: `"en"`
+</ParamField>
+
+<ParamField body="STT_TARGET_LANG" type="string">
+  Target language code. Default: `"en"`
+</ParamField>
+
+### Optical Character Recognition (OCR)
+
+<ParamField body="OCR_API_URL" type="string">
+  Gradio Space URL for OCR. Default: `https://prithivmlmods-multimodal-ocr3.hf.space`
+</ParamField>
+
+---
+
+## ChromaDB Configuration
+
+<ParamField body="CHROMADB_PERSIST_DIR" type="string">
+  Directory for ChromaDB persistence. Default: `./chroma_db`
+</ParamField>
+
+<ParamField body="CHROMADB_SEED_DOCUMENTS_DIR" type="string">
+  Optional: Directory to load documents into ChromaDB on startup
+</ParamField>
+
+**Code Reference**: `app/agents/vector_store.py`
+
+---
+
+## Demo Data Configuration
+
+<ParamField body="DEMO_DATA_ENABLED" type="boolean">
+  Enable demo data generation. Default: `true`
+</ParamField>
+
+<ParamField body="DEMO_DATA_DEAL_COUNT" type="integer">
+  Number of demo deals to generate. Default: `12`
+</ParamField>
+
+<ParamField body="DEMO_DATA_DEAL_TYPES" type="string">
+  Comma-separated list of deal types. Default: `loan_application,refinancing,restructuring`
+</ParamField>
+
+<ParamField body="DEMO_DATA_STORAGE_PATH" type="string">
+  Storage path for demo data. Default: `storage/deals/demo`
+</ParamField>
+
+<ParamField body="DEMO_DATA_CACHE_ENABLED" type="boolean">
+  Enable demo data caching. Default: `true`
+</ParamField>
+
+<ParamField body="DEMO_DATA_CACHE_TTL" type="integer">
+  Cache TTL in seconds. Default: `86400` (24 hours)
+</ParamField>
+
+<ParamField body="DEMO_DATA_CACHE_PATH" type="string">
+  Cache file path (optional)
+</ParamField>
+
+---
+
+## Seeding Configuration
+
+<ParamField body="SEED_PERMISSIONS" type="boolean">
+  Seed permission definitions and role mappings on startup. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_PERMISSIONS_FORCE" type="boolean">
+  Force update existing permissions (use with caution). Default: `false`
+</ParamField>
+
+<ParamField body="SEED_DEMO_USERS" type="boolean">
+  Seed demo users on startup. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_DEMO_USERS_FORCE" type="boolean">
+  Force update existing demo users (use with caution). Default: `false`
+</ParamField>
+
+<ParamField body="SEED_AUDITOR" type="boolean">
+  Seed auditor role. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_BANKER" type="boolean">
+  Seed banker role. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_LAW_OFFICER" type="boolean">
+  Seed law officer role. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_ACCOUNTANT" type="boolean">
+  Seed accountant role. Default: `false`
+</ParamField>
+
+<ParamField body="SEED_APPLICANT" type="boolean">
+  Seed applicant role. Default: `false`
+</ParamField>
+
+---
+
+## Remote API Configuration
+
+<ParamField body="REMOTE_API_ENABLED" type="boolean">
+  Enable remote API for SSL-enabled verification links. Default: `false`
+</ParamField>
+
+<ParamField body="REMOTE_API_SSL_CERT" type="string">
+  Path to SSL certificate file for remote API
+</ParamField>
+
+<ParamField body="REMOTE_API_SSL_KEY" type="string">
+  Path to SSL private key file for remote API
+</ParamField>
+
+**Code Reference**: `app/api/remote_routes.py`
+
+---
+
+## File Storage Configuration
+
+<ParamField body="STORAGE_BASE_DIR" type="string">
+  Base directory for file storage. Default: `./storage`
+</ParamField>
+
+<ParamField body="STORAGE_DEALS_DIR" type="string">
+  Directory for deal documents. Default: `storage/deals`
+</ParamField>
+
+<ParamField body="STORAGE_TEMPLATES_DIR" type="string">
+  Directory for templates. Default: `storage/templates`
+</ParamField>
+
+**Code Reference**: `app/services/file_storage_service.py`
+
+---
+
+## Configuration Examples
+
+### Minimal Development Setup
+
+```env
+# Required
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgresql://user:password@localhost:5432/creditnexus
+JWT_SECRET_KEY=your-secret-key-here
+
+# LLM
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o
+
+# Policy Engine
+POLICY_ENABLED=true
+```
+
+### Production Setup with All Features
+
+```env
+# Database (with SSL)
+DATABASE_URL=postgresql://user:password@localhost:5432/creditnexus
+DB_SSL_REQUIRED=true
+DB_SSL_MODE=verify-full
+DB_SSL_CA=/path/to/ca.crt
+
+# LLM
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o
+OPENAI_API_KEY=sk-...
+
+# Authentication
+JWT_SECRET_KEY=secure-random-string-here
+JWT_ALGORITHM=HS256
+
+# Twilio (Loan Recovery)
+TWILIO_ENABLED=true
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1234567890
+TWILIO_WEBHOOK_URL=https://your-domain.com/api/twilio/webhook/status
+
+# DigiSigner (Digital Signatures)
+DIGISIGNER_API_KEY=...
+DIGISIGNER_WEBHOOK_SECRET=...
+
+# SentinelHub (Satellite Imagery)
+SENTINELHUB_KEY=...
+SENTINELHUB_SECRET=...
+
+# Blockchain (Base Network)
+X402_NETWORK_RPC_URL=https://mainnet.base.org
+USDC_TOKEN_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+BLOCKCHAIN_AUTO_DEPLOY=false
+
+# Policy Engine
+POLICY_ENABLED=true
+POLICY_AUTO_RELOAD=false
+```
+
+### Local AI Setup (HuggingFace)
+
+```env
+# LLM Provider
+LLM_PROVIDER=huggingface
+HUGGINGFACE_API_KEY=hf_...
+HUGGINGFACE_USE_LOCAL=true
+LLM_MODEL=microsoft/Phi-3.5-mini-instruct
+
+# Embeddings
+EMBEDDINGS_PROVIDER=huggingface
+EMBEDDINGS_USE_LOCAL=true
+EMBEDDINGS_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDINGS_DEVICE=cuda
+```
+
+---
+
+## Security Best Practices
+
+1. **Never commit secrets to version control**
+   - Use `.env` file (already in `.gitignore`)
+   - Use `SecretStr` type in Pydantic settings
+   - Rotate keys regularly
+
+2. **Use SSL/TLS in production**
+   - Enable `DB_SSL_REQUIRED=true` for database
+   - Configure SSL certificates for remote API
+   - Use HTTPS for all webhook URLs
+
+3. **Environment-specific configuration**
+   - Development: Use testnet for blockchain, local models
+   - Production: Use mainnet, require SSL, disable auto-deployment
+
+4. **Access control**
+   - Use strong JWT secret keys
+   - Set appropriate token expiration times
+   - Enable policy engine for compliance
+
+---
+
+## Troubleshooting
+
+### LLM Provider Issues
+
+**Issue**: OpenAI API errors
+- Verify `OPENAI_API_KEY` is set correctly
+- Check API rate limits and billing
+- Review network connectivity
+
+**Issue**: HuggingFace local models not loading
+- Ensure sufficient RAM/VRAM
+- Check `EMBEDDINGS_DEVICE` setting
+- Verify model path is correct
+
+### Database Connection Issues
+
+**Issue**: Cannot connect to PostgreSQL
+- Verify `DATABASE_URL` format
+- Check PostgreSQL is running
+- Verify user permissions
+
+**Issue**: SSL connection errors
+- Verify SSL certificates are valid
+- Check `DB_SSL_MODE` setting
+- Ensure certificates are readable
+
+### Blockchain Issues
+
+**Issue**: Cannot connect to Base network
+- Verify `X402_NETWORK_RPC_URL` is correct
+- Check network connectivity
+- For testnet, use `https://sepolia.base.org`
+
+**Issue**: Contract deployment fails
+- Verify `BLOCKCHAIN_DEPLOYER_PRIVATE_KEY` is set
+- Check account has sufficient ETH for gas
+- Verify RPC URL is accessible
+
+---
+
+## Additional Resources
+
+- [Quick Start Guide](/getting-started/quickstart)
+- [Installation Guide](/getting-started/installation)
+- [Twilio Setup Guide](/guides/twilio-setup)
+- [DigiSigner Setup Guide](/guides/digisigner-setup)
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [SentinelHub Setup Guide](/guides/sentinelhub-setup)
+- [Security Documentation](/docs/SECURITY.md)
+
+---
+
+**Configuration File**: `app/core/config.py`  
+**Last Updated**: 2026-01-14

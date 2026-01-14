@@ -61,14 +61,7 @@ class SignatureService:
         """Get document file path."""
         from app.db.models import DocumentVersion, GeneratedDocument
         
-        # 1. Try to get from DocumentVersion (if document has versions)
-        if document.versions:
-            # Get the latest version
-            latest_version = sorted(document.versions, key=lambda v: v.version_number, reverse=True)[0]
-            if latest_version.file_path and Path(latest_version.file_path).exists():
-                return latest_version.file_path
-        
-        # 2. Try to get from GeneratedDocument (if document is generated)
+        # 1. Try to get from GeneratedDocument (if document is generated)
         if document.is_generated:
             generated_doc = self.db.query(GeneratedDocument).filter(
                 GeneratedDocument.source_document_id == document.id
@@ -76,7 +69,7 @@ class SignatureService:
             if generated_doc and generated_doc.file_path and Path(generated_doc.file_path).exists():
                 return generated_doc.file_path
         
-        # 3. Try to get from file storage (primary method for uploaded documents)
+        # 2. Try to get from file storage (primary method for uploaded documents)
         if document.deal_id:
             from app.db.models import Deal
             deal = self.db.query(Deal).filter(Deal.id == document.deal_id).first()
@@ -89,7 +82,7 @@ class SignatureService:
                 if document_path and Path(document_path).exists():
                     return document_path
         
-        # 4. Try to get from uploaded_by user if no deal
+        # 3. Try to get from uploaded_by user if no deal
         if document.uploaded_by:
             document_path = self.file_storage.get_document_path(
                 user_id=document.uploaded_by,
@@ -98,6 +91,31 @@ class SignatureService:
             )
             if document_path and Path(document_path).exists():
                 return document_path
+        
+        # 4. Try to get from current_version_id if it points to a GeneratedDocument
+        if document.current_version_id:
+            # Check if current_version_id points to a GeneratedDocument
+            generated_doc = self.db.query(GeneratedDocument).filter(
+                GeneratedDocument.id == document.current_version_id
+            ).first()
+            if generated_doc and generated_doc.file_path and Path(generated_doc.file_path).exists():
+                return generated_doc.file_path
+        
+        # 5. Try to get from DocumentVersion if it has a file_path
+        if document.current_version_id:
+            version = self.db.query(DocumentVersion).filter(
+                DocumentVersion.id == document.current_version_id
+            ).first()
+            if version and hasattr(version, 'file_path') and version.file_path and Path(version.file_path).exists():
+                return version.file_path
+        
+        # 6. Try to get from any DocumentVersion associated with this document
+        versions = self.db.query(DocumentVersion).filter(
+            DocumentVersion.document_id == document.id
+        ).order_by(DocumentVersion.created_at.desc()).all()
+        for version in versions:
+            if hasattr(version, 'file_path') and version.file_path and Path(version.file_path).exists():
+                return version.file_path
 
         return None
 
@@ -183,7 +201,7 @@ class SignatureService:
         # 3. Get document file path
         document_path = self._get_document_path(document)
         if not document_path or not Path(document_path).exists():
-            # Provide helpful error message
+            # Provide helpful error message with more context
             error_msg = f"Document file not found for document {document_id}"
             if document.is_generated:
                 error_msg += ". This document may need to be generated first. Please generate the document before requesting signatures."
@@ -191,6 +209,16 @@ class SignatureService:
                 error_msg += f". Checked {len(document.versions)} version(s) but file not found."
             else:
                 error_msg += ". The document file may not have been uploaded or stored correctly."
+            
+            # Log additional debugging info
+            logger.warning(
+                f"Document file not found for document {document_id}. "
+                f"Document details: deal_id={document.deal_id}, "
+                f"uploaded_by={document.uploaded_by}, "
+                f"is_generated={document.is_generated}, "
+                f"current_version_id={document.current_version_id}, "
+                f"generated_document_id={getattr(document, 'generated_document_id', None)}"
+            )
             raise ValueError(error_msg)
 
         # 4. Upload document to DigiSigner

@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Copy, Check, Share2, ExternalLink, Loader2 } from 'lucide-react';
+import { Copy, Check, Share2, ExternalLink, Loader2, X } from 'lucide-react';
 import { useFDC3, createWorkflowLinkContext } from '@/context/FDC3Context';
 import { fetchWithAuth } from '@/context/AuthContext';
+import { useThemeClasses } from '@/utils/themeUtils';
 
 interface WorkflowLinkSharerProps {
   workflowId: string;
@@ -31,6 +32,7 @@ interface WorkflowLinkSharerProps {
     filesIncluded?: number;
   };
   onShared?: () => void;
+  onClose?: () => void;
 }
 
 export function WorkflowLinkSharer({
@@ -40,8 +42,10 @@ export function WorkflowLinkSharer({
   encryptedPayload,
   metadata,
   onShared,
+  onClose,
 }: WorkflowLinkSharerProps) {
   const { isAvailable, broadcastWorkflowLink, raiseIntent } = useFDC3();
+  const classes = useThemeClasses();
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [fdc3Shared, setFdc3Shared] = useState(false);
@@ -120,17 +124,31 @@ export function WorkflowLinkSharer({
   };
 
   return (
-    <Card className="bg-slate-800 border-slate-700">
+    <Card className={`${classes.background.card} ${classes.border.default}`}>
       <CardHeader>
-        <CardTitle className="text-slate-100">Share Workflow Link</CardTitle>
-        <CardDescription className="text-slate-400">
-          Share this workflow link via desktop (FDC3), native sharing, or copy to clipboard
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className={classes.text.primary}>Share Workflow Link</CardTitle>
+            <CardDescription className={classes.text.secondary}>
+              Share this workflow link via desktop (FDC3), native sharing, or copy to clipboard
+            </CardDescription>
+          </div>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className={`${classes.text.secondary} ${classes.interactive.hover.text}`}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Link Display */}
         <div className="space-y-2">
-          <Label htmlFor="workflow-link" className="text-slate-300">
+          <Label htmlFor="workflow-link" className={classes.text.secondary}>
             Workflow Link
           </Label>
           <div className="flex gap-2">
@@ -138,18 +156,18 @@ export function WorkflowLinkSharer({
               id="workflow-link"
               value={link}
               readOnly
-              className="bg-slate-900 border-slate-600 text-slate-100 font-mono text-sm"
+              className={`${classes.background.primary} ${classes.border.muted} ${classes.text.primary} font-mono text-sm`}
             />
             <Button
               variant="outline"
               size="icon"
               onClick={handleCopy}
-              className="border-slate-600 hover:bg-slate-700"
+              className={`${classes.border.muted} ${classes.interactive.hover.background}`}
             >
               {copied ? (
                 <Check className="h-4 w-4 text-green-400" />
               ) : (
-                <Copy className="h-4 w-4 text-slate-400" />
+                <Copy className={`h-4 w-4 ${classes.text.secondary}`} />
               )}
             </Button>
           </div>
@@ -157,35 +175,35 @@ export function WorkflowLinkSharer({
 
         {/* Metadata Display */}
         {metadata && (
-          <div className="bg-slate-900 rounded-lg p-4 space-y-2 text-sm">
+          <div className={`${classes.background.primary} rounded-lg p-4 space-y-2 text-sm`}>
             {metadata.title && (
               <div>
-                <span className="text-slate-400">Title: </span>
-                <span className="text-slate-200">{metadata.title}</span>
+                <span className={classes.text.secondary}>Title: </span>
+                <span className={classes.text.primary}>{metadata.title}</span>
               </div>
             )}
             {metadata.description && (
               <div>
-                <span className="text-slate-400">Description: </span>
-                <span className="text-slate-200">{metadata.description}</span>
+                <span className={classes.text.secondary}>Description: </span>
+                <span className={classes.text.primary}>{metadata.description}</span>
               </div>
             )}
             {metadata.workflowType && (
               <div>
-                <span className="text-slate-400">Type: </span>
-                <span className="text-slate-200 capitalize">{metadata.workflowType.replace('_', ' ')}</span>
+                <span className={classes.text.secondary}>Type: </span>
+                <span className={`${classes.text.primary} capitalize`}>{metadata.workflowType.replace('_', ' ')}</span>
               </div>
             )}
             {metadata.filesIncluded !== undefined && (
               <div>
-                <span className="text-slate-400">Files: </span>
-                <span className="text-slate-200">{metadata.filesIncluded} included</span>
+                <span className={classes.text.secondary}>Files: </span>
+                <span className={classes.text.primary}>{metadata.filesIncluded} included</span>
               </div>
             )}
             {metadata.expiresAt && (
               <div>
-                <span className="text-slate-400">Expires: </span>
-                <span className="text-slate-200">
+                <span className={classes.text.secondary}>Expires: </span>
+                <span className={classes.text.primary}>
                   {new Date(metadata.expiresAt).toLocaleString()}
                 </span>
               </div>
@@ -222,7 +240,7 @@ export function WorkflowLinkSharer({
               onClick={handleNativeShare}
               disabled={sharing}
               variant="outline"
-              className="border-slate-600 hover:bg-slate-700"
+              className={`${classes.border.muted} ${classes.interactive.hover.background}`}
             >
               {sharing ? (
                 <>
@@ -242,7 +260,7 @@ export function WorkflowLinkSharer({
           <Button
             onClick={handleCopy}
             variant="outline"
-            className="border-slate-600 hover:bg-slate-700"
+            className={`${classes.border.muted} ${classes.interactive.hover.background}`}
           >
             {copied ? (
               <>
@@ -261,7 +279,7 @@ export function WorkflowLinkSharer({
           <Button
             onClick={handleOpenLink}
             variant="outline"
-            className="border-slate-600 hover:bg-slate-700"
+            className={`${classes.border.muted} ${classes.interactive.hover.background}`}
           >
             <ExternalLink className="h-4 w-4 mr-2" />
             Open Link
@@ -270,7 +288,7 @@ export function WorkflowLinkSharer({
 
         {/* FDC3 Status */}
         {isAvailable && (
-          <div className="text-xs text-slate-400 flex items-center gap-2">
+          <div className={`text-xs ${classes.text.secondary} flex items-center gap-2`}>
             <div className="h-2 w-2 bg-green-400 rounded-full"></div>
             FDC3 Desktop Integration Available
           </div>

@@ -14,7 +14,7 @@ import random
 import json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -31,6 +31,7 @@ from app.models.cdm import CreditAgreement
 from app.models.loan_asset import LoanAsset
 from app.models.user_profile import UserProfileData
 from app.core.config import settings
+from app.services.file_storage_service import FileStorageService
 
 # #region agent log
 log_data = {
@@ -89,10 +90,128 @@ class DemoDataService:
         # Use global status store to persist status across requests
         self._status = _global_seeding_status
         self._progress_callback: Optional[Callable[[str, SeedingStatus], None]] = None
+        # Initialize file storage service for creating demo files
+        self.file_storage = FileStorageService(base_storage_path="storage/deals")
     
     def set_progress_callback(self, callback: Callable[[str, SeedingStatus], None]):
         """Set callback for progress updates."""
         self._progress_callback = callback
+    
+    def _create_synthetic_document_file(
+        self,
+        document: Document,
+        deal: Deal,
+        file_type: str = "pdf"
+    ) -> Optional[str]:
+        """
+        Create a synthetic document file (PDF or DOCX) for demo purposes.
+        
+        Args:
+            document: Document object
+            deal: Deal object
+            file_type: File type ("pdf" or "docx")
+            
+        Returns:
+            Path to created file, or None if creation failed
+        """
+        try:
+            # Generate filename
+            safe_title = "".join(c for c in document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            filename = f"{safe_title.replace(' ', '_')}_{document.id}.{file_type}"
+            
+            # Create deal folder if needed
+            deal_folder_path = self.file_storage.create_deal_folder(
+                user_id=deal.applicant_id,
+                deal_id=deal.deal_id
+            )
+            
+            # Generate file content
+            if file_type == "docx":
+                try:
+                    from docx import Document as DocxDocument
+                    from docx.shared import Pt, Inches
+                    from docx.enum.text import WD_ALIGN_PARAGRAPH
+                    
+                    doc = DocxDocument()
+                    
+                    # Title
+                    title = doc.add_heading(document.title, 0)
+                    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # Document metadata
+                    doc.add_paragraph(f"Borrower: {document.borrower_name or 'N/A'}")
+                    doc.add_paragraph(f"LEI: {document.borrower_lei or 'N/A'}")
+                    doc.add_paragraph(f"Governing Law: {document.governing_law or 'N/A'}")
+                    if document.total_commitment:
+                        doc.add_paragraph(f"Total Commitment: {document.total_commitment:,.2f} {document.currency or 'USD'}")
+                    if document.agreement_date:
+                        doc.add_paragraph(f"Agreement Date: {document.agreement_date}")
+                    if document.sustainability_linked:
+                        doc.add_paragraph("Sustainability-Linked Loan: Yes")
+                    
+                    # Add content sections
+                    doc.add_heading("FACILITY DETAILS", 1)
+                    doc.add_paragraph("This is a synthetic demo document generated for testing purposes.")
+                    doc.add_paragraph("The document contains placeholder content representing a credit agreement.")
+                    
+                    doc.add_heading("TERMS AND CONDITIONS", 1)
+                    doc.add_paragraph("Terms and conditions would be detailed here in a real document.")
+                    
+                    # Save to bytes
+                    import io
+                    file_content = io.BytesIO()
+                    doc.save(file_content)
+                    file_content.seek(0)
+                    content_bytes = file_content.read()
+                    
+                except ImportError:
+                    logger.warning("python-docx not available, creating text file instead")
+                    # Fallback to text file
+                    content_bytes = f"""
+{document.title}
+
+Borrower: {document.borrower_name or 'N/A'}
+LEI: {document.borrower_lei or 'N/A'}
+Governing Law: {document.governing_law or 'N/A'}
+Total Commitment: {document.total_commitment:,.2f if document.total_commitment else 'N/A'} {document.currency or 'USD'}
+Agreement Date: {document.agreement_date or 'N/A'}
+
+This is a synthetic demo document generated for testing purposes.
+""".encode('utf-8')
+                    filename = filename.replace('.docx', '.txt')
+            else:  # PDF or fallback
+                # Create a simple text-based "PDF" representation
+                # In production, use a proper PDF library like reportlab or fpdf
+                content_bytes = f"""
+{document.title}
+
+Borrower: {document.borrower_name or 'N/A'}
+LEI: {document.borrower_lei or 'N/A'}
+Governing Law: {document.governing_law or 'N/A'}
+Total Commitment: {document.total_commitment:,.2f if document.total_commitment else 'N/A'} {document.currency or 'USD'}
+Agreement Date: {document.agreement_date or 'N/A'}
+
+This is a synthetic demo document generated for testing purposes.
+The document contains placeholder content representing a credit agreement.
+""".encode('utf-8')
+                filename = filename.replace('.pdf', '.txt')
+            
+            # Store file using file storage service
+            file_path = self.file_storage.store_deal_document(
+                user_id=deal.applicant_id,
+                deal_id=deal.deal_id,
+                document_id=document.id,
+                filename=filename,
+                content=content_bytes,
+                subdirectory="documents"
+            )
+            
+            logger.debug(f"Created synthetic document file: {file_path}")
+            return file_path
+            
+        except Exception as e:
+            logger.warning(f"Failed to create synthetic document file for document {document.id}: {e}")
+            return None
     
     def _update_status(self, stage: str, **kwargs):
         """Update status for a stage."""
@@ -616,6 +735,36 @@ class DemoDataService:
         # Step 6: Generate LoanAssets for sustainability-linked deals
         loan_assets = self._generate_loan_assets_for_deals(deals)
         
+        # Step 6b: Verify correlation - ensure deals with files have loan assets
+        # This ensures 100% correlation between deals with attached files and loan assets
+        deals_with_files = []
+        for deal in deals:
+            try:
+                deal_files = self.file_storage.get_deal_documents(
+                    user_id=deal.applicant_id,
+                    deal_id=deal.deal_id,
+                    subdirectory="documents"
+                )
+                if deal_files:
+                    deals_with_files.append(deal)
+            except Exception:
+                pass
+        
+        # For deals with files that are sustainability-linked, ensure they have loan assets
+        sustainability_deals_with_files = [
+            d for d in deals_with_files 
+            if d.deal_data and d.deal_data.get("sustainability_linked", False)
+        ]
+        
+        for deal in sustainability_deals_with_files:
+            existing_loan_asset = self.db.query(LoanAsset).filter(
+                LoanAsset.loan_id == deal.deal_id
+            ).first()
+            if not existing_loan_asset:
+                logger.warning(f"Deal {deal.deal_id} has files but no loan asset - this should not happen for sustainability-linked deals")
+        
+        logger.info(f"File attachment correlation: {len(deals_with_files)} deals have files, {len(sustainability_deals_with_files)} are sustainability-linked with files")
+        
         # #region agent log
         log_data = {
             "sessionId": "debug-session",
@@ -818,6 +967,30 @@ class DemoDataService:
                 
                 if status == ApplicationStatus.REJECTED.value:
                     rejected_at = reviewed_at + timedelta(days=random.randint(1, 3)) if reviewed_at else None
+                    rejection_reason = random.choice([
+                        "Insufficient credit history",
+                        "Inadequate collateral",
+                        "High debt-to-income ratio",
+                        "Unstable revenue stream",
+                        "Industry risk concerns",
+                        "Incomplete documentation"
+                    ])
+                else:
+                    rejection_reason = None
+                
+                # Generate individual_data for individual applications
+                individual_data = None
+                if app_type == ApplicationType.INDIVIDUAL.value:
+                    individual_data = {
+                        "first_name": f"John",
+                        "last_name": f"Doe{i + 1}",
+                        "date_of_birth": (datetime.utcnow() - timedelta(days=random.randint(25*365, 65*365))).date().isoformat(),
+                        "ssn_last_4": f"{random.randint(1000, 9999)}",
+                        "employment_status": random.choice(["Employed", "Self-employed", "Retired"]),
+                        "annual_income": annual_revenue,
+                        "residential_address": f"{random.randint(1, 9999)} Residential Ave, City, ST {random.randint(10000, 99999)}",
+                        "years_at_address": random.randint(1, 20)
+                    }
                 
                 # Create application
                 application = Application(
@@ -828,8 +1001,10 @@ class DemoDataService:
                     reviewed_at=reviewed_at,
                     approved_at=approved_at,
                     rejected_at=rejected_at,
+                    rejection_reason=rejection_reason,
                     application_data=application_data,
-                    business_data=business_data
+                    business_data=business_data,
+                    individual_data=individual_data
                 )
                 
                 self.db.add(application)
@@ -927,23 +1102,70 @@ class DemoDataService:
                 
                 sustainability_linked = random.random() < 0.30  # 30% sustainability-linked
                 
+                # Enhanced deal_data with comprehensive metadata
                 deal_data = {
                     "loan_amount": loan_amount,
                     "interest_rate": interest_rate,
                     "term_years": term_years,
                     "industry": industry,
                     "collateral_type": random.choice(industry_config["collateral_types"]),
-                    "sustainability_linked": sustainability_linked
+                    "sustainability_linked": sustainability_linked,
+                    "is_demo": True,  # Explicitly mark as demo
+                    "created_via": "demo_data_service",
+                    "loan_purpose": application.application_data.get("purpose", "Working capital") if application.application_data else "Working capital",
+                    "origination_date": (application.submitted_at or application.created_at).isoformat() if (application.submitted_at or application.created_at) else None,
+                    "maturity_date": None,  # Will be calculated based on term_years if needed
+                    "amortization_schedule": random.choice(["Bullet", "Amortizing", "Balloon"]),
+                    "prepayment_penalty": random.choice([True, False]),
+                    "covenants": {
+                        "debt_service_coverage_ratio": random.uniform(1.2, 2.0),
+                        "loan_to_value_ratio": random.uniform(0.5, 0.85),
+                        "debt_to_equity_ratio": random.uniform(0.3, 2.0)
+                    },
+                    "risk_rating": random.choice(["A", "BBB", "BB", "B", "CCC"]),
+                    "syndication_status": random.choice(["Sole lender", "Syndicated", "Club deal"]),
+                    "currency": "USD"
                 }
+                
+                # Calculate maturity date if term_years is set
+                if deal_data.get("term_years") and (application.submitted_at or application.created_at):
+                    base_date = application.submitted_at or application.created_at
+                    maturity_date = base_date + timedelta(days=deal_data["term_years"] * 365)
+                    deal_data["maturity_date"] = maturity_date.isoformat()
                 
                 if sustainability_linked:
                     deal_data["esg_targets"] = {
                         "ndvi_threshold": random.uniform(0.70, 0.85),
-                        "verification_frequency": "Quarterly"
+                        "verification_frequency": "Quarterly",
+                        "carbon_reduction_target": random.uniform(10, 30),  # Percentage
+                        "renewable_energy_target": random.uniform(20, 50),  # Percentage
+                        "water_conservation_target": random.uniform(15, 40)  # Percentage
+                    }
+                    deal_data["esg_penalties"] = {
+                        "penalty_bps": random.randint(25, 50),  # Basis points
+                        "penalty_applicable": True
                     }
                 
                 # Create folder path
                 folder_path = f"storage/deals/demo/{deal_id}/"
+                
+                # Set verification and notarization requirements based on deal status and type
+                # Sustainability-linked deals and approved deals are more likely to require verification
+                verification_required = sustainability_linked or (deal_status in [DealStatus.APPROVED.value, DealStatus.ACTIVE.value])
+                verification_completed_at = None
+                if verification_required and deal_status in [DealStatus.APPROVED.value, DealStatus.ACTIVE.value]:
+                    # 70% of verification-required deals have completed verification
+                    if random.random() < 0.70:
+                        verification_completed_at = (application.approved_at or application.reviewed_at or application.submitted_at or application.created_at) + timedelta(days=random.randint(1, 14))
+                
+                # Notarization is required for larger deals or when deal is active/closed
+                notarization_required = loan_amount > 5000000 or deal_status in [DealStatus.ACTIVE.value, DealStatus.CLOSED.value]
+                notarization_completed_at = None
+                if notarization_required and deal_status in [DealStatus.ACTIVE.value, DealStatus.CLOSED.value]:
+                    # 60% of notarization-required deals have completed notarization
+                    if random.random() < 0.60:
+                        base_date = verification_completed_at or (application.approved_at or application.reviewed_at or application.submitted_at or application.created_at)
+                        notarization_completed_at = base_date + timedelta(days=random.randint(1, 30))
                 
                 # Create deal with is_demo flag
                 deal = Deal(
@@ -955,6 +1177,10 @@ class DemoDataService:
                     is_demo=True,  # Mark as demo deal
                     deal_data=deal_data,
                     folder_path=folder_path,
+                    verification_required=verification_required,
+                    verification_completed_at=verification_completed_at,
+                    notarization_required=notarization_required,
+                    notarization_completed_at=notarization_completed_at,
                     created_at=application.submitted_at or application.created_at,
                     updated_at=application.approved_at or application.reviewed_at or application.submitted_at or application.created_at
                 )
@@ -1122,6 +1348,121 @@ class DemoDataService:
                     
                     # Create document
                     # Note: is_demo is tracked via deal.deal_data["is_demo"], not a separate field
+                    # Set is_generated based on document type (term sheets are often generated)
+                    is_generated = "Term Sheet" in title or random.random() < 0.15  # 15% chance for other docs
+                    
+                    # Set template_id and source_cdm_data for generated documents
+                    template_id = None
+                    source_cdm_data = None
+                    if is_generated:
+                        # For generated documents, try to find a matching template
+                        from app.db.models import LMATemplate
+                        # Try to find a template matching the document type
+                        if "Term Sheet" in title:
+                            template = self.db.query(LMATemplate).filter(
+                                LMATemplate.name.ilike("%term sheet%")
+                            ).first()
+                        elif "Credit Agreement" in title:
+                            template = self.db.query(LMATemplate).filter(
+                                LMATemplate.category == "Credit Agreement"
+                            ).first()
+                        else:
+                            # Get any available template
+                            template = self.db.query(LMATemplate).first()
+                        
+                        if template:
+                            template_id = template.id
+                            # Store the CDM data used for generation
+                            # Use model_dump_json() and parse to ensure dates are serialized as strings for JSONB storage
+                            # #region agent log
+                            log_data = {
+                                "sessionId": "debug-session",
+                                "runId": "fix-date-serialization",
+                                "hypothesisId": "A",
+                                "location": "demo_data_service.py:1376",
+                                "message": "Serializing CDM data for JSONB storage",
+                                "data": {
+                                    "has_model_dump_json": hasattr(cdm, 'model_dump_json'),
+                                    "has_model_dump": hasattr(cdm, 'model_dump'),
+                                    "has_dict": hasattr(cdm, 'dict'),
+                                    "cdm_type": type(cdm).__name__
+                                },
+                                "timestamp": int(datetime.now().timestamp() * 1000)
+                            }
+                            try:
+                                with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
+                                    f.write(json.dumps(log_data) + "\n")
+                            except Exception:
+                                pass
+                            # #endregion
+                            
+                            if hasattr(cdm, 'model_dump_json'):
+                                cdm_json = cdm.model_dump_json()
+                                source_cdm_data = json.loads(cdm_json)
+                                # #region agent log
+                                log_data = {
+                                    "sessionId": "debug-session",
+                                    "runId": "fix-date-serialization",
+                                    "hypothesisId": "A",
+                                    "location": "demo_data_service.py:1395",
+                                    "message": "Used model_dump_json() for serialization",
+                                    "data": {
+                                        "cdm_json_length": len(cdm_json),
+                                        "source_cdm_data_type": type(source_cdm_data).__name__,
+                                        "has_date_objects": any(isinstance(v, (date, datetime)) for v in _flatten_dict(source_cdm_data).values()) if isinstance(source_cdm_data, dict) else False
+                                    },
+                                    "timestamp": int(datetime.now().timestamp() * 1000)
+                                }
+                                try:
+                                    with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
+                                        f.write(json.dumps(log_data) + "\n")
+                                except Exception:
+                                    pass
+                                # #endregion
+                            elif hasattr(cdm, 'model_dump'):
+                                source_cdm_data = cdm.model_dump(mode='json')
+                            elif hasattr(cdm, 'dict'):
+                                # For Pydantic v1, convert date objects to ISO strings manually
+                                source_cdm_data = cdm.dict()
+                                # datetime and date are already imported at module level
+                                
+                                def json_serial(obj):
+                                    """JSON serializer for objects not serializable by default json code"""
+                                    if isinstance(obj, (date, datetime)):
+                                        return obj.isoformat()
+                                    raise TypeError(f"Type {type(obj)} not serializable")
+                                
+                                source_cdm_data = json.loads(json.dumps(source_cdm_data, default=json_serial))
+                            else:
+                                source_cdm_data = None
+                            
+                            # #region agent log
+                            log_data = {
+                                "sessionId": "debug-session",
+                                "runId": "fix-date-serialization",
+                                "hypothesisId": "A",
+                                "location": "demo_data_service.py:1420",
+                                "message": "Final source_cdm_data check before DB insert",
+                                "data": {
+                                    "source_cdm_data_is_none": source_cdm_data is None,
+                                    "source_cdm_data_type": type(source_cdm_data).__name__ if source_cdm_data is not None else None,
+                                    "can_serialize_to_json": False
+                                },
+                                "timestamp": int(datetime.now().timestamp() * 1000)
+                            }
+                            if source_cdm_data is not None:
+                                try:
+                                    json.dumps(source_cdm_data)  # Test if it's JSON serializable
+                                    log_data["data"]["can_serialize_to_json"] = True
+                                except TypeError as e:
+                                    log_data["data"]["serialization_error"] = str(e)
+                            try:
+                                with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
+                                    f.write(json.dumps(log_data) + "\n")
+                            except Exception:
+                                pass
+                            # #endregion
+                    
                     document = Document(
                         title=title,
                         borrower_name=borrower_name,
@@ -1134,10 +1475,34 @@ class DemoDataService:
                         esg_metadata=esg_metadata,
                         uploaded_by=random.choice(uploaders).id if uploaders else None,
                         deal_id=deal.id,
+                        is_generated=is_generated,  # Set is_generated flag
+                        template_id=template_id,  # Set template_id for generated documents
+                        source_cdm_data=source_cdm_data,  # Store CDM data used for generation
                         created_at=deal.created_at + timedelta(days=random.randint(0, 2))
                     )
                     
                     self.db.add(document)
+                    self.db.flush()  # Flush to get document.id
+                    
+                    # Attach file to 60-70% of documents (weighted towards sustainability-linked)
+                    should_attach_file = False
+                    if sustainability_linked:
+                        # 80% of sustainability-linked documents get files
+                        should_attach_file = random.random() < 0.80
+                    else:
+                        # 60% of regular documents get files
+                        should_attach_file = random.random() < 0.60
+                    
+                    if should_attach_file:
+                        # Create synthetic document file
+                        file_path = self._create_synthetic_document_file(
+                            document=document,
+                            deal=deal,
+                            file_type=random.choice(["docx", "pdf"])
+                        )
+                        if file_path:
+                            logger.debug(f"Attached file to document {document.id}: {file_path}")
+                    
                     documents.append(document)
                     self._update_status("documents", current=len(documents), progress=len(documents) / (len(deals) * 2))
                     
@@ -1227,11 +1592,32 @@ Interest Rate: {facility.interest_terms.rate_option.benchmark} + {facility.inter
                     import json
                     cdm_json = cdm.model_dump_json()
                     cdm_dict = json.loads(cdm_json)
+                    # Generate source filename for document version
+                    source_filename = f"{document.title.replace(' ', '_')}_v{version_num}.pdf"
+                    if document.deal:
+                        # Try to get actual file path from deal folder
+                        try:
+                            deal_files = self.file_storage.get_deal_documents(
+                                user_id=document.deal.applicant_id,
+                                deal_id=document.deal.deal_id,
+                                subdirectory="documents"
+                            )
+                            # Find file matching this document
+                            for file_info in deal_files:
+                                if str(document.id) in file_info.get("filename", ""):
+                                    source_filename = file_info.get("filename", source_filename)
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Could not retrieve file info for document {document.id}: {e}")
+                    
                     doc_version = DocumentVersion(
                         document_id=document.id,
                         version_number=version_num,
                         original_text=extracted_text,  # Use original_text, not extracted_text
                         extracted_data=cdm_dict,
+                        source_filename=source_filename,  # Populate source_filename
+                        extraction_method=random.choice(["simple", "map_reduce", "structured"]),
+                        created_by=document.uploaded_by,  # Set created_by from document
                         created_at=document.created_at + timedelta(days=random.randint(0, 2))
                     )
                     
@@ -1599,7 +1985,7 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                 
                 # Generate physical reality data
                 # Mock satellite snapshot URL
-                satellite_snapshot_url = f"https://satellite-demo.creditnexus.app/snapshots/{deal.deal_id}/{datetime.utcnow().strftime('%Y%m%d')}.tif"
+                satellite_snapshot_url = f"https://josephrp.github.io/creditnexus/snapshots/{deal.deal_id}/{datetime.utcnow().strftime('%Y%m%d')}.tif"
                 
                 # Generate mock geo vector (512-dim image embeddings)
                 geo_vector = [random.uniform(-1.0, 1.0) for _ in range(512)]
@@ -3032,3 +3418,452 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
             logger.warning(f"Failed to create ChromaDB seed index: {e}")
         
         return indexed_count
+
+    def complete_partially_filled_data(
+        self,
+        complete_deals: bool = True,
+        complete_loan_assets: bool = True,
+        complete_applications: bool = True,
+        complete_documents: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Complete missing fields in partially filled synthetic data points.
+        
+        This method identifies demo records that have some fields filled but others are missing,
+        and completes them using the same generation logic as new records.
+        
+        Args:
+            complete_deals: Whether to complete partially filled deals
+            complete_loan_assets: Whether to complete partially filled loan assets
+            complete_applications: Whether to complete partially filled applications
+            complete_documents: Whether to complete partially filled documents
+            
+        Returns:
+            Dictionary with completion statistics
+        """
+        completion_stats = {
+            "deals_completed": 0,
+            "loan_assets_completed": 0,
+            "applications_completed": 0,
+            "documents_completed": 0,
+            "errors": []
+        }
+        
+        self._update_status("data_completion", status="running", started_at=datetime.utcnow(), total=4, current=0)
+        
+        try:
+            # Step 1: Complete partially filled deals
+            if complete_deals:
+                deals_completed = self._complete_partial_deals()
+                completion_stats["deals_completed"] = deals_completed
+                self._update_status("data_completion", current=1, progress=0.25)
+            
+            # Step 2: Complete partially filled loan assets
+            if complete_loan_assets:
+                loan_assets_completed = self._complete_partial_loan_assets()
+                completion_stats["loan_assets_completed"] = loan_assets_completed
+                self._update_status("data_completion", current=2, progress=0.50)
+            
+            # Step 3: Complete partially filled applications
+            if complete_applications:
+                applications_completed = self._complete_partial_applications()
+                completion_stats["applications_completed"] = applications_completed
+                self._update_status("data_completion", current=3, progress=0.75)
+            
+            # Step 4: Complete partially filled documents
+            if complete_documents:
+                documents_completed = self._complete_partial_documents()
+                completion_stats["documents_completed"] = documents_completed
+                self._update_status("data_completion", current=4, progress=1.0)
+            
+            self.db.commit()
+            self._update_status("data_completion", status="completed", completed_at=datetime.utcnow())
+            
+        except Exception as e:
+            error_msg = f"Failed to complete partially filled data: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            completion_stats["errors"].append(error_msg)
+            self._update_status("data_completion", status="failed", errors=[error_msg])
+            self.db.rollback()
+        
+        return completion_stats
+
+
+    def _complete_partial_deals(self) -> int:
+        """Complete missing fields in partially filled demo deals."""
+        partial_deals = self.db.query(Deal).filter(Deal.is_demo == True).all()
+        completed_count = 0
+        
+        for deal in partial_deals:
+            try:
+                needs_completion = False
+                deal_data = deal.deal_data or {}
+                
+                required_fields = ["loan_amount", "term_years", "interest_rate", "industry", "sustainability_linked", "collateral_type"]
+                for field in required_fields:
+                    if field not in deal_data or deal_data[field] is None:
+                        needs_completion = True
+                        break
+                
+                if not deal.deal_type:
+                    needs_completion = True
+                
+                if deal_data.get("sustainability_linked", False):
+                    if "esg_targets" not in deal_data or deal_data["esg_targets"] is None:
+                        needs_completion = True
+                
+                if needs_completion:
+                    application = deal.application
+                    if application and application.application_data:
+                        app_data = application.application_data
+                        loan_amount = app_data.get("loan_amount", 1000000)
+                        industry = app_data.get("industry", "Technology")
+                    else:
+                        loan_amount = deal_data.get("loan_amount", 1000000)
+                        industry = deal_data.get("industry", "Technology")
+                    
+                    from app.prompts.demo.deal_generation import get_industry_config
+                    industry_config = get_industry_config(industry)
+                    
+                    if "loan_amount" not in deal_data or deal_data["loan_amount"] is None:
+                        deal_data["loan_amount"] = loan_amount
+                    if "term_years" not in deal_data or deal_data["term_years"] is None:
+                        term_min, term_max = industry_config["term_range"]
+                        deal_data["term_years"] = random.randint(term_min, term_max)
+                    if "interest_rate" not in deal_data or deal_data["interest_rate"] is None:
+                        rate_min, rate_max = industry_config["interest_rate_range"]
+                        deal_data["interest_rate"] = round(random.uniform(rate_min, rate_max), 2)
+                    if "industry" not in deal_data or deal_data["industry"] is None:
+                        deal_data["industry"] = industry
+                    if "sustainability_linked" not in deal_data or deal_data["sustainability_linked"] is None:
+                        deal_data["sustainability_linked"] = random.random() < 0.30
+                    if "collateral_type" not in deal_data or deal_data["collateral_type"] is None:
+                        deal_data["collateral_type"] = random.choice(industry_config["collateral_types"])
+                    
+                    if deal_data.get("sustainability_linked", False):
+                        if "esg_targets" not in deal_data or deal_data["esg_targets"] is None:
+                            deal_data["esg_targets"] = {
+                                "ndvi_threshold": round(random.uniform(0.70, 0.85), 2),
+                                "penalty_bps": random.randint(25, 50),
+                                "measurement_frequency": "Quarterly"
+                            }
+                    
+                    if not deal.deal_type:
+                        deal.deal_type = DealType.LOAN_APPLICATION.value
+                    
+                    deal.deal_data = deal_data
+                    deal.updated_at = datetime.utcnow()
+                    self.db.add(deal)
+                    completed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to complete deal {deal.deal_id}: {str(e)}", exc_info=True)
+                continue
+        
+        self.db.flush()
+        logger.info(f"Completed {completed_count} partially filled deals")
+        return completed_count
+    
+    def _complete_partial_loan_assets(self) -> int:
+        """Complete missing fields in partially filled demo loan assets."""
+        demo_deal_ids = [d.deal_id for d in self.db.query(Deal).filter(Deal.is_demo == True).all()]
+        if not demo_deal_ids:
+            return 0
+        
+        partial_loan_assets = self.db.query(LoanAsset).filter(LoanAsset.loan_id.in_(demo_deal_ids)).all()
+        completed_count = 0
+        
+        for loan_asset in partial_loan_assets:
+            try:
+                needs_completion = (
+                    not loan_asset.original_text or not loan_asset.legal_vector or
+                    not loan_asset.collateral_address or loan_asset.geo_lat is None or
+                    loan_asset.geo_lon is None or not loan_asset.satellite_snapshot_url or
+                    not loan_asset.geo_vector or not loan_asset.spt_data or
+                    not loan_asset.green_finance_metrics or loan_asset.location_type is None or
+                    loan_asset.air_quality_index is None or loan_asset.composite_sustainability_score is None
+                )
+                
+                if needs_completion:
+                    deal = self.db.query(Deal).filter(Deal.deal_id == loan_asset.loan_id).first()
+                    if not deal:
+                        continue
+                    
+                    esg_targets = deal.deal_data.get("esg_targets", {}) if deal.deal_data else {}
+                    ndvi_threshold = esg_targets.get("ndvi_threshold", 0.75)
+                    
+                    if not loan_asset.collateral_address:
+                        addresses = [
+                            "123 Industrial Way, Detroit, MI 48201",
+                            "456 Farm Road, Napa, CA 94558",
+                            "789 Agricultural Blvd, Fresno, CA 93721",
+                            "321 Green Valley Lane, Austin, TX 78701"
+                        ]
+                        loan_asset.collateral_address = random.choice(addresses)
+                    
+                    if loan_asset.geo_lat is None or loan_asset.geo_lon is None:
+                        geo_coords = {
+                            "123 Industrial Way, Detroit, MI 48201": (42.3314, -83.0458),
+                            "456 Farm Road, Napa, CA 94558": (38.2975, -122.2869),
+                            "789 Agricultural Blvd, Fresno, CA 93721": (36.7378, -119.7871),
+                            "321 Green Valley Lane, Austin, TX 78701": (30.2672, -97.7431)
+                        }
+                        geo_lat, geo_lon = geo_coords.get(loan_asset.collateral_address, (40.7128, -74.0060))
+                        loan_asset.geo_lat = geo_lat
+                        loan_asset.geo_lon = geo_lon
+                    
+                    if loan_asset.last_verified_score is None:
+                        loan_asset.last_verified_score = random.uniform(0.50, 0.95)
+                    
+                    if loan_asset.risk_status == "PENDING" or not loan_asset.risk_status:
+                        if loan_asset.last_verified_score >= ndvi_threshold:
+                            loan_asset.risk_status = "COMPLIANT"
+                        elif loan_asset.last_verified_score >= ndvi_threshold * 0.9:
+                            loan_asset.risk_status = "WARNING"
+                        else:
+                            loan_asset.risk_status = "BREACH"
+                    
+                    base_interest_rate = deal.deal_data.get("interest_rate", 5.25) if deal.deal_data else 5.25
+                    penalty_bps = esg_targets.get("penalty_bps", 25) if isinstance(esg_targets, dict) else 25
+                    
+                    if loan_asset.base_interest_rate is None:
+                        loan_asset.base_interest_rate = float(base_interest_rate)
+                    if loan_asset.current_interest_rate is None:
+                        current_rate = base_interest_rate + (penalty_bps / 10000 if loan_asset.risk_status == "BREACH" else 0)
+                        loan_asset.current_interest_rate = float(current_rate)
+                    if loan_asset.penalty_bps is None:
+                        loan_asset.penalty_bps = penalty_bps if loan_asset.risk_status == "BREACH" else 0
+                    
+                    if not loan_asset.original_text:
+                        loan_amount = deal.deal_data.get('loan_amount', 1000000) if deal.deal_data else 1000000
+                        term_years = deal.deal_data.get('term_years', 5) if deal.deal_data else 5
+                        loan_asset.original_text = f"""Credit Agreement for {deal.deal_id}
+                        
+This sustainability-linked credit agreement establishes a loan facility with the following terms:
+- Loan Amount: ${loan_amount:,.0f}
+- Interest Rate: {base_interest_rate}% base rate
+- Term: {term_years} years
+- Collateral: {loan_asset.collateral_address}
+- ESG Target: NDVI threshold of {ndvi_threshold:.2f}
+- Penalty: {penalty_bps} basis points for non-compliance
+
+The borrower agrees to maintain the specified NDVI threshold and will be subject to quarterly verification."""
+                    
+                    if not loan_asset.legal_vector:
+                        loan_asset.legal_vector = [random.uniform(-1.0, 1.0) for _ in range(1536)]
+                    if not loan_asset.satellite_snapshot_url:
+                        loan_asset.satellite_snapshot_url = f"https://josephrp.github.io/creditnexus/snapshots/{deal.deal_id}/{datetime.utcnow().strftime('%Y%m%d')}.tif"
+                    if not loan_asset.geo_vector:
+                        loan_asset.geo_vector = [random.uniform(-1.0, 1.0) for _ in range(512)]
+                    if not loan_asset.spt_data:
+                        loan_asset.spt_data = {
+                            "target_type": "NDVI",
+                            "threshold": ndvi_threshold,
+                            "measurement_frequency": "Quarterly",
+                            "penalty_bps": penalty_bps,
+                            "cdm_compliant": True,
+                            "measurement_history": [
+                                {
+                                    "date": (datetime.utcnow() - timedelta(days=90*i)).isoformat(),
+                                    "value": max(0.0, min(1.0, loan_asset.last_verified_score + random.uniform(-0.1, 0.1))),
+                                    "verified_by": "Sentinel-2B",
+                                    "confidence": random.uniform(0.85, 0.98)
+                                }
+                                for i in range(4)
+                            ],
+                            "next_verification_date": (datetime.utcnow() + timedelta(days=90)).isoformat()
+                        }
+                    if loan_asset.spt_threshold is None:
+                        loan_asset.spt_threshold = ndvi_threshold
+                    
+                    if not loan_asset.green_finance_metrics or loan_asset.location_type is None:
+                        location_type_map = {
+                            "123 Industrial Way, Detroit, MI 48201": "urban",
+                            "456 Farm Road, Napa, CA 94558": "rural",
+                            "789 Agricultural Blvd, Fresno, CA 93721": "suburban",
+                            "321 Green Valley Lane, Austin, TX 78701": "suburban"
+                        }
+                        location_type = location_type_map.get(loan_asset.collateral_address, random.choice(["urban", "suburban", "rural"]))
+                        loan_asset.location_type = location_type
+                        
+                        if location_type == "urban":
+                            aqi = random.uniform(80, 150)
+                        elif location_type == "suburban":
+                            aqi = random.uniform(50, 100)
+                        else:
+                            aqi = random.uniform(20, 60)
+                        
+                        loan_asset.air_quality_index = aqi
+                        vegetation_health = loan_asset.last_verified_score
+                        if aqi <= 50:
+                            air_quality_score = 1.0
+                        elif aqi <= 100:
+                            air_quality_score = 0.8
+                        elif aqi <= 150:
+                            air_quality_score = 0.6
+                        elif aqi <= 200:
+                            air_quality_score = 0.4
+                        else:
+                            air_quality_score = 0.2
+                        
+                        composite_score = (vegetation_health * 0.30 + air_quality_score * 0.25 + 0.45)
+                        loan_asset.composite_sustainability_score = composite_score
+                        loan_asset.green_finance_metrics = {
+                            "location_type": location_type,
+                            "location_confidence": random.uniform(0.75, 0.95),
+                            "air_quality": {
+                                "pm25": random.uniform(5, 55),
+                                "pm10": random.uniform(10, 100),
+                                "no2": random.uniform(5, 80),
+                                "data_source": "synthetic_demo"
+                            },
+                            "sustainability_components": {
+                                "vegetation_health": vegetation_health,
+                                "air_quality": air_quality_score
+                            }
+                        }
+                    
+                    if not loan_asset.last_verified_at:
+                        loan_asset.last_verified_at = datetime.utcnow() - timedelta(days=random.randint(1, 30))
+                    if not loan_asset.asset_metadata:
+                        loan_asset.asset_metadata = {
+                            "verification_method": "Sentinel-2B",
+                            "cloud_cover": random.uniform(0.01, 0.10),
+                            "classification": random.choice(["AnnualCrop", "Forest", "PermanentCrop"]),
+                            "confidence": random.uniform(0.85, 0.98)
+                        }
+                    
+                    self.db.add(loan_asset)
+                    completed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to complete loan asset {loan_asset.loan_id}: {str(e)}", exc_info=True)
+                continue
+        
+        self.db.flush()
+        logger.info(f"Completed {completed_count} partially filled loan assets")
+        return completed_count
+    
+    def _complete_partial_applications(self) -> int:
+        """Complete missing fields in partially filled demo applications."""
+        demo_application_ids = [
+            d.application_id for d in self.db.query(Deal).filter(
+                Deal.is_demo == True,
+                Deal.application_id.isnot(None)
+            ).all()
+        ]
+        if not demo_application_ids:
+            return 0
+        
+        partial_applications = self.db.query(Application).filter(Application.id.in_(demo_application_ids)).all()
+        completed_count = 0
+        
+        for application in partial_applications:
+            try:
+                needs_completion = (
+                    not application.application_data or
+                    not application.application_data.get("loan_amount") or
+                    not application.application_data.get("industry") or
+                    (application.application_type == ApplicationType.BUSINESS.value and not application.business_data) or
+                    (application.application_type == ApplicationType.INDIVIDUAL.value and not application.individual_data)
+                )
+                
+                if needs_completion:
+                    if not application.application_data:
+                        application.application_data = {}
+                    app_data = application.application_data
+                    
+                    if not app_data.get("loan_amount"):
+                        app_data["loan_amount"] = random.randint(100000, 10000000)
+                    if not app_data.get("industry"):
+                        from app.prompts.demo.deal_generation import get_industry_weights
+                        industry_weights = get_industry_weights()
+                        industries = list(industry_weights.keys())
+                        weights = list(industry_weights.values())
+                        app_data["industry"] = random.choices(industries, weights=weights)[0]
+                    if not app_data.get("purpose"):
+                        app_data["purpose"] = random.choice(["Working capital", "Expansion", "Refinancing", "Equipment purchase", "Inventory"])
+                    if not app_data.get("years_in_business"):
+                        app_data["years_in_business"] = random.randint(2, 50)
+                    if not app_data.get("annual_revenue"):
+                        app_data["annual_revenue"] = app_data["loan_amount"] * random.uniform(2, 10)
+                    if not app_data.get("credit_score"):
+                        app_data["credit_score"] = random.randint(650, 850)
+                    application.application_data = app_data
+                    
+                    if application.application_type == ApplicationType.BUSINESS.value:
+                        if not application.business_data:
+                            application.business_data = {}
+                        business_data = application.business_data
+                        if not business_data.get("company_name"):
+                            business_data["company_name"] = f"Demo Company {application.id}"
+                        if not business_data.get("tax_id"):
+                            business_data["tax_id"] = f"{random.randint(10, 99)}-{random.randint(1000000, 9999999)}"
+                        if not business_data.get("legal_structure"):
+                            business_data["legal_structure"] = random.choice(["Corporation", "LLC", "Partnership"])
+                        if not business_data.get("number_of_employees"):
+                            business_data["number_of_employees"] = random.randint(10, 5000)
+                        if not business_data.get("business_address"):
+                            business_data["business_address"] = f"{random.randint(1, 9999)} Business St, City, ST {random.randint(10000, 99999)}"
+                        application.business_data = business_data
+                    elif application.application_type == ApplicationType.INDIVIDUAL.value:
+                        if not application.individual_data:
+                            application.individual_data = {}
+                        individual_data = application.individual_data
+                        if not individual_data.get("first_name"):
+                            individual_data["first_name"] = "John"
+                        if not individual_data.get("last_name"):
+                            individual_data["last_name"] = f"Doe{application.id}"
+                        if not individual_data.get("date_of_birth"):
+                            individual_data["date_of_birth"] = (datetime.utcnow() - timedelta(days=random.randint(25*365, 65*365))).date().isoformat()
+                        if not individual_data.get("ssn_last_4"):
+                            individual_data["ssn_last_4"] = f"{random.randint(1000, 9999)}"
+                        if not individual_data.get("employment_status"):
+                            individual_data["employment_status"] = random.choice(["Employed", "Self-employed", "Retired"])
+                        if not individual_data.get("annual_income"):
+                            individual_data["annual_income"] = app_data.get("annual_revenue", 100000)
+                        if not individual_data.get("residential_address"):
+                            individual_data["residential_address"] = f"{random.randint(1, 9999)} Residential Ave, City, ST {random.randint(10000, 99999)}"
+                        if not individual_data.get("years_at_address"):
+                            individual_data["years_at_address"] = random.randint(1, 20)
+                        application.individual_data = individual_data
+                    
+                    self.db.add(application)
+                    completed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to complete application {application.id}: {str(e)}", exc_info=True)
+                continue
+        
+        self.db.flush()
+        logger.info(f"Completed {completed_count} partially filled applications")
+        return completed_count
+    
+    def _complete_partial_documents(self) -> int:
+        """Complete missing fields in partially filled demo documents."""
+        demo_deal_ids = [d.id for d in self.db.query(Deal).filter(Deal.is_demo == True).all()]
+        if not demo_deal_ids:
+            return 0
+        
+        partial_documents = self.db.query(Document).filter(Document.deal_id.in_(demo_deal_ids)).all()
+        completed_count = 0
+        
+        for document in partial_documents:
+            try:
+                needs_completion = (
+                    not document.title or not document.document_type or not document.status
+                )
+                
+                if needs_completion:
+                    if not document.title:
+                        document.title = f"Document for Deal {document.deal_id}"
+                    if not document.document_type:
+                        document.document_type = random.choice(["credit_agreement", "term_sheet", "amendment", "notice", "certificate"])
+                    if not document.status:
+                        document.status = "draft"
+                    self.db.add(document)
+                    completed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to complete document {document.id}: {str(e)}", exc_info=True)
+                continue
+        
+        self.db.flush()
+        logger.info(f"Completed {completed_count} partially filled documents")
+        return completed_count

@@ -321,7 +321,7 @@ def test_form_field_types(mock_prompt_func, mock_chain_func, sample_credit_agree
         form_type="8-K",
         fields=[
             FilingFormField(field_name="Company Name", field_value="ACME", field_type="text", required=True),
-            FilingFormField(field_name="Date", field_value="2024-01-01", field_type="date", required=True)
+            FilingFormField(field_name="Date", field_value="2026-01-15", field_type="date", required=True)
         ],
         language="en"
     )

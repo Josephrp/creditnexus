@@ -1,0 +1,496 @@
+---
+title: Policy Compliance
+description: Policy-as-code compliance engine and rule documentation
+---
+
+## Policy Engine Overview
+
+CreditNexus uses a **policy-as-code** engine for real-time compliance enforcement. All policy decisions are deterministic, auditable, and stored as CDM events.
+
+**Code Reference**: `app/services/policy_service.py`, `app/core/policy_config.py`, `app/policies/`
+
+---
+
+## Policy Engine Architecture
+
+### Policy Evaluation Process
+
+1. **Validation**: Policy rules are loaded from YAML files
+2. **Calculation**: Rules are evaluated against transaction data
+3. **Event Creation**: Policy decisions are stored as CDM events
+
+**Code Reference**: `app/services/policy_service.py` (evaluate methods)
+
+### Decision Types
+
+Policy decisions can be:
+
+- **`ALLOW`**: Transaction proceeds normally
+- **`BLOCK`**: Transaction is blocked (highest priority)
+- **`FLAG`**: Transaction is flagged for review
+
+**Decision Priority**: `BLOCK` > `FLAG` > `ALLOW`
+
+**Code Reference**: `app/services/policy_service.py` (decision handling)
+
+---
+
+## Policy Categories
+
+CreditNexus includes **18+ policy rules** across 5 categories:
+
+### 1. Compliance Policies
+
+**Location**: `app/policies/compliance/`
+
+#### Sanctions Screening
+
+**File**: `sanctions_screening.yaml`
+
+**Rules**:
+- Block transactions with sanctioned parties
+- Check LEI against sanctions lists
+
+**Code Reference**: `app/policies/compliance/sanctions_screening.yaml`
+
+---
+
+### 2. Credit Risk Policies
+
+**Location**: `app/policies/credit_risk/`
+
+#### Basel III Capital Requirements
+
+**File**: `basel_iii_capital.yaml`
+
+**Rules**:
+- Minimum capital adequacy ratios
+- Risk-weighted asset calculations
+- Capital buffer requirements
+
+**Code Reference**: `app/policies/credit_risk/basel_iii_capital.yaml`
+
+#### Collateral Requirements
+
+**File**: `collateral_requirements.yaml`
+
+**Rules**:
+- Minimum collateral coverage ratios
+- Collateral valuation requirements
+- Collateral quality standards
+
+**Code Reference**: `app/policies/credit_risk/collateral_requirements.yaml`
+
+#### Creditworthiness Assessment
+
+**File**: `creditworthiness.yaml`
+
+**Rules**:
+- Credit score thresholds
+- Debt-to-income ratios
+- Financial health indicators
+
+**Code Reference**: `app/policies/credit_risk/creditworthiness.yaml`
+
+#### Data Quality
+
+**File**: `data_quality.yaml`
+
+**Rules**:
+- Data completeness requirements
+- Data accuracy standards
+- Data validation checks
+
+**Code Reference**: `app/policies/credit_risk/data_quality.yaml`
+
+#### IRB Ratings
+
+**File**: `irb_ratings.yaml`
+
+**Rules**:
+- Internal ratings-based (IRB) requirements
+- Rating validation
+- Rating consistency checks
+
+**Code Reference**: `app/policies/credit_risk/irb_ratings.yaml`
+
+#### Model Validation
+
+**File**: `model_validation.yaml`
+
+**Rules**:
+- Model validation requirements
+- Model performance thresholds
+- Model governance standards
+
+**Code Reference**: `app/policies/credit_risk/model_validation.yaml`
+
+#### Risk Rating
+
+**File**: `risk_rating.yaml`
+
+**Rules**:
+- Risk rating assignment
+- Rating migration rules
+- Rating review requirements
+
+**Code Reference**: `app/policies/credit_risk/risk_rating.yaml`
+
+#### Stress Testing
+
+**File**: `stress_testing.yaml`
+
+**Rules**:
+- Stress test scenarios
+- Stress test frequency
+- Stress test reporting
+
+**Code Reference**: `app/policies/credit_risk/stress_testing.yaml`
+
+---
+
+### 3. ESG Policies
+
+**Location**: `app/policies/esg/`
+
+#### ESG Compliance
+
+**File**: `esg_compliance.yaml`
+
+**Rules**:
+- Block missing ESG KPIs
+- ESG reporting requirements
+- ESG performance thresholds
+
+**Code Reference**: `app/policies/esg/esg_compliance.yaml`
+
+---
+
+### 4. Green Finance Policies
+
+**Location**: `app/policies/green_finance/`
+
+#### Climate Resilience
+
+**File**: `climate_resilience.yaml`
+
+**Rules**:
+- Flag high climate risk areas
+- Require climate adaptation measures
+
+**Code Reference**: `app/policies/green_finance/climate_resilience.yaml`
+
+#### Emissions Monitoring
+
+**File**: `emissions_monitoring.yaml`
+
+**Rules**:
+- Block facilities exceeding air quality limits
+- Flag high emission areas
+- Require emissions monitoring
+
+**Code Reference**: `app/policies/green_finance/emissions_monitoring.yaml`
+
+#### Pollution Compliance
+
+**File**: `pollution_compliance.yaml`
+
+**Rules**:
+- Block critical pollution areas
+- Flag pollution hotspots
+- Require pollution mitigation
+
+**Code Reference**: `app/policies/green_finance/pollution_compliance.yaml`
+
+#### SDG Alignment
+
+**File**: `sdg_alignment.yaml`
+
+**Rules**:
+- Promote SDG-aligned projects
+- Flag low SDG alignment
+- Require SDG improvement plan
+
+**Code Reference**: `app/policies/green_finance/sdg_alignment.yaml`
+
+#### Sustainable Infrastructure
+
+**File**: `sustainable_infrastructure.yaml`
+
+**Rules**:
+- Require green infrastructure in urban areas
+- Flag missing green roofs
+- Promote sustainable infrastructure
+
+**Code Reference**: `app/policies/green_finance/sustainable_infrastructure.yaml`
+
+#### Urban Sustainability
+
+**File**: `urban_sustainability.yaml`
+
+**Rules**:
+- Block high emission urban development
+- Flag low green infrastructure urban
+- Require urban sustainability mitigation
+
+**Code Reference**: `app/policies/green_finance/urban_sustainability.yaml`
+
+#### Vehicle Activity
+
+**File**: `vehicle_activity.yaml`
+
+**Rules**:
+- Block high vehicle density urban areas
+- Flag high traffic areas
+
+**Code Reference**: `app/policies/green_finance/vehicle_activity.yaml`
+
+---
+
+### 5. Filing Compliance Policies
+
+**Location**: `app/policies/`
+
+#### Filing Compliance
+
+**File**: `filing_compliance.yaml`
+
+**Rules**:
+- US SEC material agreement filing
+- US CFIUS filing requirement
+- UK Companies House charge filing
+- UK NSIA filing requirement
+- FR AMF foreign investment filing
+- FR commercial court charge filing
+- DE BaFin foreign investment filing
+- DE commercial register charge filing
+
+**Code Reference**: `app/policies/filing_compliance.yaml`
+
+#### Filing Deadlines
+
+**File**: `filing_deadlines.yaml`
+
+**Rules**:
+- Filing deadline approaching (critical)
+- Filing deadline approaching (high)
+- Filing deadline approaching (medium)
+
+**Code Reference**: `app/policies/filing_deadlines.yaml`
+
+---
+
+### 6. Syndicated Loan Policies
+
+**Location**: `app/policies/`
+
+#### Syndicated Loan Rules
+
+**File**: `syndicated_loan_rules.yaml`
+
+**Rules**:
+- Syndicated loan structure requirements
+- Participation requirements
+- Documentation standards
+
+**Code Reference**: `app/policies/syndicated_loan_rules.yaml`
+
+---
+
+## Policy Rule Format
+
+Policy rules are defined in YAML format:
+
+```yaml
+- name: block_sanctioned_parties
+  when:
+    any:
+      - field: originator.lei
+        op: in
+        value: ["SANCTIONED_LEI_LIST"]
+  action: block
+  priority: 100
+  description: "Block transactions with sanctioned entities"
+```
+
+**Code Reference**: `app/policies/` (all YAML files)
+
+---
+
+## Policy Evaluation Methods
+
+### Facility Creation Evaluation
+
+```python
+policy_result = policy_service.evaluate_facility_creation(
+    credit_agreement=agreement,
+    document_id=doc.id
+)
+```
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_facility_creation)
+
+### Trade Execution Evaluation
+
+```python
+policy_result = policy_service.evaluate_trade_execution(
+    trade_data=trade_data,
+    credit_agreement=agreement
+)
+```
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_trade_execution)
+
+### Loan Asset Evaluation
+
+```python
+policy_result = policy_service.evaluate_loan_asset(
+    loan_asset=asset,
+    verification_results=results
+)
+```
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_loan_asset)
+
+### Terms Change Evaluation
+
+```python
+policy_result = policy_service.evaluate_terms_change(
+    old_terms=old_terms,
+    new_terms=new_terms,
+    credit_agreement=agreement
+)
+```
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_terms_change)
+
+---
+
+## CDM Event Integration
+
+All policy decisions generate CDM-compliant events:
+
+```python
+policy_event = generate_cdm_policy_evaluation(
+    transaction_id=agreement.deal_id,
+    transaction_type="facility_creation",
+    decision=policy_result.decision,
+    rule_applied=policy_result.rule_applied,
+    related_event_identifiers=[],
+    evaluation_trace=policy_result.trace,
+    matched_rules=policy_result.matched_rules
+)
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_policy_evaluation)
+
+---
+
+## Policy Configuration
+
+### Environment Variables
+
+<ParamField body="POLICY_ENABLED" type="boolean">
+  Enable policy engine. Default: `true`
+</ParamField>
+
+<ParamField body="POLICY_RULES_DIR" type="string">
+  Directory containing policy rule YAML files. Default: `app/policies`
+</ParamField>
+
+<ParamField body="POLICY_RULES_PATTERN" type="string">
+  File pattern for policy rules. Default: `*.yaml`
+</ParamField>
+
+<ParamField body="POLICY_ENGINE_VENDOR" type="string">
+  Policy engine vendor (optional). Default: `""` (uses default engine)
+</ParamField>
+
+<ParamField body="POLICY_AUTO_RELOAD" type="boolean">
+  Auto-reload policy rules on file changes (development only). Default: `false`
+</ParamField>
+
+**Code Reference**: `app/core/config.py` (lines 108-115), `app/core/policy_config.py`
+
+---
+
+## Policy Decision Handling
+
+### Block Decision
+
+```python
+if policy_result.decision == "BLOCK":
+    raise HTTPException(403, detail={
+        "status": "blocked",
+        "reason": policy_result.rule_applied,
+        "cdm_event": policy_event
+    })
+```
+
+### Flag Decision
+
+```python
+elif policy_result.decision == "FLAG":
+    workflow.priority = "high"
+    workflow.state = WorkflowState.REQUIRES_REVIEW
+```
+
+### Allow Decision
+
+```python
+# ALLOW: Continue normally
+```
+
+**Code Reference**: `app/api/routes.py` (policy evaluation handling)
+
+---
+
+## Policy Rule Management
+
+### Adding New Policies
+
+1. **Create YAML file** in `app/policies/` or appropriate subdirectory
+2. **Define rule** with `name`, `when`, `action`, `priority`, `description`
+3. **Test rule** using policy service
+4. **Deploy** - rules are automatically loaded on startup
+
+### Policy Editor UI
+
+CreditNexus includes a Policy Editor interface for managing rules:
+
+**Location**: `client/src/apps/policy-editor/`
+
+**Features**:
+- View all policy rules
+- Create new rules
+- Edit existing rules
+- Test rule evaluation
+
+**Code Reference**: `client/src/apps/policy-editor/`, `app/api/policy_editor_routes.py`
+
+---
+
+## Compliance Checklist
+
+- ✅ 18+ policy rules implemented
+- ✅ Policy-as-code architecture
+- ✅ CDM event generation
+- ✅ Real-time enforcement
+- ✅ Audit logging
+- ✅ Policy editor UI
+- ✅ Deterministic evaluation
+
+---
+
+## Additional Resources
+
+- [Configuration Guide](/getting-started/configuration#policy-engine-configuration)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Policy Service Implementation](../../app/services/policy_service.py)
+- [Policy Rules Directory](../../app/policies/)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Policy Rules**: 18+ rules across 5 categories  
+**Code Reference**: `app/services/policy_service.py`, `app/core/policy_config.py`, `app/policies/`

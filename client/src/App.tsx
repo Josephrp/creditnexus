@@ -114,6 +114,7 @@ interface TradeBlotterState {
 }
 
 function App() {
+  const classes = useThemeClasses();
   const [activeApp, setActiveApp] = useState<AppView>('document-parser');
   const [hasBroadcast, setHasBroadcast] = useState(false);
   const [viewData, setViewData] = useState<CreditAgreementData | null>(null);
@@ -451,15 +452,30 @@ function App() {
         </main>
       </div>
 
-      <footer className="border-t border-slate-700 mt-auto">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
-          <p>Powered by OpenAI GPT-4o and LangChain</p>
+      <footer className={`border-t ${classes.border.default} mt-auto`}>
+        <div className={`max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm ${classes.text.secondary}`}>
+          <p>Price & create structured financial products</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
               <Radio className="h-3 w-3 text-emerald-500" />
               FDC3 Desktop Interoperability
             </span>
             <span>FINOS CDM Compliant</span>
+            <div className={`flex items-center gap-2 ml-2 pl-2 border-l ${classes.border.muted}`}>
+              <Link 
+                to="/licence" 
+                className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
+              >
+                License
+              </Link>
+              <span className={classes.text.muted}>•</span>
+              <Link 
+                to="/rail" 
+                className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
+              >
+                RAIL
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

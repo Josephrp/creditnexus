@@ -16,6 +16,7 @@ from app.services.audit_statistics_service import AuditStatisticsService
 from app.services.audit_export_service import AuditExportService
 from app.chains.audit_report_chain import AuditReportChain
 from app.chains.clause_analysis_chain import ClauseAnalysisChain
+from app.db.models import GeneratedReport
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,8 @@ class AuditReportService:
                 )
             
             if include_sections.get("compliance_analysis", False):
-                policy_decisions = audit_data.get("policy_decisions", [])
+                # Use policy_decisions_list instead of policy_decisions (which is policy_stats dict)
+                policy_decisions = audit_data.get("policy_decisions_list", [])
                 audit_logs = audit_data.get("audit_logs", [])
                 report_sections["compliance_analysis"] = self.generate_compliance_analysis(
                     policy_decisions=policy_decisions,
@@ -114,6 +116,33 @@ class AuditReportService:
                 report_sections=report_sections,
                 date_range=date_range
             )
+            
+            # Persist report to database
+            try:
+                # Store user if possible (requires passing user_id to service)
+                # For now, we'll just store the report
+                db_report = GeneratedReport(
+                    report_id=report_id,
+                    report_type=report_type,
+                    template=template,
+                    request_params={
+                        "report_type": report_type,
+                        "date_range": {
+                            "start": start_date.isoformat() if start_date else None,
+                            "end": end_date.isoformat() if end_date else None
+                        },
+                        "entity_selection": entity_selection,
+                        "include_sections": include_sections
+                    },
+                    report_data=report,
+                    created_at=datetime.utcnow()
+                )
+                db.add(db_report)
+                db.commit()
+                logger.info(f"Persisted generated report {report_id} to database")
+            except Exception as e:
+                logger.warning(f"Failed to persist report to database: {e}")
+                db.rollback()
             
             return report
             
@@ -302,12 +331,14 @@ class AuditReportService:
             
             # Get policy decisions (for compliance analysis)
             from app.services.policy_audit import get_policy_decisions
-            policy_decisions = get_policy_decisions(
+            policy_decisions_raw = get_policy_decisions(
                 db=db,
                 start_date=start_date,
                 end_date=end_date,
                 limit=1000
             )
+            # Convert PolicyDecision models to dictionaries
+            policy_decisions = [pd.to_dict() if hasattr(pd, 'to_dict') else pd for pd in policy_decisions_raw]
             
             # Get audit logs
             audit_logs, total_logs = self.audit_service.get_audit_logs(
@@ -364,7 +395,7 @@ class AuditReportService:
                 "top_users": top_users,
                 "top_actions": top_actions,
                 "policy_decisions": policy_stats,
-                "policy_decisions_list": [pd.to_dict() for pd in policy_decisions],
+                "policy_decisions_list": [pd if isinstance(pd, dict) else pd.to_dict() for pd in policy_decisions],
                 "audit_logs": [self.audit_service.enrich_audit_log(db, log) for log in audit_logs],
                 "total_logs": total_logs,
                 "anomalies": anomalies,

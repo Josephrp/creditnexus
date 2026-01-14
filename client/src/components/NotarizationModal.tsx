@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { fetchWithAuth, useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
+import { useToast } from '@/components/ui/toast';
 import { NotarizationPayment } from './NotarizationPayment';
 
 interface NotarizationModalProps {
@@ -45,6 +46,7 @@ export function NotarizationModal({
 }: NotarizationModalProps) {
   const { user } = useAuth();
   const { isConnected, account, connect } = useWallet();
+  const { addToast } = useToast();
   const [signers, setSigners] = useState<string[]>([]);
   const [newSignerAddress, setNewSignerAddress] = useState('');
   const [messagePrefix, setMessagePrefix] = useState('CreditNexus Notarization');
@@ -151,10 +153,22 @@ export function NotarizationModal({
       }
 
       const data = await response.json();
-      setNotarizationId(data.notarization_id);
+      const notarizationId = data.notarization_id;
+      setNotarizationId(notarizationId);
       
       if (data.payment_status === 'skipped_admin' || data.payment_status === 'paid') {
-        onNotarizationComplete?.(data.notarization_id);
+        // Show success message
+        const statusMessage = data.payment_status === 'skipped_admin' 
+          ? 'Notarization created successfully (payment skipped - admin privilege).'
+          : 'Notarization created successfully and payment processed.';
+        
+        addToast(
+          `${statusMessage} Notarization hash: ${data.notarization_hash?.slice(0, 16)}...`,
+          'success',
+          6000
+        );
+        
+        onNotarizationComplete?.(notarizationId);
         setTimeout(() => {
           onClose();
         }, 2000);
@@ -172,6 +186,13 @@ export function NotarizationModal({
 
   const handlePaymentComplete = (transactionHash: string) => {
     if (notarizationId) {
+      // Show success message with transaction hash
+      addToast(
+        `Payment processed successfully! Notarization completed. Transaction: ${transactionHash.slice(0, 10)}...${transactionHash.slice(-8)}`,
+        'success',
+        6000
+      );
+      
       onNotarizationComplete?.(notarizationId);
       setTimeout(() => {
         onClose();
@@ -201,6 +222,11 @@ export function NotarizationModal({
               dealId={dealId}
               onPaymentComplete={handlePaymentComplete}
               onPaymentSkipped={() => {
+                addToast(
+                  'Notarization created successfully (payment skipped - admin privilege).',
+                  'success',
+                  6000
+                );
                 onNotarizationComplete?.(notarizationId);
                 setTimeout(() => onClose(), 2000);
               }}

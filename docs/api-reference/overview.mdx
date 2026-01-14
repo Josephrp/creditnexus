@@ -1,0 +1,162 @@
+---
+title: API Overview
+description: Complete API reference for CreditNexus
+---
+
+## API Overview
+
+CreditNexus provides a comprehensive REST API for all platform functionality. All endpoints are CDM-compliant and include policy enforcement, audit logging, and error handling.
+
+**Base URL**: `http://localhost:8000` (development) or your production URL  
+**API Version**: v1  
+**Authentication**: JWT Bearer tokens
+
+---
+
+## Authentication
+
+All API endpoints (except public health checks) require authentication via JWT Bearer tokens.
+
+**Header Format**:
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Code Reference**: `app/auth/jwt_auth.py`
+
+---
+
+## API Route Files
+
+CreditNexus includes 15+ API route files covering all functionality:
+
+### Core Routes
+
+- **`routes.py`**: Main API routes (documents, extraction, health checks)
+- **`config_routes.py`**: Configuration management
+- **`websocket_routes.py`**: WebSocket connections
+
+### Feature-Specific Routes
+
+- **`securitization_routes.py`**: Securitization workflow endpoints
+- **`recovery_routes.py`**: Loan recovery and default management
+- **`auditor_routes.py`**: Audit report generation and CDM event exploration
+- **`gdpr_routes.py`**: GDPR compliance endpoints (data export, deletion)
+- **`green_finance_routes.py`**: Green finance and ESG metrics
+- **`credit_risk_routes.py`**: Credit risk analysis and scoring
+- **`policy_editor_routes.py`**: Policy rule management
+- **`policy_template_routes.py`**: Policy template management
+
+### Integration Routes
+
+- **`twilio_routes.py`**: Twilio SMS and voice webhooks
+- **`remote_routes.py`**: Remote API for verification links
+- **`workflow_delegation_routes.py`**: Workflow delegation and sharing
+- **`layer_routes.py`**: Geospatial layer management
+
+---
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "status": "success",
+  "data": {...},
+  "cdm_events": [...]
+}
+```
+
+### Error Response
+
+```json
+{
+  "detail": "Error message",
+  "status_code": 400,
+  "cdm_events": [...]
+}
+```
+
+---
+
+## CDM Event Integration
+
+All state-changing operations generate CDM events:
+
+- **Policy Decisions**: PolicyEvaluation events
+- **Trade Executions**: TradeExecution events
+- **Recovery Actions**: Observation events
+- **Securitization**: SecuritizationCreation events
+
+**Code Reference**: `app/models/cdm_events.py`
+
+---
+
+## Pagination
+
+List endpoints support pagination:
+
+**Query Parameters**:
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20, max: 100)
+
+**Response**:
+```json
+{
+  "items": [...],
+  "total": 100,
+  "page": 1,
+  "limit": 20,
+  "pages": 5
+}
+```
+
+---
+
+## Rate Limiting
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Default**: 100 requests per minute per user
+- **Burst**: 200 requests per minute
+
+Rate limit headers:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1633024800
+```
+
+---
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request |
+| 401 | Unauthorized |
+| 403 | Forbidden (Policy Block) |
+| 404 | Not Found |
+| 402 | Payment Required (x402) |
+| 422 | Validation Error |
+| 500 | Internal Server Error |
+
+---
+
+## Additional Resources
+
+- [Authentication API](/api-reference/authentication)
+- [Documents API](/api-reference/documents)
+- [Securitization API](/api-reference/securitization)
+- [Auditor API](/api-reference/auditor)
+- [GDPR API](/api-reference/gdpr)
+- [Payments API](/api-reference/payments)
+- [Signatures API](/api-reference/signatures)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/` directory

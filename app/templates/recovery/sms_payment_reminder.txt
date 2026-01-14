@@ -1,0 +1,1 @@
+Hi {{borrower_name}}, your loan {{loan_id}} payment of {{amount_overdue}} is {{days_past_due}} days overdue. Please pay by {{due_date}}. Contact us at +1-800-XXX-XXXX.

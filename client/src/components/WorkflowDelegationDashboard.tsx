@@ -28,7 +28,7 @@ import {
 } from 'lucide-react'
 import { fetchWithAuth } from '@/context/AuthContext'
 import { WorkflowLinkSharer } from './WorkflowLinkSharer'
-import { VerificationLinkCreator } from './VerificationLinkCreator'
+import { WorkflowLinkCreator } from '@/apps/workflow/WorkflowLinkCreator'
 
 interface WorkflowDelegation {
   id: number
@@ -484,7 +484,7 @@ export function WorkflowDelegationDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <VerificationLinkCreator
+              <WorkflowLinkCreator
                 onLinkGenerated={(link, workflowId) => {
                   setShowCreator(false)
                   loadDelegations()
@@ -516,7 +516,13 @@ export function WorkflowDelegationDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <WorkflowLinkSharer {...sharerData} />
+              <WorkflowLinkSharer 
+                {...sharerData} 
+                onClose={() => {
+                  setShowSharer(false)
+                  setSharerData(null)
+                }}
+              />
             </CardContent>
           </Card>
         </div>

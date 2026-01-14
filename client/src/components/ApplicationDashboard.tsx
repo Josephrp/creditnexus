@@ -13,6 +13,7 @@ import {
   Send,
   CheckCircle,
   X,
+  XCircle,
   AlertCircle,
   Calendar,
   Building2,
@@ -57,6 +58,9 @@ export function ApplicationDashboard() {
   const [sortBy, setSortBy] = useState<'date' | 'status'>('date');
   const [searchQuery, setSearchQuery] = useState('');
   const [creatingDeal, setCreatingDeal] = useState<number | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectApplicationId, setRejectApplicationId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchApplications();
@@ -129,6 +133,48 @@ export function ApplicationDashboard() {
       await fetchApplications();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw application');
+    }
+  };
+
+  const handleApproveApplication = async (applicationId: number) => {
+    try {
+      const response = await fetchWithAuth(`/api/applications/${applicationId}/approve`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail?.message || 'Failed to approve application');
+      }
+      
+      await fetchApplications();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve application');
+    }
+  };
+
+  const handleRejectApplication = async (applicationId: number, reason: string) => {
+    if (!reason.trim() || reason.trim().length < 10) {
+      setError('Rejection reason must be at least 10 characters');
+      return;
+    }
+    
+    try {
+      const response = await fetchWithAuth(`/api/applications/${applicationId}/reject?rejection_reason=${encodeURIComponent(reason)}`, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail?.message || 'Failed to reject application');
+      }
+      
+      await fetchApplications();
+      setShowRejectModal(false);
+      setRejectApplicationId(null);
+      setRejectReason('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject application');
     }
   };
 
@@ -417,6 +463,30 @@ export function ApplicationDashboard() {
                       </>
                     )}
                     
+                    {(app.status === 'submitted' || app.status === 'under_review') && user?.role === 'admin' && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveApplication(app.id)}
+                          className="bg-emerald-600 hover:bg-emerald-500"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            setRejectApplicationId(app.id);
+                            setShowRejectModal(true);
+                          }}
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    
                     {app.status === 'approved' && (
                       <Button
                         variant="ghost"
@@ -449,6 +519,55 @@ export function ApplicationDashboard() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Reject Application Modal */}
+      {showRejectModal && rejectApplicationId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-slate-800 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-slate-100">Reject Application</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-slate-300">
+                Rejecting application #{rejectApplicationId}
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Rejection Reason (minimum 10 characters) *
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  rows={4}
+                  placeholder="Please provide a reason for rejection..."
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectApplicationId(null);
+                    setRejectReason('');
+                  }}
+                  className="border-slate-600 text-slate-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleRejectApplication(rejectApplicationId, rejectReason)}
+                  disabled={!rejectReason.trim() || rejectReason.trim().length < 10}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

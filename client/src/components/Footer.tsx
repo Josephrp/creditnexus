@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Github, Linkedin, Mail, ExternalLink } from 'lucide-react';
+import { useThemeClasses } from '@/utils/themeUtils';
 
 interface FooterProps {
   className?: string;
@@ -7,6 +8,7 @@ interface FooterProps {
 
 export function Footer({ className = '' }: FooterProps) {
   const currentYear = new Date().getFullYear();
+  const classes = useThemeClasses();
 
   const footerLinks = {
     product: [
@@ -16,9 +18,9 @@ export function Footer({ className = '' }: FooterProps) {
       { label: 'GreenLens', path: '/app/green-lens' },
     ],
     resources: [
-      { label: 'Documentation', href: 'https://docs.creditnexus.com', external: true },
-      { label: 'API Reference', href: 'https://docs.creditnexus.com/api-reference', external: true },
-      { label: 'GitHub', href: 'https://github.com/yourusername/creditnexus', external: true },
+      { label: 'Documentation', href: 'https://tonic-ai.mintlify.app', external: true },
+      { label: 'API Reference', href: 'https://tonic-ai.mintlify.app/api-reference', external: true },
+      { label: 'GitHub', href: 'https://github.com/josephrp/creditnexus', external: true },
       { label: 'Blog', href: '#', external: false },
     ],
     company: [
@@ -30,26 +32,26 @@ export function Footer({ className = '' }: FooterProps) {
     legal: [
       { label: 'Compliance', path: '/compliance' },
       { label: 'Security', path: '/security' },
-      { label: 'Licenses', path: '/licenses' },
+      { label: 'License', path: '/licence' },
+      { label: 'RAIL', path: '/rail' },
     ],
   };
 
   const socialLinks = [
-    { icon: Github, href: 'https://github.com/yourusername/creditnexus', label: 'GitHub' },
+    { icon: Github, href: 'https://github.com/josephrp/creditnexus', label: 'GitHub' },
     { icon: Linkedin, href: 'https://linkedin.com/company/creditnexus', label: 'LinkedIn' },
     { icon: Mail, href: 'mailto:contact@creditnexus.com', label: 'Email' },
   ];
 
   return (
-    <footer className={`bg-slate-900 border-t border-slate-800 ${className}`}>
+    <footer className={`${classes.background.primary} border-t ${classes.border.light} ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand Section */}
           <div className="lg:col-span-2">
-            <h3 className="text-xl font-bold text-white mb-4">CreditNexus</h3>
-            <p className="text-slate-400 text-sm mb-4 max-w-md">
-              A next-generation financial operating system that extracts structured data from credit agreements,
-              enforces compliance via policy-as-code, and verifies sustainability-linked loans using satellite imagery.
+            <h3 className={`text-xl font-bold ${classes.text.white} mb-4`}>CreditNexus</h3>
+            <p className={`${classes.text.secondary} text-sm mb-4 max-w-md`}>
+              Price & create structured financial products
             </p>
             <div className="flex items-center gap-4">
               {socialLinks.map((social) => {
@@ -60,7 +62,7 @@ export function Footer({ className = '' }: FooterProps) {
                     href={social.href}
                     target={social.href.startsWith('http') ? '_blank' : undefined}
                     rel={social.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    className="w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-colors"
+                    className={`w-10 h-10 rounded-lg ${classes.background.secondary} ${classes.interactive.hover.background} flex items-center justify-center ${classes.text.secondary} hover:text-emerald-400 transition-colors`}
                     aria-label={social.label}
                   >
                     <Icon className="h-5 w-5" />
@@ -72,13 +74,13 @@ export function Footer({ className = '' }: FooterProps) {
 
           {/* Product Links */}
           <div>
-            <h4 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product</h4>
+            <h4 className={`text-sm font-semibold ${classes.text.white} mb-4 uppercase tracking-wider`}>Product</h4>
             <ul className="space-y-2">
               {footerLinks.product.map((link) => (
                 <li key={link.label}>
                   <Link
                     to={link.path}
-                    className="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+                    className={`text-sm ${classes.text.secondary} hover:text-emerald-400 transition-colors`}
                   >
                     {link.label}
                   </Link>
@@ -89,7 +91,7 @@ export function Footer({ className = '' }: FooterProps) {
 
           {/* Resources Links */}
           <div>
-            <h4 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Resources</h4>
+            <h4 className={`text-sm font-semibold ${classes.text.white} mb-4 uppercase tracking-wider`}>Resources</h4>
             <ul className="space-y-2">
               {footerLinks.resources.map((link) => (
                 <li key={link.label}>
@@ -98,7 +100,7 @@ export function Footer({ className = '' }: FooterProps) {
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                      className={`text-sm ${classes.text.secondary} hover:text-emerald-400 transition-colors flex items-center gap-1`}
                     >
                       {link.label}
                       <ExternalLink className="h-3 w-3" />
@@ -106,7 +108,7 @@ export function Footer({ className = '' }: FooterProps) {
                   ) : (
                     <Link
                       to={link.href}
-                      className="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+                      className={`text-sm ${classes.text.secondary} hover:text-emerald-400 transition-colors`}
                     >
                       {link.label}
                     </Link>
@@ -118,13 +120,13 @@ export function Footer({ className = '' }: FooterProps) {
 
           {/* Company Links */}
           <div>
-            <h4 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Company</h4>
+            <h4 className={`text-sm font-semibold ${classes.text.white} mb-4 uppercase tracking-wider`}>Company</h4>
             <ul className="space-y-2">
               {footerLinks.company.map((link) => (
                 <li key={link.label}>
                   <Link
                     to={link.path}
-                    className="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+                    className={`text-sm ${classes.text.secondary} hover:text-emerald-400 transition-colors`}
                   >
                     {link.label}
                   </Link>
@@ -135,9 +137,9 @@ export function Footer({ className = '' }: FooterProps) {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-8 pt-8 border-t border-slate-800">
+        <div className={`mt-8 pt-8 border-t ${classes.border.light}`}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500">
+            <p className={`text-sm ${classes.text.muted}`}>
               © {currentYear} CreditNexus. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
@@ -145,7 +147,7 @@ export function Footer({ className = '' }: FooterProps) {
                 <Link
                   key={link.label}
                   to={link.path}
-                  className="text-sm text-slate-500 hover:text-slate-400 transition-colors"
+                  className={`text-sm ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
                 >
                   {link.label}
                 </Link>

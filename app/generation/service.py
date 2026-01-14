@@ -400,6 +400,24 @@ class DocumentGenerationService:
                 logger.warning(f"Failed to apply override for {field_path}: {e}")
                 continue
         
+        # Ensure required fields are present before reconstruction
+        # Fix parties: ensure each party has an 'id' field
+        if "parties" in cdm_dict and isinstance(cdm_dict["parties"], list):
+            for i, party in enumerate(cdm_dict["parties"]):
+                if isinstance(party, dict) and "id" not in party:
+                    # Generate a default ID if missing
+                    party["id"] = party.get("name", f"party_{i}") or f"party_{i}"
+        
+        # Fix facilities: ensure each facility has payment_frequency in interest_terms
+        if "facilities" in cdm_dict and isinstance(cdm_dict["facilities"], list):
+            for facility in cdm_dict["facilities"]:
+                if isinstance(facility, dict):
+                    interest_terms = facility.get("interest_terms", {})
+                    if isinstance(interest_terms, dict) and "payment_frequency" not in interest_terms:
+                        # Default to monthly if not specified
+                        interest_terms["payment_frequency"] = "Monthly"
+                        facility["interest_terms"] = interest_terms
+        
         # Reconstruct CreditAgreement from modified dict
         # Use model_validate to handle missing required fields more gracefully
         try:

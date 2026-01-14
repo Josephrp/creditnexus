@@ -1,0 +1,1 @@
+URGENT: {{borrower_name}}, your loan {{loan_id}} payment of {{amount_overdue}} is {{days_past_due}} days overdue. This matter requires immediate attention. Please contact us today at +1-800-XXX-XXXX.

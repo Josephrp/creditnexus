@@ -90,6 +90,9 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [availableDocuments, setAvailableDocuments] = useState<any[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [requestingSignature, setRequestingSignature] = useState(false);
+  const [showSignatureRequest, setShowSignatureRequest] = useState(false);
+  const [signatureId, setSignatureId] = useState<number | null>(null);
 
   // Load templates and documents on mount
   useEffect(() => {

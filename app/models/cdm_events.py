@@ -681,3 +681,181 @@ def generate_cdm_securitization_notarization(
             "version": 1
         }
     }
+
+
+def generate_cdm_loan_default(
+    default_id: str,
+    loan_id: Optional[str],
+    deal_id: Optional[str],
+    default_type: str,
+    default_date: datetime.datetime,
+    amount_overdue: Optional[float] = None,
+    days_past_due: int = 0,
+    severity: str = "low",
+    default_reason: Optional[str] = None,
+    related_event_identifiers: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Generate CDM-compliant Observation event for loan default.
+    
+    Args:
+        default_id: Unique identifier for the default
+        loan_id: Loan identifier (optional)
+        deal_id: Deal identifier (optional)
+        default_type: Type of default (payment_default, covenant_breach, infraction)
+        default_date: Date when default occurred
+        amount_overdue: Amount overdue (if payment default)
+        days_past_due: Number of days past due
+        severity: Severity level (low, medium, high, critical)
+        default_reason: Reason for default (optional)
+        related_event_identifiers: List of related event identifiers
+        
+    Returns:
+        CDM-compliant Observation event dictionary
+    """
+    observation_value = {
+        "value": default_type.upper(),
+        "unit": "LOAN_DEFAULT_TYPE",
+        "numericValue": days_past_due,
+        "context": {
+            "severity": severity,
+            "daysPastDue": days_past_due
+        }
+    }
+    
+    if amount_overdue is not None:
+        observation_value["context"]["amountOverdue"] = amount_overdue
+    
+    if default_reason:
+        observation_value["context"]["reason"] = default_reason
+    
+    related_identifiers = related_event_identifiers or []
+    
+    # Add loan/facility identifier if provided
+    if loan_id:
+        related_identifiers.append({
+            "eventIdentifier": {
+                "issuer": "CreditNexus_LoanService",
+                "assignedIdentifier": [{"identifier": {"value": loan_id}}]
+            }
+        })
+    
+    # Add deal identifier if provided
+    if deal_id:
+        related_identifiers.append({
+            "eventIdentifier": {
+                "issuer": "CreditNexus_DealService",
+                "assignedIdentifier": [{"identifier": {"value": deal_id}}]
+            }
+        })
+    
+    return {
+        "eventType": "Observation",
+        "eventDate": default_date.isoformat() if isinstance(default_date, datetime.datetime) else default_date,
+        "observation": {
+            "observationType": "LoanDefault",
+            "observationDate": {
+                "date": default_date.date().isoformat() if isinstance(default_date, datetime.datetime) else default_date
+            },
+            "observedValue": observation_value,
+            "informationSource": {
+                "sourceProvider": "CreditNexus_RecoveryService",
+                "sourceType": "LoanMonitoring",
+                "reference": {
+                    "defaultId": default_id,
+                    "detectionMethod": "automated"
+                }
+            }
+        },
+        "relatedEventIdentifier": related_identifiers,
+        "meta": {
+            "globalKey": str(uuid.uuid4()),
+            "sourceSystem": "CreditNexus_RecoveryService_v1",
+            "version": 1
+        }
+    }
+
+
+def generate_cdm_recovery_action(
+    action_id: str,
+    loan_default_id: str,
+    action_type: str,
+    communication_method: str,
+    message_content: str,
+    status: str = "pending",
+    twilio_message_sid: Optional[str] = None,
+    twilio_call_sid: Optional[str] = None,
+    sent_at: Optional[datetime.datetime] = None,
+    related_event_identifiers: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Generate CDM-compliant Observation event for recovery action.
+    
+    Args:
+        action_id: Unique identifier for the recovery action
+        loan_default_id: ID of the related loan default
+        action_type: Type of action (sms_reminder, voice_call, email, escalation, legal_notice)
+        communication_method: Method used (sms, voice, email)
+        message_content: Content of the message sent
+        status: Status of the action (pending, sent, delivered, failed, responded)
+        twilio_message_sid: Twilio message SID (if SMS)
+        twilio_call_sid: Twilio call SID (if voice)
+        sent_at: Timestamp when action was sent (optional)
+        related_event_identifiers: List of related event identifiers
+        
+    Returns:
+        CDM-compliant Observation event dictionary
+    """
+    observation_value = {
+        "value": action_type.upper(),
+        "unit": "RECOVERY_ACTION_TYPE",
+        "context": {
+            "communicationMethod": communication_method,
+            "status": status,
+            "messageLength": len(message_content)
+        }
+    }
+    
+    if twilio_message_sid:
+        observation_value["context"]["twilioMessageSid"] = twilio_message_sid
+    
+    if twilio_call_sid:
+        observation_value["context"]["twilioCallSid"] = twilio_call_sid
+    
+    related_identifiers = related_event_identifiers or []
+    
+    # Add loan default identifier
+    related_identifiers.append({
+        "eventIdentifier": {
+            "issuer": "CreditNexus_RecoveryService",
+            "assignedIdentifier": [{"identifier": {"value": f"LOAN_DEFAULT_{loan_default_id}"}}]
+        }
+    })
+    
+    event_date = sent_at if sent_at else datetime.datetime.now()
+    
+    return {
+        "eventType": "Observation",
+        "eventDate": event_date.isoformat() if isinstance(event_date, datetime.datetime) else event_date,
+        "observation": {
+            "observationType": "RecoveryAction",
+            "observationDate": {
+                "date": event_date.date().isoformat() if isinstance(event_date, datetime.datetime) else datetime.date.today().isoformat()
+            },
+            "observedValue": observation_value,
+            "informationSource": {
+                "sourceProvider": "CreditNexus_RecoveryService",
+                "sourceType": "LoanRecovery",
+                "reference": {
+                    "actionId": action_id,
+                    "communicationProvider": "Twilio" if communication_method in ["sms", "voice"] else "Email"
+                }
+            }
+        },
+        "relatedEventIdentifier": related_identifiers,
+        "meta": {
+            "globalKey": str(uuid.uuid4()),
+            "sourceSystem": "CreditNexus_RecoveryService_v1",
+            "version": 1
+        }
+    }

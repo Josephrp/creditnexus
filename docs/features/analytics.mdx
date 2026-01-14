@@ -1,0 +1,129 @@
+---
+title: Analytics
+description: Portfolio analytics and dashboard insights
+---
+
+## Overview
+
+The Analytics feature provides comprehensive portfolio analytics, dashboard insights, and reporting capabilities for monitoring credit portfolio performance, risk metrics, and operational statistics.
+
+**Code Reference**: `app/api/routes.py` (analytics endpoints), `client/src/components/Dashboard.tsx`
+
+---
+
+## Key Features
+
+### Portfolio Analytics
+
+- **Portfolio Overview**: Complete portfolio statistics
+- **Risk Metrics**: Credit risk metrics and indicators
+- **Performance Tracking**: Track portfolio performance over time
+- **Trend Analysis**: Analyze trends and patterns
+
+**Code Reference**: `app/api/routes.py` (get_portfolio_analytics endpoint)
+
+### Dashboard Analytics
+
+- **Dashboard Statistics**: Key metrics for dashboard display
+- **Activity Summary**: User activity and system usage
+- **Document Statistics**: Document processing statistics
+- **Policy Statistics**: Policy decision statistics
+
+**Code Reference**: `app/api/routes.py` (get_dashboard_analytics endpoint)
+
+### Reporting
+
+- **Custom Reports**: Generate custom analytics reports
+- **Export Functionality**: Export analytics data
+- **Visualization**: Data visualization and charts
+- **Scheduled Reports**: Schedule automatic report generation
+
+---
+
+## Analytics Metrics
+
+### Portfolio Metrics
+
+- **Total Portfolio Value**: Sum of all loan commitments
+- **Active Loans**: Number of active loans
+- **Default Rate**: Percentage of loans in default
+- **Average Interest Rate**: Average interest rate across portfolio
+- **Geographic Distribution**: Loan distribution by geography
+
+### Risk Metrics
+
+- **Credit Risk Score**: Overall portfolio credit risk
+- **Concentration Risk**: Sector and geographic concentration
+- **Policy Violations**: Number of policy violations
+- **Breach Count**: Number of compliance breaches
+- **Recovery Rate**: Loan recovery success rate
+
+### Operational Metrics
+
+- **Document Processing**: Documents processed per period
+- **Extraction Accuracy**: Extraction accuracy metrics
+- **Policy Decisions**: Policy decision statistics
+- **User Activity**: User activity and engagement
+
+---
+
+## API Endpoints
+
+### Get Portfolio Analytics
+
+<Endpoint method="GET" path="/api/analytics/portfolio" />
+
+Get comprehensive portfolio analytics.
+
+**Response**: Portfolio statistics, risk metrics, and performance data
+
+**Code Reference**: `app/api/routes.py` (get_portfolio_analytics endpoint)
+
+### Get Dashboard Analytics
+
+<Endpoint method="GET" path="/api/analytics/dashboard" />
+
+Get dashboard statistics and key metrics.
+
+**Response**: Dashboard statistics including activity, documents, and policy decisions
+
+**Code Reference**: `app/api/routes.py` (get_dashboard_analytics endpoint)
+
+---
+
+## User Interface
+
+### Dashboard
+
+**Location**: `client/src/components/Dashboard.tsx`
+
+**Features**:
+- **Portfolio Overview**: Key portfolio metrics
+- **Activity Summary**: Recent activity summary
+- **Document Statistics**: Document processing stats
+- **Policy Statistics**: Policy decision summary
+- **Quick Actions**: Quick access to common actions
+
+**Access**: Navigate to "Dashboard" in sidebar
+
+---
+
+## Best Practices
+
+1. **Regular Monitoring**: Monitor analytics regularly
+2. **Trend Analysis**: Analyze trends over time
+3. **Risk Assessment**: Use analytics for risk assessment
+4. **Performance Tracking**: Track portfolio performance
+5. **Report Generation**: Generate regular reports
+
+---
+
+## Additional Resources
+
+- [Audit Reports Feature](/features/audit-reports)
+- [Configuration Guide](/getting-started/configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/routes.py`, `client/src/components/Dashboard.tsx`

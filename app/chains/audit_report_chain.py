@@ -146,6 +146,20 @@ Please provide:
             violations = []
             
             for decision in policy_decisions:
+                # Handle both dict and string formats
+                if isinstance(decision, str):
+                    # If decision is a string, skip it or convert to dict
+                    logger.warning(f"Skipping string decision: {decision}")
+                    continue
+                
+                if not isinstance(decision, dict):
+                    # Try to convert to dict if it has to_dict method
+                    if hasattr(decision, 'to_dict'):
+                        decision = decision.to_dict()
+                    else:
+                        logger.warning(f"Skipping non-dict decision: {type(decision)}")
+                        continue
+                
                 decision_type = decision.get("decision", "ALLOW")
                 decision_counts[decision_type] = decision_counts.get(decision_type, 0) + 1
                 

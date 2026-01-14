@@ -489,6 +489,36 @@ class AuditLog(Base):
         }
 
 
+class GeneratedReport(Base):
+    """Storage for generated audit reports."""
+
+    __tablename__ = "generated_reports"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    report_id = Column(String(255), unique=True, nullable=False, index=True)
+    report_type = Column(String(50), nullable=False)
+    template = Column(String(50), nullable=False)
+    request_params = Column(JSONB, nullable=True)
+    report_data = Column(JSONB, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    creator = relationship("User", foreign_keys=[created_by])
+
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "report_id": self.report_id,
+            "report_type": self.report_type,
+            "template": self.template,
+            "request_params": self.request_params,
+            "report_data": self.report_data,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class OAuth(Base):
     """OAuth token storage for Replit Auth sessions."""
 
@@ -912,6 +942,7 @@ class DocumentSignature(Base):
     signed_at = Column(DateTime, nullable=True)  # Changed to nullable
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
     document = relationship("Document", back_populates="signatures")
@@ -942,6 +973,7 @@ class DocumentSignature(Base):
             "signature_data": self.signature_data,
             "signed_at": self.signed_at.isoformat() if self.signed_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": getattr(self, 'updated_at', None).isoformat() if getattr(self, 'updated_at', None) else None,
         }
 
 
@@ -1260,6 +1292,8 @@ class Deal(Base):
     documents = relationship("Document", back_populates="deal")
     notes = relationship("DealNote", back_populates="deal", cascade="all, delete-orphan")
     filings = relationship("DocumentFiling", back_populates="deal", cascade="all, delete-orphan")
+    loan_defaults = relationship("LoanDefault", back_populates="deal", cascade="all, delete-orphan")
+    borrower_contacts = relationship("BorrowerContact", back_populates="deal", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary."""
@@ -2293,7 +2327,7 @@ class PaymentEvent(Base):
     related_notarization_id = Column(Integer, ForeignKey("notarization_records.id"), nullable=True, index=True)
     related_trade_id = Column(Integer, nullable=True)
     related_loan_id = Column(Integer, nullable=True)
-    payment_metadata = Column(JSONB, name="metadata", nullable=True)
+    payment_metadata = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
@@ -2329,6 +2363,146 @@ class PaymentEvent(Base):
         }
 
 
+class LoanDefault(Base):
+    """Loan default model for tracking payment defaults and covenant breaches."""
+    
+    __tablename__ = "loan_defaults"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    loan_id = Column(String(255), nullable=True, index=True)  # Foreign key to LoanAsset or Deal
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=True, index=True)
+    default_type = Column(String(50), nullable=False, index=True)  # payment_default, covenant_breach, infraction
+    default_date = Column(DateTime, nullable=False, index=True)
+    default_reason = Column(Text, nullable=True)
+    amount_overdue = Column(Numeric(20, 2), nullable=True)  # If payment default
+    days_past_due = Column(Integer, nullable=False, default=0)
+    severity = Column(String(20), nullable=False, index=True)  # low, medium, high, critical
+    status = Column(String(50), nullable=False, index=True, default="open")  # open, in_recovery, resolved, written_off
+    resolved_at = Column(DateTime, nullable=True)
+    cdm_events = Column(JSONB, nullable=True)  # CDM events for this default
+    default_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional data (renamed to avoid SQLAlchemy reserved name)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", back_populates="loan_defaults")
+    recovery_actions = relationship("RecoveryAction", back_populates="loan_default", cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "loan_id": self.loan_id,
+            "deal_id": self.deal_id,
+            "default_type": self.default_type,
+            "default_date": self.default_date.isoformat() if self.default_date else None,
+            "default_reason": self.default_reason,
+            "amount_overdue": str(self.amount_overdue) if self.amount_overdue else None,
+            "days_past_due": self.days_past_due,
+            "severity": self.severity,
+            "status": self.status,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "cdm_events": self.cdm_events,
+            "metadata": self.default_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
-    """Remote application profile for API access control."""
+
+class RecoveryAction(Base):
+    """Recovery action model for tracking communication attempts."""
+    
+    __tablename__ = "recovery_actions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    loan_default_id = Column(Integer, ForeignKey("loan_defaults.id", ondelete="CASCADE"), nullable=False, index=True)
+    action_type = Column(String(50), nullable=False, index=True)  # sms_reminder, voice_call, email, escalation, legal_notice
+    communication_method = Column(String(20), nullable=False)  # sms, voice, email
+    recipient_phone = Column(String(20), nullable=True)
+    recipient_email = Column(String(255), nullable=True)
+    message_template = Column(String(255), nullable=False)  # Template name or custom message
+    message_content = Column(Text, nullable=False)  # Actual message sent
+    twilio_message_sid = Column(String(255), nullable=True, index=True)  # For SMS
+    twilio_call_sid = Column(String(255), nullable=True, index=True)  # For voice
+    status = Column(String(50), nullable=False, index=True, default="pending")  # pending, sent, delivered, failed, responded
+    scheduled_at = Column(DateTime, nullable=True, index=True)  # For scheduled actions
+    sent_at = Column(DateTime, nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    response_received_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional data (renamed to avoid SQLAlchemy reserved name)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    loan_default = relationship("LoanDefault", back_populates="recovery_actions")
+    creator = relationship("User", foreign_keys=[created_by])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "loan_default_id": self.loan_default_id,
+            "action_type": self.action_type,
+            "communication_method": self.communication_method,
+            "recipient_phone": self.recipient_phone,
+            "recipient_email": self.recipient_email,
+            "message_template": self.message_template,
+            "message_content": self.message_content,
+            "twilio_message_sid": self.twilio_message_sid,
+            "twilio_call_sid": self.twilio_call_sid,
+            "status": self.status,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "response_received_at": self.response_received_at.isoformat() if self.response_received_at else None,
+            "error_message": self.error_message,
+            "created_by": self.created_by,
+            "metadata": self.action_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class BorrowerContact(Base):
+    """Borrower contact model for managing borrower contact information."""
+    
+    __tablename__ = "borrower_contacts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # If borrower is a user
+    contact_name = Column(String(255), nullable=False)
+    phone_number = Column(String(20), nullable=True)  # E.164 format
+    email = Column(String(255), nullable=True)
+    preferred_contact_method = Column(String(20), nullable=False, default="sms")  # sms, voice, email
+    contact_preferences = Column(JSONB, nullable=True)  # timezone, preferred_hours, etc.
+    is_primary = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    contact_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional data (renamed to avoid SQLAlchemy reserved name)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", back_populates="borrower_contacts")
+    user = relationship("User", foreign_keys=[user_id])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "deal_id": self.deal_id,
+            "user_id": self.user_id,
+            "contact_name": self.contact_name,
+            "phone_number": self.phone_number,
+            "email": self.email,
+            "preferred_contact_method": self.preferred_contact_method,
+            "contact_preferences": self.contact_preferences,
+            "is_primary": self.is_primary,
+            "is_active": self.is_active,
+            "metadata": self.contact_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 

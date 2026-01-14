@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
-from pydantic import SecretStr, field_validator, Field
+from pydantic import SecretStr, field_validator, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -255,9 +255,23 @@ class Settings(BaseSettings):
     SUSTAINABILITY_POLLUTION_WEIGHT: float = 0.15
 
     # Twilio configuration
-    TWILIO_ACCOUNT_SID: Optional[str] = None
-    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_ENABLED: bool = False
+    TWILIO_ACCOUNT_SID: Optional[SecretStr] = None
+    TWILIO_AUTH_TOKEN: Optional[SecretStr] = None
     TWILIO_PHONE_NUMBER: Optional[str] = None
+    TWILIO_SMS_ENABLED: bool = True
+    TWILIO_VOICE_ENABLED: bool = True
+    TWILIO_WEBHOOK_URL: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validate_twilio_credentials(self):
+        """Validate that Twilio credentials are present if Twilio is enabled."""
+        if self.TWILIO_ENABLED:
+            if not self.TWILIO_ACCOUNT_SID:
+                raise ValueError("TWILIO_ACCOUNT_SID is required when TWILIO_ENABLED is True")
+            if not self.TWILIO_AUTH_TOKEN:
+                raise ValueError("TWILIO_AUTH_TOKEN is required when TWILIO_ENABLED is True")
+        return self
 
     # Remote API Configuration
     REMOTE_API_ENABLED: bool = False
@@ -275,7 +289,7 @@ class Settings(BaseSettings):
     VERIFICATION_FILE_CONFIG_PATH: Optional[Path] = None  # YAML config for file whitelist
     
     # Workflow Delegation Configuration
-    WORKFLOW_DELEGATION_BASE_URL: Optional[str] = None  # Base URL for workflow delegation links (e.g., "https://app.creditnexus.com")
+    WORKFLOW_DELEGATION_BASE_URL: Optional[str] = None  # Base URL for workflow delegation links (e.g., "https://josephrp.github.io/creditnexus")
 
     
     # Demo Data Configuration
@@ -317,7 +331,7 @@ class Settings(BaseSettings):
     SEED_APPLICANT: bool = False  # Seed applicant demo user
     
     # Security Configuration
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:8000", "https://creditnexus.com"]  # CORS allowed origins
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:8000", "https://josephrp.github.io"]  # CORS allowed origins
     CORS_ALLOW_CREDENTIALS: bool = True  # Allow credentials in CORS
     SESSION_SAME_SITE: str = "strict"  # Session cookie same-site policy: "strict", "lax", or "none"
     SESSION_SECURE: bool = True  # Require HTTPS for session cookies

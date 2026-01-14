@@ -27,6 +27,7 @@ interface SeedOptions {
   generate_deals: boolean;
   deal_count: number;
   dry_run: boolean;
+  complete_partial_data?: boolean;
 }
 
 interface SeedResult {
@@ -68,7 +69,8 @@ export function DemoDataDashboard() {
     seed_policy_templates: true,
     generate_deals: true,
     deal_count: 12,
-    dry_run: false
+    dry_run: false,
+    complete_partial_data: false
   });
   
   const [seedResults, setSeedResults] = useState<Record<string, SeedResult>>({});
@@ -95,6 +97,7 @@ export function DemoDataDashboard() {
     generateDeals,
     getSeedingStatus,
     resetDemoData,
+    completePartialData,
     getGeneratedDeals,
     loading,
     error,
@@ -329,6 +332,7 @@ export function DemoDataDashboard() {
         seed_policy_templates: seedOptions.seed_policy_templates,
         generate_deals: false, // Already handled above
         dry_run: seedOptions.dry_run,
+        complete_partial_data: seedOptions.complete_partial_data || false,
       });
       
       // Store user credentials if available
@@ -581,6 +585,16 @@ export function DemoDataDashboard() {
                       />
                       <span className="text-sm text-slate-300">Dry Run (Preview Only)</span>
                     </label>
+                    
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={seedOptions.complete_partial_data || false}
+                        onChange={(e) => setSeedOptions({ ...seedOptions, complete_partial_data: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-slate-300">Complete Partial Data</span>
+                    </label>
                   </div>
                   
                   {seedOptions.generate_deals && (
@@ -663,6 +677,41 @@ export function DemoDataDashboard() {
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         Clear Results
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const result = await completePartialData({
+                              completeDeals: true,
+                              completeLoanAssets: true,
+                              completeApplications: true,
+                              completeDocuments: true
+                            });
+                            // Convert result to SeedResult format
+                            const results: Record<string, SeedResult> = {};
+                            Object.entries(result.created).forEach(([stage, count]) => {
+                              results[stage] = {
+                                stage,
+                                created: count,
+                                updated: result.updated[stage] || 0,
+                                errors: result.errors[stage] || [],
+                              };
+                            });
+                            setSeedResults(results);
+                            if (activeTab === 'deals') {
+                              fetchDeals();
+                            }
+                          } catch (err) {
+                            console.error('Failed to complete partial data:', err);
+                          }
+                        }}
+                        disabled={loading}
+                        className="bg-amber-900/40 hover:bg-amber-900/60 text-amber-200 border border-amber-500/30"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Complete Partial Data
                       </Button>
                     </div>
 

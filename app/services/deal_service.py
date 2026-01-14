@@ -613,6 +613,55 @@ class DealService:
                 }
             })
         
+        # Add loan defaults
+        from app.db.models import LoanDefault, RecoveryAction
+        loan_defaults = self.db.query(LoanDefault).filter(LoanDefault.deal_id == deal_id).all()
+        for default in loan_defaults:
+            timeline.append({
+                "event_type": "loan_default",
+                "timestamp": default.default_date.isoformat() if default.default_date else default.created_at.isoformat() if default.created_at else None,
+                "data": {
+                    "default_id": default.id,
+                    "default_type": default.default_type,
+                    "severity": default.severity,
+                    "amount_overdue": str(default.amount_overdue) if default.amount_overdue else None,
+                    "days_past_due": default.days_past_due,
+                    "status": default.status,
+                    "default_reason": default.default_reason
+                },
+                "status": "warning" if default.severity in ["low", "medium"] else "failure" if default.severity in ["high", "critical"] else "pending"
+            })
+            
+            # Add recovery actions for this default
+            recovery_actions = self.db.query(RecoveryAction).filter(
+                RecoveryAction.loan_default_id == default.id
+            ).all()
+            
+            for action in recovery_actions:
+                # Determine status based on action status
+                action_timeline_status = "pending"
+                if action.status == "delivered":
+                    action_timeline_status = "success"
+                elif action.status == "failed":
+                    action_timeline_status = "failure"
+                elif action.status in ["sent", "in_recovery"]:
+                    action_timeline_status = "pending"
+                
+                timeline.append({
+                    "event_type": "recovery_action",
+                    "timestamp": (action.sent_at.isoformat() if action.sent_at else action.created_at.isoformat()) if action.created_at else None,
+                    "data": {
+                        "action_id": action.id,
+                        "action_type": action.action_type,
+                        "communication_method": action.communication_method,
+                        "status": action.status,
+                        "message_content": action.message_content[:100] + "..." if action.message_content and len(action.message_content) > 100 else action.message_content,
+                        "recipient_phone": action.recipient_phone,
+                        "recipient_email": action.recipient_email
+                    },
+                    "status": action_timeline_status
+                })
+        
         # Sort by timestamp
         timeline.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
         

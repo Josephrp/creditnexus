@@ -83,11 +83,29 @@ export function AuditReportGenerator() {
     if (!reportId) return;
     
     try {
-      // TODO: Implement download endpoint
-      // For now, show a message
-      alert(`Download ${format} functionality will be implemented soon`);
+      setGenerating(true);
+      const response = await fetchWithAuth(
+        `/api/auditor/reports/${reportId}/download?format=${format}`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const extension = format === 'excel' ? 'xlsx' : format === 'word' ? 'docx' : 'pdf';
+      a.download = `audit_report_${reportId}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -111,6 +129,29 @@ export function AuditReportGenerator() {
             </h1>
             <p className="text-slate-400 mt-1">Generate comprehensive audit reports with LLM-powered analysis</p>
           </div>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => {
+              setRequest({
+                report_type: 'overview',
+                date_range: { start: null, end: null },
+                template: 'standard',
+                include_sections: {
+                  executive_summary: true,
+                  compliance_analysis: true,
+                  recommendations: true,
+                  detailed_trail: true,
+                }
+              });
+              handleGenerate();
+            }}
+            disabled={generating}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+            One-Click Overview Report
+          </Button>
         </div>
       </div>
 

@@ -1,0 +1,234 @@
+---
+title: Auditor API
+description: API endpoints for audit reports, CDM event exploration, and policy decisions
+---
+
+## Auditor API
+
+Complete API for audit report generation, CDM event exploration, policy decision tracking, and audit log management.
+
+**Base Path**: `/api/auditor`  
+**Code Reference**: `app/api/auditor_routes.py`
+
+---
+
+## Dashboard
+
+### Get Auditor Dashboard
+
+<Endpoint method="GET" path="/api/auditor/dashboard" />
+
+Get auditor dashboard statistics and overview.
+
+**Query Parameters**:
+- `start_date`: Start date (ISO format)
+- `end_date`: End date (ISO format)
+
+**Response**: Dashboard statistics including:
+- Total audit logs
+- Policy decisions summary
+- CDM events count
+- Activity trends
+
+---
+
+## Report Generation
+
+### Generate Audit Report
+
+<Endpoint method="POST" path="/api/auditor/reports/generate" />
+
+Generate an audit report with customizable sections and templates.
+
+**Request Body**:
+```json
+{
+  "report_type": "overview",
+  "date_range": {
+    "start": "2026-01-15T00:00:00Z",
+    "end": "2026-12-31T23:59:59Z"
+  },
+  "entity_selection": {
+    "type": "deal",
+    "ids": [1, 2, 3]
+  },
+  "template": "comprehensive",
+  "include_sections": {
+    "audit_logs": true,
+    "policy_decisions": true,
+    "cdm_events": true,
+    "statistics": true
+  }
+}
+```
+
+**Response**: Generated report in requested format
+
+---
+
+### Export Report
+
+<Endpoint method="GET" path="/api/auditor/reports/{report_id}/export" />
+
+Export a generated report in various formats.
+
+**Query Parameters**:
+- `format`: Export format (pdf, csv, json, xlsx)
+
+**Response**: File download
+
+---
+
+## CDM Event Exploration
+
+### Get CDM Events
+
+<Endpoint method="GET" path="/api/auditor/cdm-events" />
+
+Browse and filter CDM events.
+
+**Query Parameters**:
+- `event_type`: Filter by event type
+- `transaction_id`: Filter by transaction ID
+- `start_date`: Start date filter
+- `end_date`: End date filter
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of CDM events
+
+---
+
+### Get CDM Event Details
+
+<Endpoint method="GET" path="/api/auditor/cdm-events/{event_id}" />
+
+Get detailed information about a specific CDM event.
+
+**Response**: Complete CDM event data
+
+---
+
+## Policy Decisions
+
+### Get Policy Decisions
+
+<Endpoint method="GET" path="/api/auditor/policy-decisions" />
+
+Browse and filter policy decisions.
+
+**Query Parameters**:
+- `decision`: Filter by decision (ALLOW, BLOCK, FLAG)
+- `rule_applied`: Filter by rule name
+- `transaction_type`: Filter by transaction type
+- `start_date`: Start date filter
+- `end_date`: End date filter
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of policy decisions
+
+---
+
+### Get Policy Decision Details
+
+<Endpoint method="GET" path="/api/auditor/policy-decisions/{decision_id}" />
+
+Get detailed information about a specific policy decision.
+
+**Response**: Complete policy decision data including evaluation trace
+
+---
+
+## Audit Logs
+
+### Get Audit Logs
+
+<Endpoint method="GET" path="/api/auditor/logs" />
+
+Browse and filter audit logs.
+
+**Query Parameters**:
+- `action`: Filter by action type
+- `target_type`: Filter by target type
+- `user_id`: Filter by user ID
+- `start_date`: Start date filter
+- `end_date`: End date filter
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of audit logs
+
+---
+
+## Entity-Specific Audits
+
+### Get Deal Audit Trail
+
+<Endpoint method="GET" path="/api/auditor/deals/{deal_id}/audit" />
+
+Get complete audit trail for a specific deal.
+
+**Response**: All audit logs, policy decisions, and CDM events for the deal
+
+---
+
+### Get Loan Audit Trail
+
+<Endpoint method="GET" path="/api/auditor/loans/{loan_id}/audit" />
+
+Get complete audit trail for a specific loan.
+
+**Response**: All audit logs, policy decisions, and CDM events for the loan
+
+---
+
+### Get Filing Audit Trail
+
+<Endpoint method="GET" path="/api/auditor/filings/{filing_id}/audit" />
+
+Get complete audit trail for a specific regulatory filing.
+
+**Response**: All audit logs, policy decisions, and CDM events for the filing
+
+---
+
+## Statistics
+
+### Get Audit Statistics
+
+<Endpoint method="GET" path="/api/auditor/statistics" />
+
+Get comprehensive audit statistics.
+
+**Query Parameters**:
+- `start_date`: Start date
+- `end_date`: End date
+- `group_by`: Group by (day, week, month)
+
+**Response**: Statistical summary including:
+- Activity trends
+- Policy decision distribution
+- CDM event counts
+- User activity
+
+---
+
+## Permissions
+
+All auditor endpoints require `AUDIT_VIEW` permission. Export endpoints require `AUDIT_EXPORT` permission.
+
+**Code Reference**: `app/core/permissions.py`
+
+---
+
+## Additional Resources
+
+- [Audit Reports Feature](/features/audit-reports)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/auditor_routes.py`

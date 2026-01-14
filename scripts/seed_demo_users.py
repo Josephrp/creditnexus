@@ -245,7 +245,7 @@ def _generate_company_info(role: UserRole) -> dict:
     address_dict = addresses.get(role, addresses[UserRole.APPLICANT])
     full_address = f"{address_dict['street']}, {address_dict['city']}, {address_dict['state']} {address_dict['postal_code']}"
     
-    website = f"https://www.{company_name.lower().replace(' ', '').replace(',', '')}.com" if role == UserRole.APPLICANT else "https://www.creditnexus.app"
+    website = f"https://www.{company_name.lower().replace(' ', '').replace(',', '')}.com" if role == UserRole.APPLICANT else "https://josephrp.github.io/creditnexus"
     
     # Return CompanyInfo structure (address must match Address model)
     return {

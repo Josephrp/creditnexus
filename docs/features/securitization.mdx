@@ -1,0 +1,232 @@
+---
+title: Securitization Workflow
+description: Complete securitization workflow from pool creation to ERC-721 token minting
+---
+
+## Overview
+
+The Securitization Workflow enables financial institutions to bundle loans and bonds into structured finance products, create CDM-compliant securitization pools, notarize transactions on the blockchain, and mint ERC-721 tranche tokens for investors.
+
+**Code Reference**: `app/services/securitization_service.py`, `app/api/securitization_routes.py`, `client/src/apps/securitization/SecuritizationWorkflow.tsx`  
+
+---
+
+## Key Features
+
+### Pool Creation
+
+- **Asset Selection**: Select loans and bonds from your portfolio
+- **Pool Configuration**: Define pool parameters and structure
+- **CDM Compliance**: All pools are CDM-compliant
+- **Auto-Generation**: Automatic pool structure generation
+
+**Code Reference**: `app/services/securitization_service.py` (create_securitization_pool)
+
+### Blockchain Notarization
+
+- **MetaMask Integration**: Multi-party signing with MetaMask
+- **Smart Contracts**: SecuritizationNotarization contract on Base network
+- **Immutable Records**: Blockchain-based transaction records
+- **CDM Events**: Notarization events stored as CDM events
+
+**Code Reference**: `app/services/blockchain_service.py`, `app/services/notarization_service.py`
+
+### Tranche Minting
+
+- **ERC-721 Tokens**: Mint non-fungible tranche tokens
+- **Tranche Structure**: Define seniority, interest rates, payment priority
+- **Token Metadata**: Rich metadata for each tranche
+- **Investor Distribution**: Distribute tokens to investors
+
+**Code Reference**: `contracts/SecuritizationToken.sol`, `app/services/securitization_service.py`
+
+### Payment Distribution
+
+- **Payment Waterfall**: Automated payment distribution
+- **Priority Rules**: Senior tranches paid first
+- **Smart Contract Routing**: SecuritizationPaymentRouter contract
+- **USDC Payments**: Payments in USDC stablecoin on Base network
+
+**Code Reference**: `contracts/SecuritizationPaymentRouter.sol`, `app/services/securitization_service.py` (distribute_payments)
+
+---
+
+## Workflow
+
+### 1. Create Securitization Pool
+
+1. **Select Assets**: Choose loans/bonds to include in pool
+2. **Configure Pool**: Set pool name, description, parameters
+3. **Define Tranches**: Create tranche structure (senior, mezzanine, equity)
+4. **Review**: Review pool configuration
+5. **Create**: Generate CDM-compliant securitization pool
+
+### 2. Notarize Pool
+
+1. **Connect Wallets**: All parties connect MetaMask wallets
+2. **Review Terms**: Review securitization terms
+3. **Sign**: Each party signs the notarization
+4. **Submit**: Submit signatures to blockchain
+5. **Confirm**: Receive blockchain transaction hash
+
+### 3. Mint Tranche Tokens
+
+1. **Select Tranche**: Choose tranche to mint
+2. **Configure Token**: Set token metadata and properties
+3. **Mint**: Deploy ERC-721 token contract
+4. **Distribute**: Assign tokens to investors
+5. **Track**: Monitor token ownership and transfers
+
+### 4. Process Payments
+
+1. **Receive Payments**: Collect payments from underlying assets
+2. **Calculate Distribution**: Apply payment waterfall rules
+3. **Route Payments**: Use smart contract for distribution
+4. **Update Records**: Update payment history and CDM events
+
+---
+
+## CDM Compliance
+
+### Securitization Models
+
+All securitization data uses CDM models:
+- **SecuritizationPool**: Pool structure and metadata
+- **UnderlyingAsset**: Assets in the pool
+- **Tranche**: Tranche definitions
+- **PaymentWaterfall**: Payment distribution rules
+
+**Code Reference**: `app/models/cdm.py` (SecuritizationPool, UnderlyingAsset, Tranche, PaymentWaterfall)
+
+### CDM Events
+
+All securitization actions generate CDM events:
+- **SecuritizationCreation**: Pool creation event
+- **SecuritizationNotarization**: Blockchain notarization event
+- **TrancheMinting**: Token minting event
+- **PaymentDistribution**: Payment distribution event
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_securitization_creation, generate_cdm_securitization_notarization)
+
+---
+
+## Smart Contracts
+
+### SecuritizationNotarization
+
+**Location**: `contracts/SecuritizationNotarization.sol`
+
+Notarizes securitization pools on the blockchain with multi-party signatures.
+
+### SecuritizationToken (ERC-721)
+
+**Location**: `contracts/SecuritizationToken.sol`
+
+Mints non-fungible tranche tokens representing ownership in securitization pools.
+
+### SecuritizationPaymentRouter
+
+**Location**: `contracts/SecuritizationPaymentRouter.sol`
+
+Routes payments according to waterfall rules defined in the securitization structure.
+
+**Code Reference**: `contracts/` directory
+
+---
+
+## API Endpoints
+
+<Endpoint method="POST" path="/api/securitization/pools" />
+
+Create a new securitization pool.
+
+<Endpoint method="GET" path="/api/securitization/pools" />
+
+List all securitization pools.
+
+<Endpoint method="GET" path="/api/securitization/pools/{pool_id}" />
+
+Get detailed pool information.
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/notarize" />
+
+Notarize a securitization pool on the blockchain.
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/tranches/{tranche_id}/mint" />
+
+Mint ERC-721 tokens for a tranche.
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/payments/distribute" />
+
+Distribute payments according to waterfall rules.
+
+**Code Reference**: `app/api/securitization_routes.py`
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="X402_NETWORK_RPC_URL" type="string">
+  Base network RPC URL. Mainnet: `https://mainnet.base.org`, Sepolia: `https://sepolia.base.org`
+</ParamField>
+
+<ParamField body="SECURITIZATION_NOTARIZATION_CONTRACT" type="string">
+  SecuritizationNotarization contract address (auto-deployed if empty)
+</ParamField>
+
+<ParamField body="SECURITIZATION_TOKEN_CONTRACT" type="string">
+  SecuritizationToken contract address (auto-deployed if empty)
+</ParamField>
+
+<ParamField body="SECURITIZATION_PAYMENT_ROUTER_CONTRACT" type="string">
+  SecuritizationPaymentRouter contract address (auto-deployed if empty)
+</ParamField>
+
+<ParamField body="USDC_TOKEN_ADDRESS" type="string">
+  USDC token address on Base network. Mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+</ParamField>
+
+**Setup Guide**: See [MetaMask Setup Guide](/guides/metamask-setup)
+
+---
+
+## User Interface
+
+### Securitization Workflow
+
+**Location**: `client/src/apps/securitization/SecuritizationWorkflow.tsx`
+
+**Features**:
+- **Asset Selection Table**: Select loans/bonds for pool
+- **Pool Configuration Panel**: Configure pool parameters
+- **Tranche Structure Editor**: Define tranche structure
+- **Notarization Interface**: Multi-party signing interface
+- **Token Minting Interface**: Mint and distribute tokens
+- **Payment Dashboard**: Monitor payment distributions
+
+**Access**: Navigate to "Securitization" in the sidebar
+
+---
+
+## Best Practices
+
+1. **Asset Selection**: Choose assets with similar risk profiles
+2. **Tranche Structure**: Design clear seniority and payment priority
+3. **Documentation**: Maintain complete CDM event trail
+4. **Compliance**: Ensure regulatory filing requirements are met
+5. **Testing**: Test on Base Sepolia testnet before mainnet deployment
+
+---
+
+## Additional Resources
+
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [Configuration Guide](/getting-started/configuration#blockchain--smart-contract-configuration)
+- [CDM Compliance](/compliance/cdm-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/securitization_service.py`, `app/api/securitization_routes.py`, `client/src/apps/securitization/SecuritizationWorkflow.tsx`

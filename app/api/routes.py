@@ -2291,6 +2291,189 @@ async def fuse_multimodal_cdm(
         )
 
 
+class AddCdmRequest(BaseModel):
+    """Request model for adding CDM data."""
+    existing_cdm: Dict[str, Any] = Field(..., description="Existing CreditAgreement CDM data")
+    audio_cdm: Optional[Dict[str, Any]] = None
+    image_cdm: Optional[Dict[str, Any]] = None
+    document_cdm: Optional[Dict[str, Any]] = None
+    text_cdm: Optional[Dict[str, Any]] = None
+    audio_text: Optional[str] = None
+    image_text: Optional[str] = None
+    document_text: Optional[str] = None
+    text_input: Optional[str] = None
+    use_llm_fusion: bool = Field(True, description="Whether to use LLM fusion")
+
+
+class RemoveCdmRequest(BaseModel):
+    """Request model for removing CDM field."""
+    document_id: Optional[int] = None
+    field_path: str = Field(..., description="Field path to remove (e.g., 'parties[0].lei')")
+    cdm_data: Dict[str, Any] = Field(..., description="Current CDM data")
+    multimodal_context: Dict[str, str] = Field(default_factory=dict, description="Multimodal context")
+
+
+class EditCdmRequest(BaseModel):
+    """Request model for editing CDM field."""
+    document_id: Optional[int] = None
+    field_path: str = Field(..., description="Field path to edit")
+    new_value: Any = Field(..., description="New value for the field")
+    cdm_data: Dict[str, Any] = Field(..., description="Current CDM data")
+    multimodal_context: Dict[str, str] = Field(default_factory=dict, description="Multimodal context")
+    use_ai: bool = Field(True, description="Whether to use AI for editing")
+
+
+@router.post("/cdm/add")
+async def add_cdm_from_multimodal(
+    request: AddCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Add CDM data using multimodal fusion and add chain."""
+    from app.chains.cdm_add_chain import create_cdm_add_chain, create_cdm_add_prompt
+    from app.chains.multimodal_fusion_chain import fuse_multimodal_inputs
+    
+    try:
+        # First, extract new CDM from multimodal sources
+        fusion_result = fuse_multimodal_inputs(
+            audio_cdm=request.audio_cdm,
+            image_cdm=request.image_cdm,
+            document_cdm=request.document_cdm,
+            text_cdm=request.text_cdm,
+            audio_text=request.audio_text,
+            image_text=request.image_text,
+            document_text=request.document_text,
+            text_input=request.text_input,
+            use_llm_fusion=request.use_llm_fusion,
+        )
+        
+        # Use add chain to merge with existing CDM
+        chain = create_cdm_add_chain()
+        prompt = create_cdm_add_prompt()
+        
+        result = chain.invoke(prompt.format_messages(
+            existing_cdm=json.dumps(request.existing_cdm, default=str),
+            new_cdm_data=json.dumps(fusion_result.agreement.model_dump(), default=str),
+            audio_text=request.audio_text or "",
+            image_text=request.image_text or "",
+            document_text=request.document_text or "",
+            text_input=request.text_input or "",
+        ))
+        
+        return {
+            "status": "success",
+            "agreement": result.agreement.model_dump(),
+            "source_tracking": {
+                field: src.to_dict()
+                for field, src in fusion_result.source_tracking.items()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error adding CDM data: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to add CDM data: {str(e)}"}
+        )
+
+
+@router.post("/cdm/remove")
+async def remove_cdm_field(
+    request: RemoveCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Remove CDM field using AI to determine if removal is safe."""
+    from app.chains.cdm_remove_chain import create_cdm_remove_chain, create_cdm_remove_prompt
+    from app.utils.cdm_utils import remove_nested_field
+    
+    try:
+        # Evaluate removal safety using AI chain
+        chain = create_cdm_remove_chain()
+        prompt = create_cdm_remove_prompt()
+        
+        decision = chain.invoke(prompt.format_messages(
+            cdm_data=json.dumps(request.cdm_data, default=str),
+            field_path=request.field_path,
+            audio_text=request.multimodal_context.get("audio_text", ""),
+            image_text=request.multimodal_context.get("image_text", ""),
+            document_text=request.multimodal_context.get("document_text", ""),
+            text_input=request.multimodal_context.get("text_input", ""),
+        ))
+        
+        if not decision.safe:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": decision.reason,
+                    "alternative_action": decision.alternative_action
+                }
+            )
+        
+        # Safe to remove
+        updated = remove_nested_field(request.cdm_data, request.field_path)
+        return {
+            "status": "success",
+            "cdm_data": updated
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing CDM field: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to remove CDM field: {str(e)}"}
+        )
+
+
+@router.post("/cdm/edit")
+async def edit_cdm_field(
+    request: EditCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Edit CDM field using AI and multimodal context."""
+    from app.chains.cdm_edit_chain import create_cdm_edit_chain, create_cdm_edit_prompt
+    from app.utils.cdm_utils import get_nested_value, set_nested_value
+    
+    try:
+        if request.use_ai:
+            # Use AI chain to edit field
+            chain = create_cdm_edit_chain()
+            prompt = create_cdm_edit_prompt()
+            
+            current_value = get_nested_value(request.cdm_data, request.field_path)
+            
+            result = chain.invoke(prompt.format_messages(
+                cdm_data=json.dumps(request.cdm_data, default=str),
+                field_path=request.field_path,
+                current_value=json.dumps(current_value, default=str) if current_value is not None else "None",
+                new_value=json.dumps(request.new_value, default=str) if request.new_value is not None else "None",
+                audio_text=request.multimodal_context.get("audio_text", ""),
+                image_text=request.multimodal_context.get("image_text", ""),
+                document_text=request.multimodal_context.get("document_text", ""),
+                text_input=request.multimodal_context.get("text_input", ""),
+            ))
+            
+            return {
+                "status": "success",
+                "cdm_data": result.model_dump()
+            }
+        else:
+            # Direct edit without AI
+            updated = set_nested_value(request.cdm_data, request.field_path, request.new_value)
+            return {
+                "status": "success",
+                "cdm_data": updated
+            }
+    except Exception as e:
+        logger.error(f"Error editing CDM field: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to edit CDM field: {str(e)}"}
+        )
+
+
 class ChatbotChatRequest(BaseModel):
     """Request model for chatbot chat."""
     message: str = Field(..., description="User message")
@@ -2532,6 +2715,90 @@ async def chatbot_suggest_templates(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to suggest templates: {str(e)}"}
+        )
+
+
+class ProfileExtractionRequest(BaseModel):
+    """Request model for profile extraction."""
+    text: str = Field(..., description="Text content to extract profile from")
+    role: Optional[str] = Field(None, description="User role to guide extraction")
+    source_type: str = Field(..., description="Source type: 'audio', 'image', 'document', 'text'")
+    existing_profile: Optional[Dict[str, Any]] = Field(None, description="Existing profile data to merge with")
+
+
+@router.post("/profile/extract")
+async def extract_profile(
+    request: ProfileExtractionRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Extract user profile data from multimodal input using profile_extraction_chain.
+    
+    Uses the existing profile_extraction_chain.py which:
+    - Uses create_profile_extraction_chain() to get structured LLM
+    - Uses create_profile_extraction_prompt() with role-specific guidance
+    - Returns UserProfileData Pydantic model
+    
+    Args:
+        request: Profile extraction request with text, role, source_type, and optional existing_profile
+        db: Database session
+        current_user: Optional authenticated user (for audit logging)
+        
+    Returns:
+        Extracted profile data in UserProfileData format
+    """
+    from app.chains.profile_extraction_chain import extract_profile_data
+    
+    try:
+        # Extract profile data using the chain
+        result = extract_profile_data(
+            text=request.text,
+            role=request.role,
+            existing_profile=request.existing_profile,
+            max_retries=3
+        )
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="profile_extraction",
+                    user_id=current_user.id,
+                    metadata={
+                        "source_type": request.source_type,
+                        "role": request.role,
+                        "has_existing_profile": request.existing_profile is not None
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log profile extraction audit: {e}")
+        
+        return {
+            "status": "success",
+            "profile": result.model_dump(),
+            "source_type": request.source_type,
+            "role": request.role
+        }
+        
+    except ValueError as e:
+        logger.error(f"Profile extraction validation error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "message": f"Profile extraction failed: {str(e)}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Profile extraction error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"Profile extraction failed: {str(e)}"
+            }
         )
 
 
@@ -6563,7 +6830,17 @@ async def execute_trade(
                 logger.error(f"Policy evaluation failed for trade {trade_request.trade_id}: {e}", exc_info=True)
                 # Continue with trade execution even if policy evaluation fails
         
-        # Step 4: Return trade execution result
+        # Step 4: Store trade event in vector store for later retrieval
+        try:
+            GLOBAL_VECTOR_STORE.add_trade_event(trade_event)
+            if policy_evaluation_event:
+                GLOBAL_VECTOR_STORE.add_trade_event(policy_evaluation_event)
+            logger.debug(f"Stored trade event {trade_request.trade_id} in vector store")
+        except Exception as e:
+            logger.warning(f"Failed to store trade event in vector store: {e}")
+            # Don't fail the request if vector store storage fails
+        
+        # Step 5: Return trade execution result
         return {
             "status": "executed",
             "trade_id": trade_request.trade_id,
@@ -8468,6 +8745,56 @@ async def wallet_signup(
 
 
 # ============================================================================
+# License API
+# ============================================================================
+
+@router.get("/licenses/{license_type}")
+async def get_license(license_type: str):
+    """Get license file content (LICENCE.md or RAIL.md).
+    
+    Args:
+        license_type: Type of license file ('licence' or 'rail').
+        
+    Returns:
+        JSON object with license content and type.
+        
+    Raises:
+        HTTPException: If license type is invalid or file not found.
+    """
+    if license_type not in ['licence', 'rail']:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "error", "message": "Invalid license type. Must be 'licence' or 'rail'"}
+        )
+    
+    # Determine filename
+    filename = 'LICENCE.md' if license_type == 'licence' else 'RAIL.md'
+    
+    # Get path to root directory (3 levels up from app/api/routes.py)
+    root_path = Path(__file__).parent.parent.parent / filename
+    
+    if not root_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "message": f"License file {filename} not found"}
+        )
+    
+    try:
+        content = root_path.read_text(encoding='utf-8')
+        return {
+            "status": "success",
+            "type": license_type,
+            "content": content
+        }
+    except Exception as e:
+        logger.error(f"Error reading license file {filename}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to read license file: {str(e)}"}
+        )
+
+
+# ============================================================================
 # Deals API
 # ============================================================================
 
@@ -9628,6 +9955,45 @@ async def search_users(
         )
 
 
+@router.get("/users")
+async def list_users(
+    role: Optional[str] = Query(None, description="Filter by user role"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of users to return"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get a list of users for selection (e.g., originator, trustee).
+    
+    Returns a simple list of users with id, display_name, email, and role.
+    """
+    try:
+        query = db.query(User).filter(User.signup_status == "approved")
+        
+        if role:
+            query = query.filter(User.role == role)
+        
+        users = query.order_by(User.display_name).limit(limit).all()
+        
+        return {
+            "status": "success",
+            "users": [
+                {
+                    "id": user.id,
+                    "display_name": user.display_name or user.email,
+                    "email": user.email,
+                    "role": user.role
+                }
+                for user in users
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error listing users: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list users: {str(e)}"}
+        )
+
+
 # ============================================================================
 # Demo Data Seeding Endpoints
 # ============================================================================
@@ -9642,6 +10008,7 @@ class DemoSeedRequest(BaseModel):
     generate_deals: bool = False
     deal_count: int = 12
     dry_run: bool = False
+    complete_partial_data: bool = False  # Whether to complete partially filled data after seeding
 
 
 class DemoSeedResponse(BaseModel):
@@ -9735,6 +10102,34 @@ async def seed_demo_data(
                 results["deals"] = {
                     "created": 0,
                     "updated": 0,
+                    "errors": [str(e)]
+                }
+        
+        # Complete partially filled data if requested
+        if request.complete_partial_data and not request.dry_run:
+            try:
+                logger.info("Completing partially filled data...")
+                completion_stats = service.complete_partially_filled_data(
+                    complete_deals=True,
+                    complete_loan_assets=True,
+                    complete_applications=True,
+                    complete_documents=True
+                )
+                results["data_completion"] = {
+                    "deals_completed": completion_stats["deals_completed"],
+                    "loan_assets_completed": completion_stats["loan_assets_completed"],
+                    "applications_completed": completion_stats["applications_completed"],
+                    "documents_completed": completion_stats["documents_completed"],
+                    "errors": completion_stats["errors"]
+                }
+                logger.info(f"Completed {completion_stats['deals_completed']} deals, {completion_stats['loan_assets_completed']} loan assets, {completion_stats['applications_completed']} applications, {completion_stats['documents_completed']} documents")
+            except Exception as e:
+                logger.error(f"Error completing partial data: {e}", exc_info=True)
+                results["data_completion"] = {
+                    "deals_completed": 0,
+                    "loan_assets_completed": 0,
+                    "applications_completed": 0,
+                    "documents_completed": 0,
                     "errors": [str(e)]
                 }
         
@@ -9906,6 +10301,55 @@ async def seed_policies(
         raise HTTPException(status_code=500, detail=f"Failed to seed policies: {str(e)}")
 
 
+@router.post("/demo/seed/complete", response_model=DemoSeedResponse)
+async def complete_partial_data(
+    complete_deals: bool = Query(True, description="Complete partially filled deals"),
+    complete_loan_assets: bool = Query(True, description="Complete partially filled loan assets"),
+    complete_applications: bool = Query(True, description="Complete partially filled applications"),
+    complete_documents: bool = Query(True, description="Complete partially filled documents"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Complete missing fields in partially filled synthetic data points.
+    
+    This endpoint identifies demo records that have some fields filled but others are missing,
+    and completes them using the same generation logic as new records.
+    """
+    if not current_user or current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        completion_stats = service.complete_partially_filled_data(
+            complete_deals=complete_deals,
+            complete_loan_assets=complete_loan_assets,
+            complete_applications=complete_applications,
+            complete_documents=complete_documents
+        )
+        
+        # Format response similar to DemoSeedResponse
+        return DemoSeedResponse(
+            status="success" if not completion_stats["errors"] else "partial",
+            created={
+                "deals": completion_stats["deals_completed"],
+                "loan_assets": completion_stats["loan_assets_completed"],
+                "applications": completion_stats["applications_completed"],
+                "documents": completion_stats["documents_completed"]
+            },
+            updated={},
+            errors={"completion": completion_stats["errors"]}
+        )
+    except Exception as e:
+        logger.error(f"Error completing partial data: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to complete partial data: {str(e)}"}
+        )
+
+
 @router.delete("/demo/seed/reset")
 async def reset_demo_data(
     include_users: bool = Query(False, description="Also delete demo users (default: False - keeps demo users)"),
@@ -10031,14 +10475,14 @@ async def reset_demo_data(
         # 4. Delete deals and related data
         if demo_deal_ids:
             # Get all document IDs for demo deals
-            doc_ids = [d.id for d in db.query(Document.id).filter(
+            doc_ids = [d[0] for d in db.query(Document.id).filter(
                 Document.deal_id.in_(demo_deal_ids)
             ).all()]
             
             if doc_ids:
-                # Delete generated documents
+                # Delete generated documents (use source_document_id, not document_id)
                 gen_docs_deleted = db.query(GeneratedDocument).filter(
-                    GeneratedDocument.document_id.in_(doc_ids)
+                    GeneratedDocument.source_document_id.in_(doc_ids)
                 ).delete(synchronize_session=False)
                 deleted_counts["generated_documents"] = gen_docs_deleted
                 

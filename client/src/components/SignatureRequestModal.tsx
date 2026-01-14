@@ -24,6 +24,7 @@ import {
   Edit,
 } from 'lucide-react';
 import { fetchWithAuth, useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/toast';
 
 interface Signer {
   name: string;
@@ -47,6 +48,7 @@ export function SignatureRequestModal({
   onError,
 }: SignatureRequestModalProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [signers, setSigners] = useState<Signer[]>([]);
   const [newSigner, setNewSigner] = useState({ name: '', email: '', role: '' });
   const [subject, setSubject] = useState('Please sign the document');
@@ -172,12 +174,22 @@ export function SignatureRequestModal({
       }
 
       const data = await response.json();
-      onSignatureRequested?.(data.signature.id);
+      const signatureId = data.signature.id;
+      const signerCount = data.signature.signers?.length || signers.length;
+      
+      // Show success message
+      addToast(
+        `Signature request sent successfully! ${signerCount} signer${signerCount > 1 ? 's' : ''} will receive an email to sign the document.`,
+        'success',
+        6000
+      );
+      
+      onSignatureRequested?.(signatureId);
       
       // Close modal after short delay
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 2000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to request signature';
       setError(errorMessage);

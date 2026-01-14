@@ -10,7 +10,9 @@ import {
   ArrowRight,
   RefreshCw,
   Shield,
-  Eye
+  Eye,
+  Phone,
+  AlertTriangle
 } from 'lucide-react';
 
 export interface TimelineEvent {
@@ -120,6 +122,24 @@ const getEventIcon = (event: TimelineEvent, status: string) => {
     return <Shield className="h-5 w-5" />;
   }
   
+  // Handle recovery-specific event types
+  if (event.event_type === 'loan_default') {
+    return <AlertTriangle className="h-5 w-5" />;
+  }
+  if (event.event_type === 'recovery_action') {
+    const method = (event.data?.communication_method as string) || '';
+    if (method === 'voice') {
+      return <Phone className="h-5 w-5" />;
+    }
+    if (method === 'sms') {
+      return <MessageSquare className="h-5 w-5" />;
+    }
+    if (method === 'email') {
+      return <MessageSquare className="h-5 w-5" />;
+    }
+    return <Phone className="h-5 w-5" />;
+  }
+  
   switch (status) {
     case 'success':
       return <CheckCircle className="h-5 w-5" />;
@@ -143,6 +163,13 @@ const getEventIcon = (event: TimelineEvent, status: string) => {
 };
 
 const formatEventType = (eventType: string): string => {
+  // Handle specific event types
+  if (eventType === 'loan_default') {
+    return 'Loan Default';
+  }
+  if (eventType === 'recovery_action') {
+    return 'Recovery Action';
+  }
   return eventType
     .replace(/_/g, ' ')
     .replace(/\b\w/g, l => l.toUpperCase());
@@ -405,6 +432,46 @@ export function DealTimeline({ events, dealStatus, className = '' }: DealTimelin
                     {node.status === 'failure' && node.event.data && (
                       <div className="mt-2 px-2 py-1 bg-red-500/20 rounded text-xs text-red-200">
                         {node.event.data.reason || 'Failed'}
+                      </div>
+                    )}
+                    {/* Recovery event details */}
+                    {node.event.event_type === 'loan_default' && node.event.data && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-xs text-slate-200">
+                          Type: <span className="font-medium">{(node.event.data.default_type as string)?.replace('_', ' ')}</span>
+                        </div>
+                        {node.event.data.days_past_due && (
+                          <div className="text-xs text-slate-200">
+                            Days Past Due: <span className="font-medium">{node.event.data.days_past_due}</span>
+                          </div>
+                        )}
+                        {node.event.data.amount_overdue && (
+                          <div className="text-xs text-slate-200">
+                            Amount: <span className="font-medium">${parseFloat(node.event.data.amount_overdue as string).toLocaleString()}</span>
+                          </div>
+                        )}
+                        {node.event.data.severity && (
+                          <div className="text-xs text-slate-200">
+                            Severity: <span className="font-medium capitalize">{node.event.data.severity as string}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {node.event.event_type === 'recovery_action' && node.event.data && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-xs text-slate-200">
+                          Method: <span className="font-medium capitalize">{(node.event.data.communication_method as string)?.toUpperCase()}</span>
+                        </div>
+                        {node.event.data.action_type && (
+                          <div className="text-xs text-slate-200">
+                            Action: <span className="font-medium">{(node.event.data.action_type as string)?.replace('_', ' ')}</span>
+                          </div>
+                        )}
+                        {node.event.data.status && (
+                          <div className="text-xs text-slate-200">
+                            Status: <span className="font-medium capitalize">{node.event.data.status as string}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -1,0 +1,229 @@
+---
+title: Features Overview
+description: Comprehensive overview of all CreditNexus features
+---
+
+## Features Overview
+
+CreditNexus provides a comprehensive suite of features for credit agreement processing, verification, compliance, and financial operations. This document provides a high-level overview of all features.
+
+---
+
+## Core Features
+
+### Document Extraction
+
+AI-powered extraction of structured CDM data from unstructured PDF credit agreements.
+
+**Key Capabilities**:
+- Multi-modal input (PDF, text, audio, image)
+- LLM-based extraction (OpenAI, vLLM, HuggingFace)
+- CDM-compliant structured output
+- Policy validation at extraction point
+
+**Documentation**: [Document Extraction Feature](/features/document-extraction)
+
+---
+
+### Trade Execution
+
+LMA trade confirmation and settlement with CDM compliance.
+
+**Key Capabilities**:
+- Pre-filled trade tickets from FDC3 context
+- Policy evaluation before execution
+- x402 payment integration
+- CDM event generation
+
+**Documentation**: [Trade Execution Feature](/features/trade-execution)
+
+---
+
+### Verification
+
+Satellite-based ground truth verification for sustainability-linked loans.
+
+**Key Capabilities**:
+- Sentinel-2 satellite imagery
+- NDVI analysis
+- TorchGeo ResNet-50 land use classification
+- Compliance/breach determination
+
+**Documentation**: [Verification Feature](/features/verification)
+
+---
+
+### Document Generation
+
+LMA template generation from CDM data with AI assistance.
+
+**Key Capabilities**:
+- Template-based generation
+- AI-powered field population
+- Decision support chatbot
+- Multi-input support
+
+**Documentation**: [Document Generation Feature](/features/document-generation)
+
+---
+
+## Financial Operations
+
+### Securitization Workflow
+
+Complete securitization workflow from pool creation to token minting.
+
+**Key Capabilities**:
+- Pool creation and asset selection
+- Blockchain-based notarization
+- ERC-721 tranche token minting
+- Automated payment distribution
+
+**Documentation**: [Securitization Feature](/features/securitization)
+
+---
+
+### Payment Systems
+
+Blockchain-based payment processing using x402 protocol.
+
+**Key Capabilities**:
+- x402 payment protocol
+- USDC stablecoin payments
+- MetaMask integration
+- Base network support
+
+**Documentation**: [Payment Systems Feature](/features/payment-systems)
+
+---
+
+### Loan Recovery
+
+Automated loan default detection and recovery workflow.
+
+**Key Capabilities**:
+- Automatic default detection
+- SMS and voice communication (Twilio)
+- Borrower contact management
+- CDM event generation
+
+**Documentation**: [Recovery Feature](/features/recovery)
+
+---
+
+## Compliance & Governance
+
+### Policy Engine
+
+Policy-as-code engine for real-time compliance enforcement.
+
+**Key Capabilities**:
+- YAML-based policy rules
+- Deterministic evaluation
+- CDM event generation
+- 18+ policy rules across 5 categories
+
+**Documentation**: [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+### Audit Reports
+
+Automated audit report generation with CDM event exploration.
+
+**Key Capabilities**:
+- One-click report generation
+- CDM event explorer
+- Policy decisions explorer
+- Multiple export formats (PDF, CSV, JSON, XLSX)
+
+**Documentation**: [Audit Reports Feature](/features/audit-reports)
+
+---
+
+## Collaboration & Management
+
+### Dealflow Management
+
+Comprehensive deal tracking and collaboration platform.
+
+**Key Capabilities**:
+- Deal dashboard with filtering
+- Deal timeline visualization
+- Collaborative notes
+- Document management
+
+**Documentation**: [Dealflow Management Feature](/features/dealflow-management)
+
+---
+
+### Applications
+
+Loan application management for individuals and businesses.
+
+**Key Capabilities**:
+- Individual and business applications
+- Application status tracking
+- Review workflows
+- Deal creation from approved applications
+
+**Documentation**: [Applications Feature](/features/applications)
+
+---
+
+## Digital Operations
+
+### Notarization
+
+Blockchain-based document notarization using smart contracts.
+
+**Key Capabilities**:
+- Smart contract notarization
+- MetaMask signing
+- Immutable records
+- Multi-party signing
+
+**Documentation**: [Notarization Feature](/features/notarization)
+
+---
+
+### Signing
+
+Digital signature workflows with DigiSigner integration.
+
+**Key Capabilities**:
+- DigiSigner integration
+- Webhook notifications
+- Multi-document signing
+- Legally binding signatures
+
+**Documentation**: [Signing Feature](/features/signing)
+
+---
+
+## Analytics & Reporting
+
+### Analytics
+
+Portfolio analytics and dashboard insights.
+
+**Key Capabilities**:
+- Portfolio metrics
+- Risk metrics
+- Operational metrics
+- Custom reporting
+
+**Documentation**: [Analytics Feature](/features/analytics)
+
+---
+
+## Additional Resources
+
+- [Features Documentation](/features)
+- [API Reference](/api-reference)
+- [Architecture Overview](/architecture/overview)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/apps/`, `client/src/components/`, `app/api/`
