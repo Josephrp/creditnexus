@@ -464,7 +464,7 @@ If you're still experiencing issues:
 
 3. **Review documentation:**
    - [Database SSL Setup Guide](./database-ssl-setup.md)
-   - [Security Documentation](../SECURITY.md)
+   - [Security Documentation](../../SECURITY.md)
 
 4. **Contact support:**
    - Include diagnostic information
@@ -487,4 +487,4 @@ To avoid SSL issues:
 - [PostgreSQL SSL Documentation](https://www.postgresql.org/docs/current/ssl-tcp.html)
 - [OpenSSL Documentation](https://www.openssl.org/docs/)
 - [Database SSL Setup Guide](./database-ssl-setup.md)
-- [Security Best Practices](../SECURITY.md)
+- [Security Best Practices](../../SECURITY.md)

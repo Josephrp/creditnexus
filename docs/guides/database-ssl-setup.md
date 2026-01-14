@@ -304,4 +304,4 @@ SSL/TLS encryption for database connections is required for:
 
 - [PostgreSQL SSL/TLS Documentation](https://www.postgresql.org/docs/current/ssl-tcp.html)
 - [SSL Troubleshooting Guide](./ssl-troubleshooting.md)
-- [Security Documentation](../SECURITY.md)
+- [Security Documentation](../../SECURITY.md)
