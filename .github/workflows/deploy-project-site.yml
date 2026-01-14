@@ -42,6 +42,23 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: npm run build
 
+      - name: Create .nojekyll file
+        working-directory: ./project-site
+        run: touch dist/.nojekyll
+
+      - name: Verify build output
+        working-directory: ./project-site
+        run: |
+          echo "Build output contents:"
+          ls -lah dist/
+          echo ""
+          echo "Checking for index.html:"
+          test -f dist/index.html || (echo "ERROR: index.html not found!" && exit 1)
+          echo "Checking artifact size:"
+          du -sh dist/
+          echo "File count:"
+          find dist -type f | wc -l
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
@@ -56,6 +73,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    timeout-minutes: 15
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
