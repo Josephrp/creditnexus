@@ -47,6 +47,7 @@ import {
 } from '@/utils/permissions';
 import { VerificationWidget } from '@/components/VerificationWidget';
 import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
+import { FilingDeadlineAlerts } from '@/components/FilingDeadlineAlerts';
 
 interface PortfolioAnalytics {
   summary: {
@@ -496,6 +497,16 @@ export function Dashboard() {
           iconBg="bg-[var(--color-indigo-500)]/20"
           iconColor="text-[var(--color-indigo-400)]"
         />
+      </div>
+
+      {/* Filing Deadline Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <FilingDeadlineAlerts limit={5} daysAhead={30} />
+        </div>
+        <div className="lg:col-span-2">
+          {/* Placeholder for other content or keep empty for now */}
+        </div>
       </div>
 
       <PermissionGate permission={PERMISSION_AUDIT_VIEW}>

@@ -626,7 +626,7 @@ export function createWorkflowLinkContext(
   metadata?: WorkflowLinkContext['metadata']
 ): WorkflowLinkContext {
   return {
-    type: 'fdc3.creditnexus.workflow',
+    type: 'finos.creditnexus.workflow',
     id: {
       workflowId,
     },

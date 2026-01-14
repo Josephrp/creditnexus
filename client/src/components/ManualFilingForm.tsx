@@ -50,6 +50,9 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filingReference, setFilingReference] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   useEffect(() => {
     fetchFormData();
@@ -97,41 +100,111 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
       ...prev,
       [fieldName]: value
     }));
+
+    // Mark field as touched
+    setTouchedFields((prev) => new Set(prev).add(fieldName));
+
+    // Validate field in real-time if touched
+    if (formData) {
+      const field = formData.fields.find((f) => f.field_name === fieldName);
+      if (field) {
+        const fieldError = validateField(field, value);
+        setFieldErrors((prev) => {
+          const newErrors = { ...prev };
+          if (fieldError) {
+            newErrors[fieldName] = fieldError;
+          } else {
+            delete newErrors[fieldName];
+          }
+          return newErrors;
+        });
+      }
+    }
+
+    // Clear general error when user starts typing
+    if (error) {
+      setError(null);
+    }
+  };
+
+  const validateField = (field: FilingFormField, value: any): string | null => {
+    // Check required
+    if (field.required && (!value || (typeof value === 'string' && value.trim() === ''))) {
+      return `${field.field_name} is required`;
+    }
+
+    if (!value || (typeof value === 'string' && value.trim() === '')) {
+      return null; // Empty optional fields are valid
+    }
+
+    // Apply validation rules
+    if (field.validation_rules) {
+      const stringValue = String(value);
+      
+      if (field.validation_rules.min_length && stringValue.length < field.validation_rules.min_length) {
+        return `Must be at least ${field.validation_rules.min_length} characters`;
+      }
+      
+      if (field.validation_rules.max_length && stringValue.length > field.validation_rules.max_length) {
+        return `Must be no more than ${field.validation_rules.max_length} characters`;
+      }
+      
+      if (field.validation_rules.pattern) {
+        try {
+          const regex = new RegExp(field.validation_rules.pattern);
+          if (!regex.test(stringValue)) {
+            return field.validation_rules.pattern_message || 'Format is invalid';
+          }
+        } catch (e) {
+          console.error('Invalid regex pattern:', field.validation_rules.pattern);
+        }
+      }
+
+      if (field.validation_rules.min !== undefined && Number(value) < field.validation_rules.min) {
+        return `Must be at least ${field.validation_rules.min}`;
+      }
+
+      if (field.validation_rules.max !== undefined && Number(value) > field.validation_rules.max) {
+        return `Must be no more than ${field.validation_rules.max}`;
+      }
+
+      if (field.validation_rules.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(stringValue)) {
+        return 'Must be a valid email address';
+      }
+
+      if (field.validation_rules.url && !/^https?:\/\/.+/.test(stringValue)) {
+        return 'Must be a valid URL';
+      }
+    }
+
+    return null;
   };
 
   const validateForm = (): boolean => {
     if (!formData) return false;
 
-    for (const field of formData.fields) {
-      if (field.required && !formValues[field.field_name]) {
-        setError(`Field "${field.field_name}" is required`);
-        return false;
-      }
+    const errors: Record<string, string> = {};
+    const validationErrorsList: string[] = [];
 
-      // Apply validation rules
-      if (field.validation_rules) {
-        const value = formValues[field.field_name];
-        
-        if (field.validation_rules.min_length && value.length < field.validation_rules.min_length) {
-          setError(`Field "${field.field_name}" must be at least ${field.validation_rules.min_length} characters`);
-          return false;
-        }
-        
-        if (field.validation_rules.max_length && value.length > field.validation_rules.max_length) {
-          setError(`Field "${field.field_name}" must be no more than ${field.validation_rules.max_length} characters`);
-          return false;
-        }
-        
-        if (field.validation_rules.pattern) {
-          const regex = new RegExp(field.validation_rules.pattern);
-          if (!regex.test(value)) {
-            setError(`Field "${field.field_name}" format is invalid`);
-            return false;
-          }
-        }
+    for (const field of formData.fields) {
+      const value = formValues[field.field_name];
+      const fieldError = validateField(field, value);
+      
+      if (fieldError) {
+        errors[field.field_name] = fieldError;
+        validationErrorsList.push(`${field.field_name}: ${fieldError}`);
       }
     }
 
+    setFieldErrors(errors);
+    setValidationErrors(validationErrorsList);
+
+    if (Object.keys(errors).length > 0) {
+      setError(`Please fix ${Object.keys(errors).length} error${Object.keys(errors).length !== 1 ? 's' : ''} before submitting`);
+      return false;
+    }
+
+    setError(null);
     return true;
   };
 
@@ -161,15 +234,36 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update filing status');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.detail?.message || errorData.message || errorData.detail || 'Failed to update filing status';
+        
+        // Handle field-level errors from API
+        if (errorData.detail?.field_errors) {
+          setFieldErrors(errorData.detail.field_errors);
+        }
+        
+        // Handle validation errors
+        if (errorData.detail?.validation_errors) {
+          setValidationErrors(errorData.detail.validation_errors);
+        }
+        
+        throw new Error(errorMessage);
       }
 
       setFilingReference(reference);
+      setFieldErrors({});
+      setValidationErrors([]);
       if (onSubmitted) {
         onSubmitted(reference);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit filing');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit filing';
+      setError(errorMessage);
+      
+      // Try to extract more details from error
+      if (err instanceof Error && err.message.includes('validation')) {
+        setValidationErrors([errorMessage]);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -178,6 +272,15 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
   const renderField = (field: FilingFormField) => {
     const value = formValues[field.field_name] || '';
     const fieldId = `field-${field.field_name}`;
+    const hasError = fieldErrors[field.field_name];
+    const isTouched = touchedFields.has(field.field_name);
+    const showError = hasError && isTouched;
+
+    const baseInputClasses = `bg-slate-900 border text-slate-100 ${
+      showError
+        ? 'border-red-500 focus:border-red-400 focus:ring-red-500/20'
+        : 'border-slate-700 focus:border-emerald-500 focus:ring-emerald-500/20'
+    }`;
 
     switch (field.field_type) {
       case 'date':
@@ -192,10 +295,17 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
               type="date"
               value={value}
               onChange={(e) => handleFieldChange(field.field_name, e.target.value)}
+              onBlur={() => setTouchedFields((prev) => new Set(prev).add(field.field_name))}
               required={field.required}
-              className="bg-slate-900 border-slate-700 text-slate-100"
+              className={baseInputClasses}
             />
-            {field.help_text && (
+            {showError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {fieldErrors[field.field_name]}
+              </p>
+            )}
+            {!showError && field.help_text && (
               <p className="text-xs text-slate-400">{field.help_text}</p>
             )}
           </div>
@@ -213,10 +323,17 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
               type="number"
               value={value}
               onChange={(e) => handleFieldChange(field.field_name, parseFloat(e.target.value) || 0)}
+              onBlur={() => setTouchedFields((prev) => new Set(prev).add(field.field_name))}
               required={field.required}
-              className="bg-slate-900 border-slate-700 text-slate-100"
+              className={baseInputClasses}
             />
-            {field.help_text && (
+            {showError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {fieldErrors[field.field_name]}
+              </p>
+            )}
+            {!showError && field.help_text && (
               <p className="text-xs text-slate-400">{field.help_text}</p>
             )}
           </div>
@@ -233,8 +350,13 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
               id={fieldId}
               value={value}
               onChange={(e) => handleFieldChange(field.field_name, e.target.value)}
+              onBlur={() => setTouchedFields((prev) => new Set(prev).add(field.field_name))}
               required={field.required}
-              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={`w-full bg-slate-900 border rounded-md px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 ${
+                showError
+                  ? 'border-red-500 focus:border-red-400 focus:ring-red-500/20'
+                  : 'border-slate-700 focus:border-emerald-500 focus:ring-emerald-500/20'
+              }`}
             >
               <option value="">Select...</option>
               {field.validation_rules?.options?.map((opt: string) => (
@@ -243,7 +365,13 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
                 </option>
               ))}
             </select>
-            {field.help_text && (
+            {showError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {fieldErrors[field.field_name]}
+              </p>
+            )}
+            {!showError && field.help_text && (
               <p className="text-xs text-slate-400">{field.help_text}</p>
             )}
           </div>
@@ -286,10 +414,17 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
               type="text"
               value={value}
               onChange={(e) => handleFieldChange(field.field_name, e.target.value)}
+              onBlur={() => setTouchedFields((prev) => new Set(prev).add(field.field_name))}
               required={field.required}
-              className="bg-slate-900 border-slate-700 text-slate-100"
+              className={baseInputClasses}
             />
-            {field.help_text && (
+            {showError && (
+              <p className="text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {fieldErrors[field.field_name]}
+              </p>
+            )}
+            {!showError && field.help_text && (
               <p className="text-xs text-slate-400">{field.help_text}</p>
             )}
           </div>
@@ -379,9 +514,18 @@ export function ManualFilingForm({ filingId, onSubmitted }: ManualFilingFormProp
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-400">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">{error}</span>
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+            <div className="flex items-center gap-2 text-red-400 mb-2">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">{error}</span>
+            </div>
+            {validationErrors.length > 0 && (
+              <ul className="list-disc list-inside text-xs text-red-300 mt-2 space-y-1">
+                {validationErrors.map((err, idx) => (
+                  <li key={idx}>{err}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

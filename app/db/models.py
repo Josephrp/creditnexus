@@ -8,6 +8,7 @@ import enum
 import sqlalchemy as sa
 
 from app.db import Base
+from app.db.encrypted_types import EncryptedString, EncryptedJSON, EncryptedText
 
 
 class UserRole(str, enum.Enum):
@@ -161,13 +162,13 @@ class User(Base):
 
     replit_user_id = Column(String(255), unique=True, nullable=True, index=True)
 
-    email = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(EncryptedString(255), unique=True, nullable=False, index=True)  # Encrypted PII
 
-    password_hash = Column(String(255), nullable=True)
+    password_hash = Column(String(255), nullable=True)  # Already hashed, don't encrypt
 
-    display_name = Column(String(255), nullable=False)
+    display_name = Column(EncryptedString(255), nullable=False)  # Encrypted PII
 
-    profile_image = Column(String(500), nullable=True)
+    profile_image = Column(String(500), nullable=True)  # URL, not sensitive
 
     role = Column(String(20), default=UserRole.ANALYST.value, nullable=False)
 
@@ -183,15 +184,15 @@ class User(Base):
 
     last_login = Column(DateTime, nullable=True)
 
-    wallet_address = Column(String(255), nullable=True, unique=True, index=True)
+    wallet_address = Column(EncryptedString(255), nullable=True, unique=True, index=True)  # Encrypted PII
 
     permissions = Column(
         JSONB(), nullable=True
-    )  # Explicit user permissions (overrides role permissions)
+    )  # Explicit user permissions (overrides role permissions) - Not sensitive
 
     profile_data = Column(
-        JSONB(), nullable=True
-    )  # Enriched profile information (phone, company, job_title, address, etc.)
+        EncryptedJSON(), nullable=True
+    )  # Enriched profile information (phone, company, job_title, address, etc.) - Encrypted PII
 
     # Signup approval workflow fields
     signup_status = Column(
@@ -249,9 +250,9 @@ class Document(Base):
 
     title = Column(String(500), nullable=False)
 
-    borrower_name = Column(String(255), nullable=True, index=True)
+    borrower_name = Column(EncryptedString(255), nullable=True, index=True)  # Encrypted PII
 
-    borrower_lei = Column(String(20), nullable=True, index=True)
+    borrower_lei = Column(EncryptedString(20), nullable=True, index=True)  # Encrypted PII
 
     governing_law = Column(String(50), nullable=True)
 
@@ -274,7 +275,7 @@ class Document(Base):
     template_id = Column(
         Integer, ForeignKey("lma_templates.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    source_cdm_data = Column(JSONB, nullable=True)  # CDM data used for generation
+    source_cdm_data = Column(EncryptedJSON(), nullable=True)  # CDM data used for generation - Encrypted
 
     # Deal relationship
     deal_id = Column(
@@ -364,11 +365,11 @@ class DocumentVersion(Base):
 
     version_number = Column(Integer, nullable=False, default=1)
 
-    extracted_data = Column(JSONB, nullable=False)
+    extracted_data = Column(EncryptedJSON(), nullable=False)  # Encrypted financial data
 
-    original_text = Column(Text, nullable=True)
+    original_text = Column(EncryptedText(), nullable=True)  # Encrypted document text (large field)
 
-    source_filename = Column(String(255), nullable=True)
+    source_filename = Column(EncryptedString(255), nullable=True)  # Encrypted PII
 
     extraction_method = Column(String(50), default="simple")
 
@@ -466,11 +467,11 @@ class AuditLog(Base):
 
     target_id = Column(Integer, nullable=True)
 
-    action_metadata = Column(JSONB, nullable=True)
+    action_metadata = Column(EncryptedJSON(), nullable=True)  # Encrypted audit metadata
 
-    ip_address = Column(String(50), nullable=True)
+    ip_address = Column(EncryptedString(255), nullable=True)  # Encrypted PII (increased from 50 to accommodate encrypted values)
 
-    user_agent = Column(String(500), nullable=True)
+    user_agent = Column(String(500), nullable=True)  # Not sensitive
 
     occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
@@ -602,11 +603,11 @@ class StagedExtraction(Base):
 
     status = Column(String(20), default=ExtractionStatus.PENDING.value, nullable=False, index=True)
 
-    agreement_data = Column(JSONB, nullable=False)
+    agreement_data = Column(EncryptedJSON(), nullable=False)  # Encrypted financial data
 
-    original_text = Column(Text, nullable=True)
+    original_text = Column(EncryptedText(), nullable=True)  # Encrypted document text (large field)
 
-    source_filename = Column(String(255), nullable=True)
+    source_filename = Column(EncryptedString(255), nullable=True)  # Encrypted PII
 
     rejection_reason = Column(Text, nullable=True)
 
@@ -652,12 +653,12 @@ class PolicyDecision(Base):
     trace_id = Column(String(255), unique=True, nullable=False)
 
     # Evaluation details
-    trace = Column(JSONB, nullable=True)  # Full evaluation trace
-    matched_rules = Column(ARRAY(String), nullable=True)  # Array of matched rule names
-    additional_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional context
+    trace = Column(EncryptedJSON(), nullable=True)  # Full evaluation trace - Encrypted
+    matched_rules = Column(ARRAY(String), nullable=True)  # Array of matched rule names - Not sensitive
+    additional_metadata = Column(JSONB, name="metadata", nullable=True)  # Additional context - Not sensitive
 
     # CDM Events (for full CDM compliance)
-    cdm_events = Column(JSONB, nullable=True)  # Full CDM PolicyEvaluation events
+    cdm_events = Column(EncryptedJSON(), nullable=True)  # Full CDM PolicyEvaluation events - Encrypted
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -1543,6 +1544,61 @@ class PolicyTemplate(Base):
 
 
 
+class FilingTemplate(Base):
+    """Filing form template model for storing and reusing filing form templates."""
+    
+    __tablename__ = "filing_templates"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Template identification
+    name = Column(String(255), nullable=False, index=True)
+    jurisdiction = Column(String(50), nullable=False, index=True)  # "US", "UK", "FR", "DE"
+    authority = Column(String(255), nullable=False, index=True)  # "SEC", "Companies House", "AMF", "BaFin"
+    form_type = Column(String(100), nullable=True, index=True)  # "8-K", "MR01", etc.
+    agreement_type = Column(String(100), nullable=True, index=True)  # "facility_agreement", etc.
+    
+    # Template content
+    template_data = Column(JSONB, nullable=False)  # FilingFormData structure
+    field_mappings = Column(JSONB, nullable=True)  # CDM field to form field mappings
+    required_fields = Column(JSONB, nullable=True)  # List of required fields
+    
+    # Metadata
+    description = Column(Text, nullable=True)
+    language = Column(String(10), nullable=True, default="en")  # "en", "fr", "de"
+    is_system_template = Column(Boolean, default=False, nullable=False, index=True)
+    usage_count = Column(Integer, default=0, nullable=False)  # How many times used
+    
+    # Ownership
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    creator = relationship("User", foreign_keys=[created_by])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "jurisdiction": self.jurisdiction,
+            "authority": self.authority,
+            "form_type": self.form_type,
+            "agreement_type": self.agreement_type,
+            "template_data": self.template_data,
+            "field_mappings": self.field_mappings,
+            "required_fields": self.required_fields,
+            "description": self.description,
+            "language": self.language,
+            "is_system_template": self.is_system_template,
+            "usage_count": self.usage_count,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Permission(Base):
     """Permission definition model for granular access control."""
 
@@ -2116,13 +2172,13 @@ class LoanAsset(Base):
     loan_id = Column(String(255), nullable=False, index=True)
 
     # Legal Reality
-    original_text = Column(Text, nullable=True)
-    legal_vector = Column(JSONB, nullable=True)
+    original_text = Column(EncryptedText(), nullable=True)  # Encrypted document text (large field)
+    legal_vector = Column(JSONB, nullable=True)  # Vector embeddings - Not sensitive
 
     # Physical Reality
-    geo_lat = Column(Float, nullable=True)
-    geo_lon = Column(Float, nullable=True)
-    collateral_address = Column(String(500), nullable=True)
+    geo_lat = Column(Float, nullable=True)  # Geographic data - Not sensitive
+    geo_lon = Column(Float, nullable=True)  # Geographic data - Not sensitive
+    collateral_address = Column(EncryptedString(500), nullable=True)  # Encrypted PII
     satellite_snapshot_url = Column(String(1000), nullable=True)
     geo_vector = Column(JSONB, nullable=True)
 

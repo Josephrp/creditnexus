@@ -2,7 +2,8 @@
 File storage service for deal document management.
 
 This service handles creating deal folder structures and managing
-documents within deal-specific directories.
+documents within deal-specific directories. All files are encrypted
+at rest using EncryptionService.
 """
 
 import os
@@ -10,6 +11,10 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+import json
+
+from app.services.encryption_service import get_encryption_service
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +100,27 @@ class FileStorageService:
         # Store file with document_id prefix to avoid conflicts
         file_path = target_dir / f"{document_id}_{filename}"
         
+        # Encrypt file content before storing
+        if settings.ENCRYPTION_ENABLED:
+            try:
+                encryption_service = get_encryption_service()
+                encrypted_content = encryption_service.encrypt(content)
+                
+                if encrypted_content is not None:
+                    # Store encrypted content with .encrypted extension
+                    encrypted_file_path = target_dir / f"{document_id}_{filename}.encrypted"
+                    with open(encrypted_file_path, 'wb') as f:
+                        f.write(encrypted_content)
+                    logger.info(f"Stored encrypted document {document_id} to {encrypted_file_path}")
+                    return str(encrypted_file_path.absolute())
+                else:
+                    logger.warning(f"Encryption returned None for document {document_id}, storing as plain text")
+            except Exception as e:
+                logger.error(f"Failed to encrypt file {filename}: {e}")
+                if settings.ENCRYPTION_ENABLED:
+                    raise ValueError(f"File encryption failed and ENCRYPTION_ENABLED=True: {e}")
+        
+        # Fallback: store as plain text (development mode or encryption disabled)
         with open(file_path, 'wb') as f:
             f.write(content)
         
@@ -138,12 +164,17 @@ class FileStorageService:
                 for file_path in subdir_path.iterdir():
                     if file_path.is_file():
                         stat = file_path.stat()
+                        # Remove .encrypted extension from display name
+                        display_name = file_path.name
+                        if display_name.endswith('.encrypted'):
+                            display_name = display_name[:-9]  # Remove .encrypted
                         documents.append({
-                            "filename": file_path.name,
+                            "filename": display_name,
                             "path": str(file_path.absolute()),
                             "subdirectory": subdir,
                             "size": stat.st_size,
                             "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            "encrypted": file_path.name.endswith('.encrypted'),
                         })
         
         return documents
@@ -180,8 +211,13 @@ class FileStorageService:
             return None
         
         # Search for files starting with {document_id}_
+        # Check both encrypted and plain text files
         pattern = f"{document_id}_*"
         matching_files = list(documents_dir.glob(pattern))
+        
+        # Also check for encrypted files
+        encrypted_pattern = f"{document_id}_*.encrypted"
+        matching_files.extend(documents_dir.glob(encrypted_pattern))
         
         if matching_files:
             # Return the first match (or most recent if multiple)
@@ -250,8 +286,7 @@ class FileStorageService:
         notes_dir = deal_folder / "notes"
         notes_dir.mkdir(parents=True, exist_ok=True)
         
-        # Store note as JSON file
-        import json
+        # Store note as JSON file (encrypted)
         note_data = {
             "note_id": note_id,
             "content": content,
@@ -261,6 +296,27 @@ class FileStorageService:
         
         note_file = notes_dir / f"{note_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         
+        # Encrypt note content before storing
+        if settings.ENCRYPTION_ENABLED:
+            try:
+                encryption_service = get_encryption_service()
+                json_str = json.dumps(note_data, indent=2)
+                encrypted_content = encryption_service.encrypt(json_str)
+                
+                if encrypted_content is not None:
+                    encrypted_file = notes_dir / f"{note_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json.encrypted"
+                    with open(encrypted_file, 'wb') as f:
+                        f.write(encrypted_content)
+                    logger.info(f"Stored encrypted note {note_id} to {encrypted_file}")
+                    return str(encrypted_file.absolute())
+                else:
+                    logger.warning(f"Encryption returned None for note {note_id}, storing as plain text")
+            except Exception as e:
+                logger.error(f"Failed to encrypt note {note_id}: {e}")
+                if settings.ENCRYPTION_ENABLED:
+                    raise ValueError(f"Note encryption failed and ENCRYPTION_ENABLED=True: {e}")
+        
+        # Fallback: store as plain JSON (development mode or encryption disabled)
         with open(note_file, 'w', encoding='utf-8') as f:
             json.dump(note_data, f, indent=2)
         
@@ -296,13 +352,96 @@ class FileStorageService:
         events_dir = deal_folder / "events"
         events_dir.mkdir(parents=True, exist_ok=True)
         
-        # Store event as JSON file
-        import json
+        # Store event as JSON file (encrypted)
         event_file = events_dir / f"{event_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         
+        # Encrypt event content before storing
+        if settings.ENCRYPTION_ENABLED:
+            try:
+                encryption_service = get_encryption_service()
+                json_str = json.dumps(event_data, indent=2)
+                encrypted_content = encryption_service.encrypt(json_str)
+                
+                if encrypted_content is not None:
+                    encrypted_file = events_dir / f"{event_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json.encrypted"
+                    with open(encrypted_file, 'wb') as f:
+                        f.write(encrypted_content)
+                    logger.info(f"Stored encrypted CDM event {event_id} to {encrypted_file}")
+                    return str(encrypted_file.absolute())
+                else:
+                    logger.warning(f"Encryption returned None for event {event_id}, storing as plain text")
+            except Exception as e:
+                logger.error(f"Failed to encrypt event {event_id}: {e}")
+                if settings.ENCRYPTION_ENABLED:
+                    raise ValueError(f"Event encryption failed and ENCRYPTION_ENABLED=True: {e}")
+        
+        # Fallback: store as plain JSON (development mode or encryption disabled)
         with open(event_file, 'w', encoding='utf-8') as f:
             json.dump(event_data, f, indent=2)
         
         logger.info(f"Stored CDM event {event_id} to {event_file}")
         
         return str(event_file.absolute())
+    
+    def read_encrypted_file(self, file_path: str) -> bytes:
+        """
+        Read and decrypt an encrypted file.
+        
+        Args:
+            file_path: Path to the encrypted file
+            
+        Returns:
+            Decrypted file content as bytes
+        """
+        path = Path(file_path)
+        
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        with open(path, 'rb') as f:
+            content = f.read()
+        
+        # Check if file is encrypted (has .encrypted extension or contains encrypted data)
+        if path.name.endswith('.encrypted') or settings.ENCRYPTION_ENABLED:
+            try:
+                encryption_service = get_encryption_service()
+                decrypted = encryption_service.decrypt(content)
+                
+                if decrypted is None:
+                    # Might be plain text file
+                    return content
+                
+                if isinstance(decrypted, bytes):
+                    return decrypted
+                elif isinstance(decrypted, str):
+                    return decrypted.encode('utf-8')
+                else:
+                    return str(decrypted).encode('utf-8')
+            except Exception as e:
+                logger.warning(f"Failed to decrypt file {file_path}, returning as-is: {e}")
+                return content
+        
+        return content
+    
+    def read_encrypted_json_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        Read and decrypt an encrypted JSON file.
+        
+        Args:
+            file_path: Path to the encrypted JSON file
+            
+        Returns:
+            Decrypted JSON data as dictionary
+        """
+        content = self.read_encrypted_file(file_path)
+        
+        # Try to parse as JSON
+        try:
+            if isinstance(content, bytes):
+                json_str = content.decode('utf-8')
+            else:
+                json_str = str(content)
+            return json.loads(json_str)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to parse JSON from file {file_path}: {e}")
+            raise ValueError(f"File does not contain valid JSON: {e}")

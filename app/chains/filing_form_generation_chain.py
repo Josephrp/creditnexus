@@ -113,11 +113,68 @@ Generate pre-filled form data for this filing requirement. Map CDM data to form 
     return prompt
 
 
+def _get_language_for_jurisdiction(jurisdiction: str) -> str:
+    """Get language code for a jurisdiction.
+    
+    Args:
+        jurisdiction: Jurisdiction code (US, UK, FR, DE, etc.)
+        
+    Returns:
+        Language code (en, fr, de, etc.)
+    """
+    language_map = {
+        "FR": "fr",
+        "DE": "de",
+        "US": "en",
+        "UK": "en",
+        "GB": "en"
+    }
+    return language_map.get(jurisdiction.upper(), "en")
+
+
+def _get_language_prompt(language: str) -> str:
+    """Get language-specific prompt instructions.
+    
+    Args:
+        language: Language code (en, fr, de)
+        
+    Returns:
+        Language-specific prompt text
+    """
+    if language == "fr":
+        return """INSTRUCTIONS EN FRANÇAIS:
+- Tous les champs de formulaire doivent être en français
+- Les noms de champs doivent être traduits en français
+- Les dates doivent être au format français (DD/MM/YYYY)
+- Les montants doivent être formatés selon les conventions françaises
+- Les instructions doivent être en français
+- Utilisez les termes réglementaires français appropriés"""
+    
+    elif language == "de":
+        return """ANWEISUNGEN AUF DEUTSCH:
+- Alle Formularfelder müssen auf Deutsch sein
+- Feldnamen müssen ins Deutsche übersetzt werden
+- Daten müssen im deutschen Format sein (DD.MM.YYYY)
+- Beträge müssen nach deutschen Konventionen formatiert werden
+- Anweisungen müssen auf Deutsch sein
+- Verwenden Sie die entsprechenden deutschen Regulierungsbegriffe"""
+    
+    else:
+        return """INSTRUCTIONS IN ENGLISH:
+- All form fields should be in English
+- Field names should be in English
+- Dates should be in ISO format (YYYY-MM-DD) or jurisdiction-specific format
+- Amounts should be formatted according to jurisdiction conventions
+- Instructions should be in English
+- Use appropriate regulatory terminology"""
+
+
 def generate_filing_form_data(
     credit_agreement: CreditAgreement,
     filing_requirement: FilingRequirement,
     document_id: Optional[int] = None,
     deal_id: Optional[int] = None,
+    language: Optional[str] = None,
     max_retries: int = 3
 ) -> FilingFormData:
     """Generate pre-filled form data for a filing requirement.
@@ -127,6 +184,7 @@ def generate_filing_form_data(
         filing_requirement: FilingRequirement instance
         document_id: Optional document ID
         deal_id: Optional deal ID
+        language: Optional language code (en, fr, de). If not provided, auto-detected from jurisdiction
         max_retries: Maximum retry attempts
         
     Returns:
@@ -135,9 +193,28 @@ def generate_filing_form_data(
     Raises:
         ValueError: If generation fails after retries
     """
-    prompt = create_filing_form_prompt()
+    # Determine language
+    if not language:
+        language = filing_requirement.language_requirement or _get_language_for_jurisdiction(filing_requirement.jurisdiction)
+    
+    logger.info(f"Generating filing form data in language: {language} for jurisdiction: {filing_requirement.jurisdiction}")
+    
+    # Create language-specific prompt
+    base_prompt = create_filing_form_prompt()
+    language_instructions = _get_language_prompt(language)
+    
+    # Enhance system prompt with language instructions
+    enhanced_system_prompt = base_prompt.messages[0].content + f"\n\n{language_instructions}"
+    
+    # Create enhanced prompt
+    from langchain_core.prompts import ChatPromptTemplate
+    enhanced_prompt = ChatPromptTemplate.from_messages([
+        ("system", enhanced_system_prompt),
+        ("user", base_prompt.messages[1].content)
+    ])
+    
     structured_llm = create_filing_form_chain()
-    generation_chain = prompt | structured_llm
+    generation_chain = enhanced_prompt | structured_llm
     
     cdm_data = credit_agreement.model_dump_json(indent=2)
     
@@ -145,7 +222,7 @@ def generate_filing_form_data(
     
     for attempt in range(max_retries):
         try:
-            logger.info(f"Filing form generation attempt {attempt + 1}/{max_retries}...")
+            logger.info(f"Filing form generation attempt {attempt + 1}/{max_retries} (language: {language})...")
             
             result = generation_chain.invoke({
                 "cdm_data": cdm_data,
@@ -155,10 +232,11 @@ def generate_filing_form_data(
                 "required_fields": ", ".join(filing_requirement.required_fields),
                 "deadline": filing_requirement.deadline.isoformat(),
                 "document_id": str(document_id) if document_id else "N/A",
-                "deal_id": str(deal_id) if deal_id else "N/A"
+                "deal_id": str(deal_id) if deal_id else "N/A",
+                "language": language
             })
             
-            logger.info("Filing form generation completed successfully")
+            logger.info(f"Filing form generation completed successfully in {language}")
             return result
             
         except ValidationError as e:

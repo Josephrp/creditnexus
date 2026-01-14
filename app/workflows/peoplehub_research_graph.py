@@ -71,9 +71,11 @@ def create_peoplehub_research_graph():
     
     # Define edges
     workflow.set_entry_point("start")
+    # NOTE: Avoid parallel fan-out from "start" because LangGraph LastValue channels
+    # cannot accept multiple writes to the same key in a single step (e.g., "status").
+    # Keep this workflow sequential to prevent INVALID_CONCURRENT_GRAPH_UPDATE.
     workflow.add_edge("start", "fetch_linkedin")
-    workflow.add_edge("start", "generate_search_query")  # Parallel execution
-    workflow.add_edge("fetch_linkedin", "aggregate_data")
+    workflow.add_edge("fetch_linkedin", "generate_search_query")
     workflow.add_conditional_edges(
         "generate_search_query",
         lambda state: "execute_search" if state.get("search_query") else "aggregate_data"
@@ -103,6 +105,23 @@ def create_peoplehub_research_graph():
 
 def start_node(state: ResearchState) -> Dict[str, Any]:
     """Initialize research state."""
+    # #region agent log
+    import json
+    from datetime import datetime
+    try:
+        with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+            f.write(json.dumps({
+                "sessionId": "debug-session",
+                "runId": "peoplehub-concurrency",
+                "hypothesisId": "CONCURRENCY",
+                "location": "peoplehub_research_graph.py:start_node",
+                "message": "start_node called",
+                "data": {"keys": list(state.keys())},
+                "timestamp": int(datetime.now().timestamp() * 1000)
+            }) + "\n")
+    except Exception:
+        pass
+    # #endregion
     # Only return fields that are being updated to avoid concurrent update errors
     return {
         "status": "Initializing research...",
@@ -115,6 +134,23 @@ def start_node(state: ResearchState) -> Dict[str, Any]:
 
 def fetch_linkedin_node(state: ResearchState) -> Dict[str, Any]:
     """Fetch LinkedIn profile data."""
+    # #region agent log
+    import json
+    from datetime import datetime
+    try:
+        with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+            f.write(json.dumps({
+                "sessionId": "debug-session",
+                "runId": "peoplehub-concurrency",
+                "hypothesisId": "CONCURRENCY",
+                "location": "peoplehub_research_graph.py:fetch_linkedin_node",
+                "message": "fetch_linkedin_node called",
+                "data": {"person_name": state.get("person_name"), "has_linkedin_url": bool(state.get("linkedin_url"))},
+                "timestamp": int(datetime.now().timestamp() * 1000)
+            }) + "\n")
+    except Exception:
+        pass
+    # #endregion
     # Implementation: Use Bright Data LinkedIn API or similar
     # This would integrate with existing LinkedIn scraping infrastructure
     logger.info(f"Fetching LinkedIn profile: {state.get('linkedin_url', 'N/A')}")
@@ -129,6 +165,23 @@ def fetch_linkedin_node(state: ResearchState) -> Dict[str, Any]:
 
 def generate_search_query_node(state: ResearchState) -> Dict[str, Any]:
     """Generate search query from person name and LinkedIn data."""
+    # #region agent log
+    import json
+    from datetime import datetime
+    try:
+        with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+            f.write(json.dumps({
+                "sessionId": "debug-session",
+                "runId": "peoplehub-concurrency",
+                "hypothesisId": "CONCURRENCY",
+                "location": "peoplehub_research_graph.py:generate_search_query_node",
+                "message": "generate_search_query_node called",
+                "data": {"person_name": state.get("person_name"), "linkedin_data_type": type(state.get("linkedin_data")).__name__},
+                "timestamp": int(datetime.now().timestamp() * 1000)
+            }) + "\n")
+    except Exception:
+        pass
+    # #endregion
     llm = get_chat_model(temperature=0.7)
     
     prompt = f"""Generate a Google search query to find information about {state['person_name']}.
@@ -163,12 +216,11 @@ Return only the search query, nothing else.
         }
 
 
-def execute_search_node(state: ResearchState) -> ResearchState:
+def execute_search_node(state: ResearchState) -> Dict[str, Any]:
     """Execute web search."""
     search_query = state.get("search_query")
     if not search_query:
         return {
-            **state,
             "status": "No search query to execute"
         }
     
@@ -181,25 +233,22 @@ def execute_search_node(state: ResearchState) -> ResearchState:
         # Placeholder - implement actual search using WebSearchService
         # For now, return empty results
         return {
-            **state,
             "search_results": [],
             "status": "Executed search"
         }
     except Exception as e:
         logger.error(f"Error executing search: {e}")
         return {
-            **state,
             "errors": state.get("errors", []) + [f"Search execution failed: {str(e)}"],
             "status": "Error executing search"
         }
 
 
-def scrape_web_page_node(state: ResearchState) -> ResearchState:
+def scrape_web_page_node(state: ResearchState) -> Dict[str, Any]:
     """Scrape web page content."""
     search_results = state.get("search_results", [])
     if not search_results:
         return {
-            **state,
             "status": "No search results to scrape"
         }
     
@@ -218,13 +267,12 @@ def scrape_web_page_node(state: ResearchState) -> ResearchState:
             })
     
     return {
-        **state,
         "scraped_contents": scraped_contents,
         "status": "Scraped web pages"
     }
 
 
-def summarize_content_node(state: ResearchState) -> ResearchState:
+def summarize_content_node(state: ResearchState) -> Dict[str, Any]:
     """Summarize scraped content."""
     llm = get_chat_model(temperature=0)
     
@@ -257,25 +305,23 @@ Return a concise summary.
             continue
     
     return {
-        **state,
         "web_summaries": summaries,
         "status": "Summarized content"
     }
 
 
-def aggregate_data_node(state: ResearchState) -> ResearchState:
+def aggregate_data_node(state: ResearchState) -> Dict[str, Any]:
     """Aggregate all research data."""
     # Deduplicate and merge data
     web_summaries = state.get("web_summaries", [])
     linkedin_data = state.get("linkedin_data", {})
     
     return {
-        **state,
         "status": "Aggregated data"
     }
 
 
-def write_report_node(state: ResearchState) -> ResearchState:
+def write_report_node(state: ResearchState) -> Dict[str, Any]:
     """Generate final research report."""
     llm = get_chat_model(temperature=0.7)
     
@@ -302,14 +348,12 @@ Format as Markdown.
         report = response.content
         
         return {
-            **state,
             "final_report": report,
             "status": "Report ready"
         }
     except Exception as e:
         logger.error(f"Error writing report: {e}")
         return {
-            **state,
             "errors": state.get("errors", []) + [f"Report generation failed: {str(e)}"],
             "status": "Error generating report"
         }

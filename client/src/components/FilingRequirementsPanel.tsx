@@ -101,15 +101,21 @@ export function FilingRequirementsPanel({
 
     try {
       // Fetch filings for this document
-      // Note: This would need a new endpoint or we can get from document details
-      // For now, we'll fetch deadline alerts which include filing info
       const response = await fetchWithAuth(
-        `/api/filings/deadline-alerts?document_id=${documentId}&days_ahead=365`
+        `/api/documents/${documentId}/filings`
       );
       if (response.ok) {
         const data = await response.json();
-        // Convert alerts to filing status format
-        // In production, you'd have a dedicated endpoint for filings
+        setFilings(data.filings || []);
+      } else if (response.status === 404) {
+        // Endpoint might not exist yet, try alternative
+        const altResponse = await fetchWithAuth(
+          `/api/filings?document_id=${documentId}`
+        );
+        if (altResponse.ok) {
+          const altData = await altResponse.json();
+          setFilings(altData.filings || altData.results || []);
+        }
       }
     } catch (err) {
       // Silently fail for filings - not critical

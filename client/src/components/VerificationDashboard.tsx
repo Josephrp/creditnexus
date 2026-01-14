@@ -19,6 +19,7 @@ import { SustainabilityScoreCard } from './green-finance/SustainabilityScoreCard
 import { SDGAlignmentPanel } from './green-finance/SDGAlignmentPanel';
 import { Card } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { DashboardChatbotPanel } from './DashboardChatbotPanel';
 
 // Mock asset for demo visualization (Napa Valley) - Aligned with LoanAsset interface
 const DEMO_ASSET = {
