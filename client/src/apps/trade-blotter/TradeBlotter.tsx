@@ -551,7 +551,7 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">Deal ID</label>
-                      <p className="font-mono">{loanData.deal_id || (context?.type === 'fdc3.creditnexus.loan' ? (context as CreditNexusLoanContext).id?.DealID : undefined) || 'AUTO-' + Date.now().toString(36).toUpperCase()}</p>
+                      <p className="font-mono">{loanData.deal_id || (context?.type === 'finos.creditnexus.loan' ? (context as CreditNexusLoanContext).id?.DealID : undefined) || 'AUTO-' + Date.now().toString(36).toUpperCase()}</p>
                     </div>
                   </div>
 

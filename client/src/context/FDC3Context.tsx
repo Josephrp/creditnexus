@@ -40,7 +40,7 @@ export interface CreditAgreementData {
 }
 
 export interface CreditNexusLoanContext extends Context {
-  type: 'fdc3.creditnexus.loan';
+  type: 'finos.creditnexus.loan';
   id?: {
     LIN?: string;
     DealID?: string;
@@ -163,7 +163,7 @@ export interface GreenFinanceAssessmentContext extends Context {
 }
 
 export interface WorkflowLinkContext extends Context {
-  type: 'fdc3.creditnexus.workflow';
+  type: 'finos.creditnexus.workflow';
   id: {
     workflowId: string;
   };
@@ -198,7 +198,8 @@ export type CreditNexusContext =
   | ESGDataContext
   | LandUseContext
   | GreenFinanceAssessmentContext
-  | WorkflowLinkContext;
+  | WorkflowLinkContext
+  | GeneratedDocumentContext;
 
 export type IntentName =
   | 'ViewLoanAgreement'
@@ -275,7 +276,7 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
 
       const setupContextListeners = async () => {
         try {
-          const loanListener = await fdc3.addContextListener('fdc3.creditnexus.loan', (ctx: Context) => {
+          const loanListener = await fdc3.addContextListener('finos.creditnexus.loan', (ctx: Context) => {
             setContext(ctx as CreditNexusLoanContext);
           });
           subscriptions.push(loanListener);
@@ -295,7 +296,7 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
           });
           subscriptions.push(portfolioListener);
 
-          const workflowLinkListener = await fdc3.addContextListener('fdc3.creditnexus.workflow', (ctx: Context) => {
+          const workflowLinkListener = await fdc3.addContextListener('finos.creditnexus.workflow', (ctx: Context) => {
             setContext(ctx as WorkflowLinkContext);
           });
           subscriptions.push(workflowLinkListener);
@@ -318,17 +319,60 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
   }, []);
 
   const broadcast = useCallback(async (loanContext: CreditNexusContext) => {
+    // Validate context before broadcasting
+    if (!loanContext || !loanContext.type) {
+      const error = new Error('Context must have a type property');
+      console.error('[FDC3] Invalid context:', error, loanContext);
+      throw error;
+    }
+
+    // Validate context type matches known types
+    const validTypes = [
+      'finos.creditnexus.loan',
+      'finos.creditnexus.agreement',
+      'finos.creditnexus.document',
+      'finos.creditnexus.portfolio',
+      'finos.creditnexus.approvalResult',
+      'finos.creditnexus.esgData',
+      'finos.creditnexus.workflow',
+      'finos.creditnexus.generatedDocument',
+      'finos.cdm.landUse',
+      'finos.cdm.greenFinanceAssessment',
+    ];
+    
+    if (!validTypes.includes(loanContext.type)) {
+      console.warn(`[FDC3] Unknown context type: ${loanContext.type}. Broadcasting anyway.`);
+    }
+
     setContext(loanContext);
 
     if (isAvailable && window.fdc3) {
-      try {
-        await window.fdc3.broadcast(loanContext as Context);
-        console.log('[FDC3] Broadcast successful:', loanContext);
-      } catch (error) {
-        console.error('[FDC3] Broadcast failed:', error);
+      // Retry logic for failed broadcasts
+      let retries = 2;
+      let lastError: Error | null = null;
+      
+      while (retries >= 0) {
+        try {
+          await window.fdc3.broadcast(loanContext as Context);
+          console.log('[FDC3] Broadcast successful:', loanContext.type, loanContext);
+          return; // Success, exit retry loop
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.error(`[FDC3] Broadcast failed (${2 - retries + 1}/3):`, lastError);
+          
+          if (retries > 0) {
+            // Wait before retry (exponential backoff: 100ms, 200ms)
+            await new Promise(resolve => setTimeout(resolve, (3 - retries) * 100));
+          }
+          retries--;
+        }
       }
+      
+      // All retries failed
+      console.error('[FDC3] Broadcast failed after all retries:', lastError);
+      throw lastError || new Error('Broadcast failed after retries');
     } else {
-      console.log('[FDC3 Mock] Broadcasting context:', loanContext);
+      console.log('[FDC3 Mock] Broadcasting context:', loanContext.type, loanContext);
     }
   }, [isAvailable]);
 
@@ -410,7 +454,7 @@ export function FDC3Provider({ children }: { children: ReactNode }) {
   ): Promise<Listener | null> => {
     if (isAvailable && window.fdc3) {
       try {
-        const listener = await window.fdc3.addContextListener('fdc3.creditnexus.workflow', (ctx: Context) => {
+        const listener = await window.fdc3.addContextListener('finos.creditnexus.workflow', (ctx: Context) => {
           callback(ctx as WorkflowLinkContext);
         });
         console.log('[FDC3] Workflow link listener added');

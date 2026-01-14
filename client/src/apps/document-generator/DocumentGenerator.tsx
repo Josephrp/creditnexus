@@ -379,11 +379,11 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
           };
           
           try {
-            // Cast to CreditNexusContext for broadcast (GeneratedDocumentContext extends Context)
-            // Note: GeneratedDocumentContext should be added to CreditNexusContext union type
-            await broadcast(context as any);
+            // GeneratedDocumentContext is part of CreditNexusContext union type
+            await broadcast(context);
           } catch (err) {
             // Don't fail the generation if broadcast fails
+            console.warn('[FDC3] Failed to broadcast generated document context:', err);
           }
         }
         

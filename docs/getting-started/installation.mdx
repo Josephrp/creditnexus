@@ -30,19 +30,6 @@ cd creditnexus
 uv sync
 ```
 
-4. Activate the virtual environment:
-```bash
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-### Using pip
-
-Alternatively, you can use pip:
-
-```bash
-pip install -r requirements.txt
-```
-
 ## Database Setup
 
 1. Create a PostgreSQL database:
@@ -72,7 +59,7 @@ docker run --name creditnexus-postgres -e POSTGRES_PASSWORD=yourpassword -e POST
 2. Copy `.env.example` to `.env` and configure database connection:
 ```bash
 cp .env.example .env
-# Edit .env and set DATABASE_URL=postgresql://user:password@localhost/creditnexus
+# Edit .env and set DATABASE_URL=postgresql://postgres:password@localhost/creditnexus
 ```
 
 3. Run migrations:

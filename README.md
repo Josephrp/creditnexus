@@ -2,7 +2,7 @@
 
 **"Price & Create Structured Financial Products"**
 
-[![Documentation](https://img.shields.io/badge/Documentation-Read%20Docs-blue?style=flat-square)](https://tonic-ai.mintlify.app)
+[![Documentation](https://img.shields.io/badge/📖-Read%20The%20Docs-blue?style=flat-square)](https://tonic-ai.mintlify.app)
 [![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://josephrp.github.io/creditnexus)
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](YOUTUBE_URL)
 
@@ -25,7 +25,7 @@
 [![Encryption](https://img.shields.io/badge/Encryption-At--Rest-brightgreen?style=flat-square)](https://tonic-ai.mintlify.app/compliance/security)
 [![Payments](https://img.shields.io/badge/Payments-X402-blue?style=flat-square)](https://tonic-ai.mintlify.app/features/payments)
 [![Green Finance](https://img.shields.io/badge/Green-Finance-green?style=flat-square)](https://tonic-ai.mintlify.app/features/green-finance)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord)](https://discord.gg/7YS4Cz2Deq)
+[![Join us on Discord](https://img.shields.io/discord/1109943800132010065?label=Discord&logo=discord&style=flat-square)](https://discord.gg/qdfnvSPcqP) 
 
 CreditNexus is a next-generation financial operating system that bridges the gap between **Sustainabiity-Linked Loans (Legal Contracts)** and **Physical Reality (Satellite Data)**. It uses AI agents to extract covenants from PDF agreements and orchestrates "Ground Truth" verification using geospatial deep learning.
 
@@ -551,13 +551,33 @@ Complete securitization workflow from pool creation to token minting.
 
 ## 🔗 System Interoperability (FDC3)
 
-The platform components are designed to work as a "Chain of Command" using the **FDC3 Standard** for seamless data flow:
+CreditNexus is **fully compliant with FDC3 2.0** standards, enabling seamless desktop interoperability with other financial applications. The platform components are designed to work as a "Chain of Command" using the **FDC3 Standard** for seamless data flow:
 
   1.**Extract**: Use the **Document Parser** to turn a PDF into data. Click "Broadcast to Desktop" to send the loan data out.
   2.**Trade**: The **Trade Blotter** automatically receives this signal and pre-fills an LMA trade ticket.
   3.**Analyze**: **GreenLens** picks up the same signal to show the ESG Margin Ratchet and pricing impact.
   4.**Verify**: The **Verification Demo** runs the "Ground Truth" protocol. When a breach is detected, it broadcasts an updated context.
   5.**Surveil**: The **Risk War Room** listens for these alerts and automatically highlights assets in breach for immediate investigation.
+
+### FDC3 2.0 Compliance Features
+
+- ✅ **App Directory API**: Served at `/api/fdc3/apps` for OpenFin Workspace discovery
+- ✅ **Context Types**: All custom contexts use `finos.creditnexus.*` namespace (FDC3 2.0 compliant)
+- ✅ **Intent Handling**: Full support for intent listeners and raisers
+- ✅ **App Channels**: Custom channels for workflow, extraction, and portfolio events
+- ✅ **Error Handling**: Robust validation and retry logic for reliable broadcasting
+- ✅ **Native OpenFin Integration**: Uses built-in FDC3 2.0 API (no deprecated services)
+
+**Context Types Supported:**
+- `finos.creditnexus.loan` - Loan data context
+- `finos.creditnexus.agreement` - Credit agreement context
+- `finos.creditnexus.document` - Document extraction context
+- `finos.creditnexus.portfolio` - Portfolio context
+- `finos.creditnexus.workflow` - Workflow link sharing context
+- `finos.creditnexus.approvalResult` - Approval workflow results
+- `finos.creditnexus.esgData` - ESG analytics data
+- `finos.cdm.landUse` - Land use classification
+- `finos.cdm.greenFinanceAssessment` - Green finance assessment
 
 > 📖 **Learn More**: See [Documentation - Architecture](https://tonic-ai.mintlify.app/architecture/overview) for detailed system design and [Documentation - FDC3 Compliance](https://tonic-ai.mintlify.app/compliance/fdc3-compliance) for interoperability standards.
 
@@ -624,10 +644,16 @@ npm run dev
 
 **Terminal 3 - Launch OpenFin:**
 ```powershell
-# Launch via RVM (no CLI needed !)
-.\scripts\launch_openfin.ps1
+# Launch via RVM (no CLI needed!)
+.\scripts\launch_openfin.sh
 # Or simply open the manifest URL in your browser:
 # http://localhost:8000/openfin/app.json
+```
+
+**Windows (Git Bash/MINGW64):**
+```bash
+# Launch via RVM
+./scripts/launch_openfin.sh
 ```
 
 ### What Happens
@@ -648,6 +674,52 @@ npm run dev
    - Loads frontend from `http://localhost:8000` (redirected from Vite)
    - Includes FDC3 interoperability
 
+### After the Script Runs
+
+Once `launch_openfin.sh` completes successfully, here's what happens:
+
+1. **OpenFin Runtime Launch**:
+   - If this is your first time, OpenFin Runtime will download automatically (this may take a few minutes)
+   - The OpenFin Runtime window will appear
+   - You'll see the CreditNexus platform loading
+
+2. **Application Window Opens**:
+   - A new window (1400×900 pixels) will open with the CreditNexus application
+   - The application loads from `http://localhost:8000`
+   - You should see the CreditNexus login/interface
+
+3. **FDC3 Integration Active**:
+   - FDC3 2.0 API is available via `window.fdc3`
+   - App Directory is accessible at `http://localhost:8000/api/fdc3/apps`
+   - Context broadcasting and intent handling are ready
+
+4. **What You Can Do Next**:
+   - **Login/Register**: Create an account or login to access features
+   - **Test FDC3**: Open multiple windows and test context broadcasting between them
+   - **Use Document Parser**: Upload a credit agreement PDF and click "Broadcast to Desktop" to test FDC3 context sharing
+   - **Open Trade Blotter**: It will automatically receive FDC3 contexts from Document Parser
+   - **Test GreenLens**: It listens for FDC3 contexts to show ESG analytics
+   - **Verify Integration**: Check that other FDC3-compliant apps can discover CreditNexus via the App Directory
+
+5. **First Launch Notes**:
+   - OpenFin Runtime download: On first launch, OpenFin may take 1-2 minutes to download and install
+   - Security prompts: You may see security prompts - allow OpenFin to run
+   - Port access: Ensure ports 8000 and 5173 are not blocked by firewall
+
+6. **Verifying Everything Works**:
+   ```bash
+   # Check FDC3 App Directory is accessible
+   curl http://localhost:8000/api/fdc3/apps
+   
+   # Should return JSON with CreditNexus app definition
+   ```
+
+7. **If OpenFin Doesn't Launch**:
+   - Check the script output for error messages
+   - Verify backend is running: `curl http://localhost:8000/api/health`
+   - Verify manifest is accessible: `curl http://localhost:8000/openfin/app.json`
+   - Try opening the manifest URL directly in your browser: `http://localhost:8000/openfin/app.json`
+
 ### Configuration
 
 The configuration is in `openfin/app.json`:
@@ -660,8 +732,11 @@ The configuration is in `openfin/app.json`:
 
 **Configuration Files:**
 - **App Manifest**: `openfin/app.json` - Platform configuration, window layout, FDC3 settings
-- **FDC3 Intents**: `openfin/fdc3-intents.json` - Intent declarations and context types
-- **Provider Config**: `openfin/provider.json` - Service provider setup
+- **FDC3 Intents**: `openfin/fdc3-intents.json` - Intent declarations and context types (served at `/api/fdc3/apps`)
+- **Provider Config**: `openfin/provider.json` - Service provider setup (uses native FDC3 2.0 API)
+
+**FDC3 App Directory:**
+The FDC3 App Directory is automatically served by the backend at `http://localhost:8000/api/fdc3/apps`. This allows OpenFin Workspace and other FDC3-compliant platforms to discover and integrate with CreditNexus.
 
 ### Troubleshooting
 
@@ -683,11 +758,23 @@ npm install
 
 **OpenFin Won't Launch:**
 ```powershell
-# Verify OpenFin CLI is installed
-openfin --version
+# Verify OpenFin RVM is installed (recommended)
+# RVM is automatically installed by OpenFin Runtime
 
-# Install if needed
+# Alternative: Install OpenFin CLI (optional)
 npm install -g @openfin/cli
+
+# Or use the launcher script which handles RVM detection
+.\scripts\launch_openfin.sh
+```
+
+**FDC3 App Directory Not Accessible:**
+```powershell
+# Verify the endpoint is accessible
+curl http://localhost:8000/api/fdc3/apps
+
+# Check backend logs for errors
+# Ensure openfin/fdc3-intents.json exists
 ```
 
 **Cannot Connect to Services:**
@@ -727,9 +814,13 @@ Then configure `openfin/app.json` to point to the production build location.
 ### Features
 
 - **FDC3 2.0 Interoperability**: Native support for context broadcasting and intent handling
+- **App Directory API**: Automatic discovery endpoint at `/api/fdc3/apps` for OpenFin Workspace
+- **Context Type Validation**: Robust validation and error handling for all FDC3 contexts
+- **Namespace Compliance**: All custom contexts use `finos.*` namespace per FDC3 2.0 standards
 - **Desktop Integration**: Seamless integration with other OpenFin applications
 - **Platform Management**: Multi-window platform with workspace support
 - **Security**: Configurable security realms and CORS policies
+- **Native API**: Uses OpenFin's built-in FDC3 2.0 API (no deprecated services)
 
 ### More Information
 
