@@ -1,17 +1,30 @@
 # Algorithmic Nature-Finance Platform (CreditNexus)
 
-**"Where Legal Text Meets Ground Truth"**
+**"Price & Create Structured Financial Products"**
 
 [![Documentation](https://img.shields.io/badge/Documentation-Read%20Docs-blue?style=flat-square)](https://tonic-ai.mintlify.app)
 [![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://josephrp.github.io/creditnexus)
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](YOUTUBE_URL)
 
+[![Enforced](https://img.shields.io/badge/Enforced-Sanctions-red?style=flat-square)](https://tonic-ai.mintlify.app/compliance/sanctions)
+[![Enforced](https://img.shields.io/badge/Enforced-BASEL%20II-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/basel)
+[![Enforced](https://img.shields.io/badge/Enforced-Credit%20Risk-orange?style=flat-square)](https://tonic-ai.mintlify.app/compliance/credit-risk)
+[![Enforced](https://img.shields.io/badge/Enforced-ESG-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/esg)
+[![Enforced](https://img.shields.io/badge/Enforced-SDG-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/sdg)
+
+[![A Priori](https://img.shields.io/badge/A%20Priori-Policy%20Enforcement-purple?style=flat-square)](https://tonic-ai.mintlify.app/features/policy-engine)
 [![FDC3](https://img.shields.io/badge/FDC3-OpenFin-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/fdc3-compliance)
 [![DORA](https://img.shields.io/badge/DORA-Compliant-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/dora-disclosure)
+[![FINOS CDM](https://img.shields.io/badge/FINOS-CDM-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/cdm-compliance)
 [![GDPR](https://img.shields.io/badge/GDPR-Compliant-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/gdpr-compliance)
 [![AI:Local](https://img.shields.io/badge/AI-Local%20Ready-orange?style=flat-square)](https://tonic-ai.mintlify.app/getting-started/configuration#llm-provider-configuration)
+
+
 [![Security](https://img.shields.io/badge/Security-Passed-brightgreen?style=flat-square)](https://github.com/josephrp/creditnexus/actions/workflows/security.yml)
-[![FINOS CDM](https://img.shields.io/badge/FINOS-CDM%20Compliant-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/cdm-compliance)
+[![SSL](https://img.shields.io/badge/SSL-Enabled-brightgreen?style=flat-square)](https://tonic-ai.mintlify.app/compliance/security)
+[![Encryption](https://img.shields.io/badge/Encryption-At--Rest-brightgreen?style=flat-square)](https://tonic-ai.mintlify.app/compliance/security)
+[![Payments](https://img.shields.io/badge/Payments-X402-blue?style=flat-square)](https://tonic-ai.mintlify.app/features/payments)
+[![Green Finance](https://img.shields.io/badge/Green-Finance-green?style=flat-square)](https://tonic-ai.mintlify.app/features/green-finance)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord)](https://discord.gg/7YS4Cz2Deq)
 
 CreditNexus is a next-generation financial operating system that bridges the gap between **Sustainabiity-Linked Loans (Legal Contracts)** and **Physical Reality (Satellite Data)**. It uses AI agents to extract covenants from PDF agreements and orchestrates "Ground Truth" verification using geospatial deep learning.
@@ -126,15 +139,47 @@ CreditNexus integrates with DigiSigner for digital signature workflows. To enabl
      - "Document Signed" Callback URL
 
 **For Local Development:**
-Use a tunnel service (ngrok, localtunnel) to expose your local server:
+
+To test webhooks locally, use a tunnel service to expose your local server:
+
+**Option 1: Using localtunnel (Recommended for quick testing)**
+
 ```bash
-# Using ngrok
-ngrok http 8000
-# Then use: https://your-ngrok-url.ngrok.io/api/signatures/webhook
+# Install and run localtunnel
+npx localtunnel --port 8000
+# Output: your url is: https://icy-chairs-warn.loca.lt
 ```
 
+Then configure the webhook URL in DigiSigner:
+- Set both callback URLs to: `https://icy-chairs-warn.loca.lt/api/signatures/webhook`
+  - "Signature Request Completed" Callback URL
+  - "Document Signed" Callback URL
+
+**Option 2: Using ngrok**
+
+```bash
+# Install ngrok (if not already installed)
+# Windows: choco install ngrok
+# macOS: brew install ngrok
+# Linux: Download from https://ngrok.com/download
+
+# Start tunnel
+ngrok http 8000
+# Use the HTTPS URL shown (e.g., https://abc123.ngrok.io)
+```
+
+Then configure the webhook URL in DigiSigner:
+- Set both callback URLs to: `https://your-ngrok-url.ngrok.io/api/signatures/webhook`
+
+**Important Notes:**
+- Ensure your local server is running on port 8000 before starting the tunnel
+- The tunnel URL changes each time you restart localtunnel (ngrok free tier also changes)
+- Update DigiSigner webhook URLs whenever the tunnel URL changes
+- For production, use a stable HTTPS domain instead of tunnels
+
 **Environment Variables:**
-Add to your `.env` file:
+
+Copy `.env.example` to `.env` and configure:
 ```env
 DIGISIGNER_API_KEY=your_api_key_here
 DIGISIGNER_BASE_URL=https://api.digisigner.com/v1
@@ -154,7 +199,8 @@ CreditNexus integrates with Twilio for SMS and voice communication in loan recov
    - Phone Number (with SMS/Voice capabilities)
 
 **Environment Variables:**
-Add to your `.env` file:
+
+Copy `.env.example` to `.env` and add:
 ```env
 TWILIO_ENABLED=true
 TWILIO_ACCOUNT_SID=your_account_sid_here
@@ -179,7 +225,7 @@ CreditNexus uses SentinelHub for satellite imagery access. To enable:
 
 1. **Create a SentinelHub account** at https://www.sentinel-hub.com/
 2. **Generate OAuth credentials** in your account settings
-3. **Add to `.env` file:**
+3. **Copy `.env.example` to `.env` and add:**
 ```env
 SENTINELHUB_KEY=your_client_id_here
 SENTINELHUB_SECRET=your_client_secret_here
@@ -205,7 +251,7 @@ USDC_TOKEN_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # Base Mainnet US
 For automated UK charge filings (MR01), configure:
 
 1. **Register for free API access** at https://developer.company-information.service.gov.uk/
-2. **Add to `.env` file:**
+2. **Copy `.env.example` to `.env` and add:**
 ```env
 COMPANIES_HOUSE_API_KEY=your_api_key_here
 ```
@@ -233,7 +279,7 @@ npm install
 
 **2. Configure Network (Optional):**
 
-Create `contracts/.env` file (optional, uses environment variables):
+Create `contracts/.env` file (optional, uses environment variables). You can copy from `contracts/.env.example` if it exists:
 
 ```env
 # For Base Mainnet
@@ -273,7 +319,7 @@ npm run deploy:base
 
 **5. Update Environment Variables:**
 
-After deployment, add the contract addresses to your `.env` file:
+After deployment, add the contract addresses to your `.env` file (copy from `.env.example` first if needed):
 
 ```env
 SECURITIZATION_NOTARIZATION_CONTRACT=0x...
@@ -286,7 +332,7 @@ X402_NETWORK_RPC_URL=https://mainnet.base.org  # or https://sepolia.base.org for
 
 If you don't manually deploy contracts, CreditNexus can auto-deploy them on first use:
 
-1. Set `BLOCKCHAIN_AUTO_DEPLOY=true` in your `.env` file
+1. Copy `.env.example` to `.env` and set `BLOCKCHAIN_AUTO_DEPLOY=true`
 2. Ensure `X402_NETWORK_RPC_URL` is configured
 3. Contracts will be automatically deployed when first accessed
 
@@ -300,7 +346,7 @@ If you don't manually deploy contracts, CreditNexus can auto-deploy them on firs
 For production, manually deploy contracts and set addresses:
 
 1. Deploy contracts using Hardhat (see steps above)
-2. Set contract addresses in `.env`:
+2. Copy `.env.example` to `.env` and set contract addresses:
    ```env
    SECURITIZATION_NOTARIZATION_CONTRACT=0x...
    SECURITIZATION_TOKEN_CONTRACT=0x...
@@ -533,7 +579,7 @@ CreditNexus supports **OpenFin Runtime** for enterprise desktop deployment with 
 
 2. **Node.js & npm** - For running the frontend
 3. **Python 3.10+** - For running the backend
-4. **.env file** - Already configured in the project root
+4. **.env file** - Copy from `.env.example` in the project root and configure
 
 ### Quick Start
 
@@ -647,7 +693,7 @@ npm install -g @openfin/cli
 **Cannot Connect to Services:**
 - Ensure firewall allows localhost traffic
 - Check that ports 8000 and 5173 are available
-- Verify .env file has correct DATABASE_URL
+- Verify `.env` file has correct DATABASE_URL (copy from `.env.example` if needed)
 
 ### Stopping Services
 

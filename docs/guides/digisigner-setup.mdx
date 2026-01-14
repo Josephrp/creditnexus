@@ -48,7 +48,14 @@ DigiSigner sends webhook notifications when documents are signed. Configure call
 
 ## Step 3: Configure Environment Variables
 
-Add to your `.env` file:
+Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+# Edit .env with your DigiSigner credentials
+```
+
+Add the following to your `.env` file:
 
 ```env
 # DigiSigner API Configuration
@@ -59,29 +66,57 @@ DIGISIGNER_BASE_URL=https://api.digisigner.com/v1
 DIGISIGNER_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
-**Security Note**: Never commit `DIGISIGNER_API_KEY` or `DIGISIGNER_WEBHOOK_SECRET` to version control!
+**Security Note**: Never commit `DIGISIGNER_API_KEY` or `DIGISIGNER_WEBHOOK_SECRET` to version control! Always use `.env` (which should be in `.gitignore`) and never commit it.
 
 ---
 
 ## Step 4: Local Development Setup
 
-For local development, use a tunneling service:
+For local development, use a tunneling service to expose your local server. **Ensure your local server is running on port 8000** before starting the tunnel.
 
-### Option 1: ngrok
+### Option 1: localtunnel (Recommended for quick testing)
 
 ```bash
+# Install and run localtunnel (no installation needed)
+npx localtunnel --port 8000
+# Output: your url is: https://icy-chairs-warn.loca.lt
+```
+
+**Configure DigiSigner Webhook:**
+1. Copy the URL provided (e.g., `https://icy-chairs-warn.loca.lt`)
+2. In DigiSigner Account Settings → API Settings, set both callback URLs to:
+   - `https://icy-chairs-warn.loca.lt/api/signatures/webhook`
+   - "Signature Request Completed" Callback URL
+   - "Document Signed" Callback URL
+
+**Important Notes:**
+- The tunnel URL changes each time you restart localtunnel
+- Update DigiSigner webhook URLs whenever the tunnel URL changes
+- Keep the localtunnel process running while testing
+
+### Option 2: ngrok
+
+```bash
+# Install ngrok (if not already installed)
+# Windows: choco install ngrok
+# macOS: brew install ngrok
+# Linux: Download from https://ngrok.com/download
+
+# Start tunnel
 ngrok http 8000
 ```
 
-Use the HTTPS URL: `https://your-ngrok-url.ngrok.io/api/signatures/webhook`
+**Configure DigiSigner Webhook:**
+1. Copy the HTTPS URL shown in ngrok (e.g., `https://abc123.ngrok.io`)
+2. In DigiSigner Account Settings → API Settings, set both callback URLs to:
+   - `https://abc123.ngrok.io/api/signatures/webhook`
+   - "Signature Request Completed" Callback URL
+   - "Document Signed" Callback URL
 
-### Option 2: localtunnel
-
-```bash
-npx localtunnel --port 8000
-```
-
-Use the provided URL in your DigiSigner webhook settings.
+**Important Notes:**
+- ngrok free tier URLs change on each restart
+- ngrok paid plans offer stable URLs
+- Keep the ngrok process running while testing
 
 ---
 

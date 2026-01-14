@@ -27,18 +27,46 @@ cd creditnexus
 uv sync
 ```
 
-3. Set up environment variables:
+3. Set up the database:
+
+**Windows:**
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+# Start PostgreSQL service using the psql client - use your own path
+"C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -c "CREATE DATABASE creditnexus;"
 ```
 
-4. Run database migrations:
+**Linux/macOS:**
+```bash
+# Start PostgreSQL service
+sudo systemctl start postgresql  # Linux
+# or
+brew services start postgresql@XX  # macOS
+
+# Create database
+createdb creditnexus
+```
+
+**Or using Docker:**
+```bash
+docker run --name creditnexus-postgres -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=creditnexus -p 5432:5432 -d postgres
+```
+
+4. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration (database URL, API keys, etc.)
+```
+
+> 💡 **Tip**: The `.env.example` file contains all available configuration options with documentation. See the [Configuration Guide](/getting-started/configuration) for detailed setup instructions.
+
+5. Run database migrations:
 ```bash
 uv run alembic upgrade head
 ```
 
-5. Start the backend server:
+This will create all necessary tables (documents, workflows, policy_decisions, users, etc.) based on the migration files in `alembic/versions/`.
+
+6. Start the backend server:
 ```bash
 uv run python server.py
 ```
