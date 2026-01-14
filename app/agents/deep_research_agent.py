@@ -14,7 +14,8 @@ from datetime import datetime
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import Tool
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain_core.messages import HumanMessage, AIMessage
+from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import MessagesPlaceholder
 
 from app.core.llm_client import get_chat_model
@@ -52,61 +53,25 @@ class ResearchContext:
     all_urls: Dict[str, Any] = field(default_factory=dict)
 
 
-def create_deep_research_agent() -> AgentExecutor:
+def create_deep_research_agent():
     """
-    Create DeepResearch agent using LangChain ReAct pattern.
+    Create DeepResearch agent using LangGraph ReAct pattern.
     
     Follows existing agent patterns:
     - Uses get_chat_model() for LLM
-    - Creates ReAct agent with tools
-    - Returns AgentExecutor for execution
+    - Creates ReAct agent with tools using langgraph.prebuilt
+    - Returns LangGraph graph for execution (supports ainvoke)
     """
     llm = get_chat_model(temperature=0.7)  # Slightly higher for reasoning
     
     # Create tools for research actions
     tools = get_all_research_tools()
     
-    # Create ReAct agent prompt
-    from langchain import hub
-    try:
-        prompt = hub.pull("hwchase17/react")
-    except Exception:
-        # Fallback prompt if hub is unavailable
-        from langchain_core.prompts import PromptTemplate
-        prompt = PromptTemplate.from_template("""You are a helpful assistant that can use tools to answer questions.
-
-You have access to the following tools:
-{tools}
-
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}""")
+    # Create ReAct agent using langgraph.prebuilt (returns a graph)
+    # This graph can be invoked directly with ainvoke()
+    agent = create_react_agent(llm, tools)
     
-    # Create ReAct agent
-    agent = create_react_agent(llm, tools, prompt=prompt)
-    
-    # Create executor
-    executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        max_iterations=20,  # Limit iterations to prevent infinite loops
-        handle_parsing_errors=True
-    )
-    
-    return executor
+    return agent
 
 
 async def research_query(
@@ -133,11 +98,14 @@ async def research_query(
     # Create agent
     agent = create_deep_research_agent()
     
-    # Execute research
-    result = await agent.ainvoke({
-        "input": question,
-        "context": str(context)  # Convert context to string for agent
-    })
+    # Execute research - langgraph.prebuilt.create_react_agent expects {"messages": [message]}
+    question_with_context = f"{question}\n\nContext: {str(context)}" if context else question
+    message = HumanMessage(content=question_with_context)
+    result = await agent.ainvoke({"messages": [message]})
+    
+    # Extract answer from result - langgraph returns {"messages": [...]}
+    response_messages = result.get("messages", [])
+    answer = response_messages[-1].content if response_messages and isinstance(response_messages[-1], AIMessage) else ""
     
     # Generate CDM event for research completion
     research_event = {
@@ -145,7 +113,7 @@ async def research_query(
         "eventDate": datetime.now().isoformat(),
         "researchQuery": {
             "query": question,
-            "answer": result.get("output", ""),
+            "answer": answer,
             "knowledgeItems": [item.__dict__ for item in context.knowledge_items],
             "visitedUrls": context.visited_urls,
             "searchedQueries": context.searched_queries
@@ -167,7 +135,7 @@ async def research_query(
         }]
     
     return {
-        "answer": result.get("output", ""),
+        "answer": answer,
         "knowledge_items": [item.__dict__ for item in context.knowledge_items],
         "visited_urls": context.visited_urls,
         "cdm_event": research_event

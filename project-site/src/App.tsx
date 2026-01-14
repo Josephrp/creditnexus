@@ -756,7 +756,9 @@ function App() {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a
-              href="/apply"
+              href="https://github.com/josephrp/creditnexus"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
             >
               <Rocket className="h-5 w-5 mr-2" />

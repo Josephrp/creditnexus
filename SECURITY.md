@@ -120,8 +120,14 @@ CreditNexus implements multiple layers of security:
 ### 3.2 Encryption
 
 #### At Rest
-- **Database:** Relies on database server encryption (PostgreSQL)
-- **File Storage:** Files stored in `storage/` directory (encryption recommended)
+- **Database:** 
+  - Application-level encryption using Fernet (symmetric encryption) for PII and sensitive data
+  - Database server encryption (PostgreSQL) for additional layer
+  - Encrypted fields: User emails, names, profile data; Document borrower info; Audit log metadata; Policy decision traces
+- **File Storage:** 
+  - All files in `storage/deals/` directory are encrypted at rest
+  - Documents, notes, and CDM events are encrypted before storage
+  - Encryption service: `app/services/encryption_service.py`
 - **Backups:** Backup encryption policy (to be implemented)
 
 #### In Transit
@@ -236,10 +242,10 @@ DB_SSL_AUTO_GENERATE=true         # Auto-generate certs (development)
 - ✅ Right to deletion (data erasure endpoint)
 - ✅ Audit logging
 - ✅ Data minimization principles
+- ✅ Encryption at rest for PII (Fernet symmetric encryption)
 
 **In Progress:**
 - ⚠️ Data retention policies (automated)
-- ⚠️ Encryption at rest for PII
 - ⚠️ Breach notification automation
 
 **Endpoints:**

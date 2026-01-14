@@ -76,6 +76,12 @@
         ]
       },
       {
+        "group": "Roadmap",
+        "pages": [
+          "roadmap/overview"
+        ]
+      },
+      {
         "group": "Architecture",
         "pages": [
           "architecture/overview",
@@ -133,12 +139,6 @@
           "guides/digisigner-setup",
           "guides/metamask-setup",
           "guides/sentinelhub-setup"
-        ]
-      },
-      {
-        "group": "Roadmap",
-        "pages": [
-          "roadmap/overview"
         ]
       },
       {

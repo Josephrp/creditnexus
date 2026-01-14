@@ -67,6 +67,28 @@
                 "finos.creditnexus.portfolio"
               ],
               "resultType": "finos.creditnexus.portfolio"
+            },
+            "GenerateLMATemplate": {
+              "displayName": "Generate LMA Template",
+              "contexts": [
+                "finos.creditnexus.agreement",
+                "finos.creditnexus.loan"
+              ],
+              "resultType": "finos.creditnexus.generatedDocument"
+            },
+            "ShareWorkflowLink": {
+              "displayName": "Share Workflow Link",
+              "contexts": [
+                "finos.creditnexus.workflow"
+              ],
+              "resultType": "finos.creditnexus.workflow"
+            },
+            "ProcessWorkflowLink": {
+              "displayName": "Process Workflow Link",
+              "contexts": [
+                "finos.creditnexus.workflow"
+              ],
+              "resultType": "finos.creditnexus.workflow"
             }
           },
           "raises": {
@@ -86,7 +108,9 @@
           "broadcasts": [
             "finos.creditnexus.agreement",
             "finos.creditnexus.approvalResult",
-            "finos.creditnexus.portfolio"
+            "finos.creditnexus.portfolio",
+            "finos.creditnexus.workflow",
+            "finos.creditnexus.generatedDocument"
           ],
           "listensFor": [
             "fdc3.instrument",
@@ -100,10 +124,12 @@
             "description": "Channel for workflow state updates and approvals",
             "broadcasts": [
               "finos.creditnexus.agreement",
-              "finos.creditnexus.approvalResult"
+              "finos.creditnexus.approvalResult",
+              "finos.creditnexus.workflow"
             ],
             "listensFor": [
-              "finos.creditnexus.approvalResult"
+              "finos.creditnexus.approvalResult",
+              "finos.creditnexus.workflow"
             ]
           },
           {

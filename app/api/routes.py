@@ -710,7 +710,7 @@ class DeepResearchQueryRequest(BaseModel):
 async def deep_research_query(
     request: DeepResearchQueryRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     policy_service: Optional[PolicyService] = Depends(get_policy_service)
 ):
     """
@@ -832,7 +832,7 @@ class PersonResearchRequest(BaseModel):
 async def research_person(
     request: PersonResearchRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     policy_service: Optional[PolicyService] = Depends(get_policy_service)
 ):
     """
@@ -1170,7 +1170,7 @@ class CompanyAnalysisRequest(BaseModel):
 async def analyze_company(
     request: CompanyAnalysisRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     policy_service: Optional[PolicyService] = Depends(get_policy_service),
     stream: bool = Query(False, description="Enable streaming response for long-running analyses")
 ):
@@ -1313,7 +1313,7 @@ class MarketAnalysisRequest(BaseModel):
 async def analyze_market(
     request: MarketAnalysisRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     policy_service: Optional[PolicyService] = Depends(get_policy_service)
 ):
     """
@@ -1364,7 +1364,7 @@ class LoanApplicationAnalysisRequest(BaseModel):
 async def analyze_loan_application(
     request: LoanApplicationAnalysisRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     policy_service: Optional[PolicyService] = Depends(get_policy_service),
     stream: bool = Query(False, description="Enable streaming response for long-running analyses")
 ):
@@ -3841,7 +3841,7 @@ class DigitizerChatbotLaunchWorkflowRequest(BaseModel):
 async def digitizer_chatbot_chat(
     request: DigitizerChatbotChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """
     Process a chatbot message for the document digitizer UI.
@@ -3909,7 +3909,7 @@ async def digitizer_chatbot_chat(
 async def digitizer_chatbot_launch_workflow(
     request: DigitizerChatbotLaunchWorkflowRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_auth)
 ):
     """
     Launch a workflow from the digitizer chatbot.
@@ -12433,7 +12433,8 @@ async def get_filing_requirements(
             document_id=document_id,
             agreement_type=agreement_type,
             deal_id=deal_id,
-            use_ai_evaluation=use_ai_evaluation
+            use_ai_evaluation=use_ai_evaluation,
+            user_id=current_user.id
         )
         
         # Convert to dict format
@@ -12508,7 +12509,8 @@ async def create_and_prepare_filing(
         # Create and prepare the filing
         filing = filing_service.prepare_manual_filing(
             document_id=request.document_id,
-            filing_requirement=filing_requirement
+            filing_requirement=filing_requirement,
+            user_id=current_user.id
         )
         
         log_audit_action(
@@ -12573,7 +12575,8 @@ async def submit_automatic_filing(
         
         result = filing_service.file_document_automatically(
             document_id=filing.document_id,
-            filing_requirement=requirement
+            filing_requirement=requirement,
+            user_id=current_user.id
         )
         
         log_audit_action(
@@ -12630,7 +12633,8 @@ async def prepare_manual_filing(
         
         result = filing_service.prepare_manual_filing(
             document_id=filing.document_id,
-            filing_requirement=requirement
+            filing_requirement=requirement,
+            user_id=current_user.id
         )
         
         return {
@@ -12668,7 +12672,8 @@ async def submit_manual_filing(
             filing_id=filing_id,
             filing_reference=request.filing_reference,
             submission_notes=request.submission_notes,
-            submitted_by=current_user.id
+            submitted_by=current_user.id,
+            user_id=current_user.id
         )
         
         log_audit_action(
@@ -12709,6 +12714,540 @@ async def get_filing_status(
         "status": "success",
         "filing": filing.to_dict()
     }
+
+
+class AttachDocumentsRequest(BaseModel):
+    """Request model for attaching documents to a filing."""
+    document_ids: List[int] = Field(..., description="List of document IDs to attach")
+
+
+@router.post("/filings/{filing_id}/attach")
+async def attach_documents_to_filing(
+    filing_id: int,
+    request: AttachDocumentsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Attach multiple documents to a filing."""
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        filing = filing_service.attach_documents_to_filing(
+            filing_id=filing_id,
+            document_ids=request.document_ids,
+            user_id=current_user.id
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Attached {len(request.document_ids)} documents to filing",
+            "filing": filing.to_dict()
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error attaching documents to filing: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to attach documents: {str(e)}"}
+        )
+
+
+@router.get("/filings/{filing_id}/attachments")
+async def get_filing_attachments(
+    filing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all attachments for a filing."""
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        attachments = filing_service.get_filing_attachments(filing_id)
+        
+        return {
+            "status": "success",
+            "filing_id": filing_id,
+            "attachments": attachments,
+            "count": len(attachments)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting filing attachments: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get attachments: {str(e)}"}
+        )
+
+
+@router.post("/filings/poll-status")
+async def poll_filing_status_endpoint(
+    filing_id: Optional[int] = Query(None, description="Specific filing ID to poll (optional)"),
+    deal_id: Optional[int] = Query(None, description="Poll all filings for a deal (optional)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Poll filing status from regulatory APIs.
+    
+    This endpoint triggers status polling for API-enabled filings (e.g., Companies House).
+    Can poll a specific filing, all filings for a deal, or all pending filings.
+    """
+    from app.services.filing_polling_service import FilingPollingService
+    
+    try:
+        polling_service = FilingPollingService(db)
+        
+        if filing_id:
+            # Poll specific filing
+            result = polling_service.poll_filing_status(filing_id)
+            return {
+                "status": "success",
+                "result": result
+            }
+        elif deal_id:
+            # Poll all filings for deal
+            result = polling_service.poll_filings_by_deal(deal_id)
+            return {
+                "status": "success",
+                "polled": result["polled"],
+                "updated": result["updated"],
+                "failed": result["failed"],
+                "results": result["results"]
+            }
+        else:
+            # Poll all pending filings
+            result = polling_service.poll_all_pending_filings(limit=100)
+            return {
+                "status": "success",
+                "polled": result["polled"],
+                "updated": result["updated"],
+                "failed": result["failed"],
+                "results": result["results"]
+            }
+    except Exception as e:
+        logger.error(f"Error polling filing status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to poll filing status: {str(e)}"}
+        )
+
+
+class BatchFilingPrepareRequest(BaseModel):
+    """Request model for batch filing preparation."""
+    document_ids: List[int] = Field(..., description="List of document IDs to prepare filings for")
+    agreement_type: str = Field("facility_agreement", description="Agreement type")
+
+
+class BatchFilingSubmitRequest(BaseModel):
+    """Request model for batch filing submission."""
+    filing_ids: List[int] = Field(..., description="List of filing IDs to submit")
+
+
+@router.post("/filings/batch/prepare")
+async def batch_prepare_filings(
+    request: BatchFilingPrepareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Prepare filings for multiple documents in batch.
+    
+    This endpoint prepares manual filings for multiple documents at once,
+    useful for bulk processing of agreements.
+    """
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        result = filing_service.prepare_batch_filings(
+            document_ids=request.document_ids,
+            agreement_type=request.agreement_type,
+            user_id=current_user.id
+        )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="batch_filings",
+            user_id=current_user.id,
+            metadata={
+                "document_count": len(request.document_ids),
+                "prepared": result["prepared"],
+                "failed": result["failed"]
+            }
+        )
+        
+        return {
+            "status": "success",
+            "total": result["total"],
+            "prepared": result["prepared"],
+            "failed": result["failed"],
+            "results": result["results"]
+        }
+    except Exception as e:
+        logger.error(f"Error in batch filing preparation: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to prepare batch filings: {str(e)}"}
+        )
+
+
+@router.post("/filings/batch/submit")
+async def batch_submit_filings(
+    request: BatchFilingSubmitRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Submit multiple filings automatically in batch.
+    
+    This endpoint submits multiple API-enabled filings at once,
+    with rate limiting to respect external API limits.
+    """
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        result = filing_service.submit_batch_filings(
+            filing_ids=request.filing_ids,
+            user_id=current_user.id
+        )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.FILE,
+            target_type="batch_filings",
+            user_id=current_user.id,
+            metadata={
+                "filing_count": len(request.filing_ids),
+                "submitted": result["submitted"],
+                "failed": result["failed"]
+            }
+        )
+        
+        return {
+            "status": "success",
+            "total": result["total"],
+            "submitted": result["submitted"],
+            "failed": result["failed"],
+            "results": result["results"]
+        }
+    except Exception as e:
+        logger.error(f"Error in batch filing submission: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to submit batch filings: {str(e)}"}
+        )
+
+
+@router.post("/filings/webhook")
+async def filing_status_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Webhook endpoint for regulatory body filing status updates.
+    
+    This endpoint receives status updates from regulatory bodies (e.g., Companies House, SEC)
+    when filing status changes (accepted, rejected, etc.).
+    
+    Supports webhook verification via signature/secret if configured.
+    """
+    from app.db.models import DocumentFiling
+    from app.utils.audit import log_audit_action
+    from app.db.models import AuditAction
+    
+    try:
+        payload = await request.json()
+        
+        # Extract webhook data (format may vary by regulatory body)
+        filing_reference = payload.get("filing_reference") or payload.get("filing_id") or payload.get("transaction_id")
+        new_status = payload.get("status") or payload.get("filing_status")
+        authority = payload.get("authority") or payload.get("regulatory_body")
+        
+        if not filing_reference:
+            logger.warning("Webhook missing filing_reference")
+            return Response(content="OK", status_code=200)
+        
+        # Find filing by reference
+        filing = db.query(DocumentFiling).filter(
+            DocumentFiling.filing_reference == filing_reference
+        ).first()
+        
+        if not filing:
+            logger.warning(f"Filing not found for reference: {filing_reference}")
+            return Response(content="OK", status_code=200)
+        
+        # Map webhook status to our status values
+        status_mapping = {
+            "accepted": "accepted",
+            "approved": "accepted",
+            "rejected": "rejected",
+            "declined": "rejected",
+            "pending": "submitted",
+            "processing": "submitted"
+        }
+        
+        mapped_status = status_mapping.get(new_status.lower(), new_status)
+        
+        # Update filing status if changed
+        old_status = filing.filing_status
+        if mapped_status != old_status:
+            filing.filing_status = mapped_status
+            filing.filing_response = payload
+            filing.updated_at = datetime.utcnow()
+            
+            # Set filed_at if accepted
+            if mapped_status == "accepted":
+                filing.filed_at = datetime.utcnow()
+            
+            db.commit()
+            
+            logger.info(
+                f"Updated filing {filing.id} status from {old_status} to {mapped_status} "
+                f"via webhook (reference: {filing_reference})"
+            )
+            
+            # Audit logging (no user_id for webhook)
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.UPDATE,
+                    target_type="document_filing",
+                    target_id=filing.id,
+                    user_id=None,  # Webhook, no user
+                    metadata={
+                        "source": "webhook",
+                        "authority": authority,
+                        "filing_reference": filing_reference,
+                        "old_status": old_status,
+                        "new_status": mapped_status,
+                        "webhook_payload": payload
+                    }
+                )
+            except Exception as audit_error:
+                logger.warning(f"Failed to log webhook audit: {audit_error}")
+        
+        # Return success (webhooks typically expect 200 OK)
+        return Response(content="OK", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error processing filing webhook: {e}", exc_info=True)
+        # Return 200 to prevent webhook retries for malformed requests
+        return Response(content="OK", status_code=200)
+
+
+@router.get("/filings/compliance-report")
+async def get_compliance_report(
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Generate compliance report for filings.
+    
+    Returns comprehensive compliance statistics including:
+    - Overall compliance rate
+    - Breakdown by status, jurisdiction, and authority
+    - Deadline alerts (filings due within 7 days)
+    - Overdue filings
+    """
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        
+        # Parse dates
+        start_dt = None
+        end_dt = None
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        
+        report = filing_service.generate_compliance_report(
+            deal_id=deal_id,
+            jurisdiction=jurisdiction,
+            start_date=start_dt,
+            end_date=end_dt
+        )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.VIEW,
+            target_type="compliance_report",
+            user_id=current_user.id,
+            metadata={
+                "deal_id": deal_id,
+                "jurisdiction": jurisdiction,
+                "total_filings": report["summary"]["total_filings"]
+            }
+        )
+        
+        return {
+            "status": "success",
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error generating compliance report: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to generate compliance report: {str(e)}"}
+        )
+
+
+@router.get("/filings/export")
+async def export_filings(
+    format: str = Query("csv", description="Export format: csv or excel"),
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
+    status: Optional[str] = Query(None, description="Filter by filing status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Export filing data to CSV or Excel.
+    
+    Exports all filings (optionally filtered) with all metadata, deadlines, and status information.
+    """
+    from app.db.models import DocumentFiling
+    from app.services.filing_service import FilingService
+    
+    try:
+        # Build query
+        query = db.query(DocumentFiling)
+        
+        if deal_id:
+            query = query.filter(DocumentFiling.deal_id == deal_id)
+        if jurisdiction:
+            query = query.filter(DocumentFiling.jurisdiction == jurisdiction)
+        if status:
+            query = query.filter(DocumentFiling.filing_status == status)
+        
+        filings = query.all()
+        
+        if not filings:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "No filings found matching criteria"}
+            )
+        
+        # Prepare data for export
+        filing_service = FilingService(db)
+        export_data = []
+        
+        for filing in filings:
+            # Calculate priority
+            priority = "unknown"
+            if filing.deadline:
+                priority = filing_service.calculate_filing_priority(filing.deadline)
+            
+            # Calculate days until deadline
+            days_until_deadline = None
+            if filing.deadline:
+                days_until_deadline = (filing.deadline - datetime.utcnow()).days
+            
+            row = {
+                "Filing ID": filing.id,
+                "Document ID": filing.document_id,
+                "Deal ID": filing.deal_id,
+                "Agreement Type": filing.agreement_type,
+                "Jurisdiction": filing.jurisdiction,
+                "Filing Authority": filing.filing_authority,
+                "Filing System": filing.filing_system,
+                "Filing Status": filing.filing_status,
+                "Filing Reference": filing.filing_reference,
+                "Deadline": filing.deadline.isoformat() if filing.deadline else None,
+                "Days Until Deadline": days_until_deadline,
+                "Priority": priority,
+                "Filing URL": filing.filing_url,
+                "Confirmation URL": filing.confirmation_url,
+                "Manual Submission URL": filing.manual_submission_url,
+                "Submitted By": filing.submitted_by,
+                "Submitted At": filing.submitted_at.isoformat() if filing.submitted_at else None,
+                "Submission Notes": filing.submission_notes,
+                "Error Message": filing.error_message,
+                "Retry Count": filing.retry_count,
+                "Created At": filing.created_at.isoformat() if filing.created_at else None,
+                "Updated At": filing.updated_at.isoformat() if filing.updated_at else None,
+                "Filed At": filing.filed_at.isoformat() if filing.filed_at else None
+            }
+            export_data.append(row)
+        
+        # Create DataFrame
+        df = pd.DataFrame(export_data)
+        
+        # Export based on format
+        if format.lower() == "excel":
+            # Excel export
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Filings', index=False)
+            output.seek(0)
+            
+            # Audit logging
+            log_audit_action(
+                db=db,
+                action=AuditAction.EXPORT,
+                target_type="filings",
+                user_id=current_user.id,
+                metadata={
+                    "format": "excel",
+                    "count": len(filings),
+                    "deal_id": deal_id,
+                    "jurisdiction": jurisdiction,
+                    "status": status
+                }
+            )
+            
+            return StreamingResponse(
+                io.BytesIO(output.read()),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                }
+            )
+        else:
+            # CSV export
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            output.seek(0)
+            
+            # Audit logging
+            log_audit_action(
+                db=db,
+                action=AuditAction.EXPORT,
+                target_type="filings",
+                user_id=current_user.id,
+                metadata={
+                    "format": "csv",
+                    "count": len(filings),
+                    "deal_id": deal_id,
+                    "jurisdiction": jurisdiction,
+                    "status": status
+                }
+            )
+            
+            return Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting filings: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to export filings: {str(e)}"}
+        )
 
 
 @router.post("/payments/process/{payload}")

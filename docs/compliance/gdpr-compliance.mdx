@@ -66,10 +66,16 @@ Check GDPR compliance status:
 ### Encryption
 
 - **In Transit**: SSL/TLS encryption for all API communications
-- **At Rest**: Database server encryption (PostgreSQL)
+- **At Rest**: 
+  - Application-level encryption using Fernet (symmetric encryption) for PII and sensitive data
+  - Database server encryption (PostgreSQL) for additional layer
+  - File storage encryption for documents, notes, and CDM events
 - **Secrets**: Pydantic `SecretStr` for API keys
 
-**Code Reference**: [SECURITY.md](https://github.com/josephrp/creditnexus/blob/main/SECURITY.md) (Data Protection section)
+**Code Reference**: 
+- `app/services/encryption_service.py` - Encryption service implementation
+- `app/db/encrypted_types.py` - SQLAlchemy encrypted types
+- [SECURITY.md](https://github.com/josephrp/creditnexus/blob/main/SECURITY.md) (Data Protection section)
 
 ### Access Controls
 
@@ -104,8 +110,16 @@ Check GDPR compliance status:
 ### ⚠️ In Progress
 
 - Data retention policies (automated)
-- Encryption at rest for PII
 - Breach notification automation
+
+### ✅ Implemented
+
+- Encryption at rest for PII (Fernet symmetric encryption)
+  - User email, display names, profile data
+  - Document borrower information and extracted data
+  - Audit log metadata and IP addresses
+  - Policy decision traces and CDM events
+  - File storage encryption for documents, notes, and CDM events
 
 **Code Reference**: `docs/SECURITY.md` (lines 232-248)
 

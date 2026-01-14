@@ -39,6 +39,7 @@ import { NotarizationButton } from './NotarizationButton';
 import { SignatureButton } from './SignatureButton';
 import { NotarizationStatus } from './NotarizationStatus';
 import { SignatureStatus } from './SignatureStatus';
+import { FilingRequirementsPanel } from './FilingRequirementsPanel';
 
 interface DocumentSummary {
   id: number;
@@ -687,6 +688,11 @@ export function DocumentHistory({ onViewData, onGenerateFromTemplate }: Document
 
             {/* Notarization Status */}
             <NotarizationStatus
+              documentId={selectedDocument.id}
+            />
+
+            {/* Filing Requirements and Status */}
+            <FilingRequirementsPanel
               documentId={selectedDocument.id}
             />
           </div>
