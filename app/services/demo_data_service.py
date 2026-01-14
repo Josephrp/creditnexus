@@ -14,7 +14,7 @@ import random
 import json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -1452,7 +1452,6 @@ The document contains placeholder content representing a credit agreement.
                             elif hasattr(cdm, 'dict'):
                                 # For Pydantic v1, convert date objects to ISO strings manually
                                 source_cdm_data = cdm.dict()
-                                from datetime import date, datetime
                                 
                                 def json_serial(obj):
                                     """JSON serializer for objects not serializable by default json code"""
