@@ -1,0 +1,162 @@
+---
+title: SentinelHub Setup Guide
+description: Configure SentinelHub for satellite imagery access
+---
+
+## Overview
+
+CreditNexus uses SentinelHub to access satellite imagery for verification workflows, including NDVI analysis, land use classification, and green finance assessments.
+
+**Code Reference**: `app/agents/verifier.py`  
+**Configuration**: `app/core/config.py` (SENTINELHUB_KEY, SENTINELHUB_SECRET)
+
+---
+
+## Prerequisites
+
+1. **SentinelHub Account**: Sign up at https://www.sentinel-hub.com/
+2. **OAuth Credentials**: Generate OAuth client ID and secret
+3. **API Access**: Enable API access in your account
+
+---
+
+## Step 1: Create SentinelHub Account
+
+1. **Visit**: https://www.sentinel-hub.com/
+2. **Sign up** for a free account
+3. **Verify your email address**
+
+---
+
+## Step 2: Generate OAuth Credentials
+
+1. **Log in to SentinelHub**: https://www.sentinel-hub.com/
+2. **Navigate to**: User Settings → OAuth clients
+3. **Create a new OAuth client**:
+   - **Name**: CreditNexus (or your preferred name)
+   - **Redirect URI**: Leave empty (not needed for API access)
+4. **Copy credentials**:
+   - **Client ID** (this is your `SENTINELHUB_KEY`)
+   - **Client Secret** (this is your `SENTINELHUB_SECRET`)
+
+---
+
+## Step 3: Configure Environment Variables
+
+Add to your `.env` file:
+
+```env
+# SentinelHub OAuth Credentials
+SENTINELHUB_KEY=your_client_id_here
+SENTINELHUB_SECRET=your_client_secret_here
+```
+
+**Security Note**: Never commit `SENTINELHUB_SECRET` to version control!
+
+---
+
+## Step 4: Verify Configuration
+
+Test the configuration by running a verification workflow:
+
+1. **Upload a credit agreement** with a collateral address
+2. **Trigger verification** in the Verification Demo
+3. **Check logs** for SentinelHub API calls
+4. **Verify satellite imagery** is fetched successfully
+
+---
+
+## API Usage
+
+SentinelHub is used automatically by the verification workflow:
+
+```python
+from app.agents.verifier import VerifierAgent
+
+agent = VerifierAgent()
+result = agent.verify_collateral(
+    address="123 Main St, City, State",
+    spt_requirements={"ndvi": 0.75}
+)
+```
+
+**Code Reference**: `app/agents/verifier.py`
+
+---
+
+## Satellite Data Sources
+
+CreditNexus uses SentinelHub to access:
+
+- **Sentinel-2**: High-resolution multispectral imagery for NDVI analysis
+- **Sentinel-5P**: Coarse-resolution data for methane detection
+- **Land Use Classification**: TorchGeo ResNet-50 for land use analysis
+
+---
+
+## Rate Limits
+
+SentinelHub has rate limits based on your account tier:
+
+- **Free Tier**: Limited requests per month
+- **Paid Tiers**: Higher rate limits
+
+**Best Practices**:
+- Cache satellite imagery when possible
+- Use appropriate image resolution (lower for faster processing)
+- Monitor usage in SentinelHub dashboard
+
+---
+
+## Troubleshooting
+
+### Issue: "Authentication failed"
+
+**Solutions**:
+1. Verify `SENTINELHUB_KEY` and `SENTINELHUB_SECRET` are correct
+2. Check credentials haven't expired
+3. Verify OAuth client is active in SentinelHub dashboard
+
+### Issue: "No imagery available"
+
+**Solutions**:
+1. Check date range (imagery may not be available for all dates)
+2. Verify location coordinates are correct
+3. Try a different date range
+4. Check cloud coverage (high cloud coverage may prevent imagery)
+
+### Issue: "Rate limit exceeded"
+
+**Solutions**:
+1. Implement caching for frequently accessed locations
+2. Reduce image resolution
+3. Upgrade SentinelHub account tier
+4. Implement request throttling
+
+---
+
+## Cost Considerations
+
+SentinelHub pricing:
+
+- **Free Tier**: Limited requests per month
+- **Paid Tiers**: Pay-per-use or subscription models
+
+**Tips**:
+- Use free tier for development and testing
+- Cache imagery to reduce API calls
+- Use appropriate resolution (lower = cheaper)
+
+---
+
+## Additional Resources
+
+- [SentinelHub Documentation](https://docs.sentinel-hub.com/)
+- [SentinelHub OAuth Guide](https://docs.sentinel-hub.com/api/overview/authentication/)
+- [Configuration Guide](/getting-started/configuration#sentinelhub-configuration)
+- [Verification Guide](/guides/verification)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/agents/verifier.py`, `app/core/config.py`

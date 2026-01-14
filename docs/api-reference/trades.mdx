@@ -1,0 +1,101 @@
+---
+title: Trades API
+description: API endpoints for trade execution and settlement
+---
+
+## Trades API
+
+API endpoints for LMA trade execution, settlement, and trade management.
+
+**Base Path**: `/api` (trade endpoints in main routes)  
+**Code Reference**: `app/api/routes.py` (trade endpoints)
+
+---
+
+## Trade Execution
+
+### Execute Trade
+
+<Endpoint method="POST" path="/api/trades/execute" />
+
+Execute a trade with policy evaluation and CDM event generation.
+
+**Request Body**:
+```json
+{
+  "credit_agreement_id": 123,
+  "facility_id": "FACILITY_001",
+  "trade_price": 100.0,
+  "trade_amount": 1000000.00,
+  "settlement_date": "2026-01-20",
+  "buyer": {
+    "id": "buyer_1",
+    "name": "Buyer Corp",
+    "lei": "LEI123"
+  },
+  "seller": {
+    "id": "seller_1",
+    "name": "Seller Corp",
+    "lei": "LEI456"
+  }
+}
+```
+
+**Response**: Trade execution result with CDM events and policy evaluation
+
+**Code Reference**: `app/api/routes.py` (execute_trade endpoint)
+
+---
+
+## Trade Settlement
+
+### Settle Trade
+
+<Endpoint method="POST" path="/api/trades/{trade_id}/settle" />
+
+Settle a trade with optional x402 payment.
+
+**Request Body** (Optional):
+```json
+{
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }
+}
+```
+
+**Response**: Settlement confirmation or 402 Payment Required
+
+**Code Reference**: `app/api/routes.py` (settle_trade endpoint)
+
+---
+
+## CDM Events
+
+### Get Trade CDM Events
+
+<Endpoint method="GET" path="/api/cdm/events/{trade_id}" />
+
+Get CDM events for a specific trade.
+
+**Response**: List of CDM events related to the trade
+
+**Code Reference**: `app/api/routes.py` (get_cdm_events endpoint)
+
+---
+
+## Additional Resources
+
+- [Trade Execution Feature](/features/trade-execution)
+- [Payment Systems Feature](/features/payment-systems)
+- [CDM Compliance](/compliance/cdm-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/routes.py`

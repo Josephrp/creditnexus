@@ -1,0 +1,312 @@
+---
+title: Twilio Setup Guide
+description: Configure Twilio for loan recovery SMS and voice communication
+---
+
+## Overview
+
+CreditNexus integrates with Twilio to enable SMS and voice communication for loan recovery workflows. This guide walks you through the complete setup process.
+
+**Code Reference**: `app/services/twilio_service.py`, `app/api/twilio_routes.py`  
+
+---
+
+## Prerequisites
+
+1. **Twilio Account**: Sign up at https://www.twilio.com/
+2. **Phone Number**: Purchase a Twilio phone number with SMS and Voice capabilities
+3. **Public URL**: Your application must be accessible via HTTPS for webhooks
+
+---
+
+## Step 1: Get Twilio Credentials
+
+1. **Log in to Twilio Console**: https://console.twilio.com/
+2. **Navigate to Account Dashboard**
+3. **Copy your credentials**:
+   - **Account SID**: Found on the dashboard
+   - **Auth Token**: Click "Show" to reveal (keep this secret!)
+
+---
+
+## Step 2: Purchase a Phone Number
+
+1. **Navigate to Phone Numbers**: https://console.twilio.com/us1/develop/phone-numbers/manage/search
+2. **Search for a number** with:
+   - ✅ SMS capabilities
+   - ✅ Voice capabilities
+3. **Purchase the number**
+4. **Copy the phone number** (E.164 format, e.g., `+1234567890`)
+
+---
+
+## Step 3: Configure Environment Variables
+
+Add to your `.env` file:
+
+```env
+# Enable Twilio integration
+TWILIO_ENABLED=true
+
+# Twilio Account Credentials
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token_here
+
+# Twilio Phone Number (E.164 format)
+TWILIO_PHONE_NUMBER=+1234567890
+
+# Enable SMS and Voice
+TWILIO_SMS_ENABLED=true
+TWILIO_VOICE_ENABLED=true
+
+# Webhook URL (see Step 4)
+TWILIO_WEBHOOK_URL=https://your-domain.com/api/twilio/webhook/status
+```
+
+**Security Note**: Never commit `TWILIO_AUTH_TOKEN` to version control!
+
+---
+
+## Step 4: Configure Webhooks
+
+Twilio needs to send status updates to your application. Configure webhook URLs in the Twilio Console:
+
+### 4.1: SMS Status Webhook
+
+1. **Navigate to**: Phone Numbers → Manage → Active Numbers
+2. **Click on your phone number**
+3. **Scroll to "Messaging" section**
+4. **Set "A MESSAGE COMES IN"**: Leave empty (handled by API)
+5. **Set "STATUS CALLBACK URL"**: `https://your-domain.com/api/twilio/webhook/sms`
+
+### 4.2: Voice Status Webhook
+
+1. **In the same phone number settings**
+2. **Scroll to "Voice & Fax" section**
+3. **Set "A CALL COMES IN"**: Leave empty (handled by API)
+4. **Set "STATUS CALLBACK URL"**: `https://your-domain.com/api/twilio/webhook/voice`
+
+### 4.3: Generic Status Callback
+
+For programmatic status updates, also set:
+
+**Status Callback URL**: `https://your-domain.com/api/twilio/webhook/status`
+
+---
+
+## Step 5: Local Development Setup
+
+For local development, use a tunneling service to expose your local server:
+
+### Option 1: ngrok
+
+```bash
+# Install ngrok
+npm install -g ngrok
+# or
+brew install ngrok
+
+# Start tunnel
+ngrok http 8000
+```
+
+Use the HTTPS URL provided (e.g., `https://abc123.ngrok.io`) in your webhook URLs:
+- `https://abc123.ngrok.io/api/twilio/webhook/sms`
+- `https://abc123.ngrok.io/api/twilio/webhook/voice`
+- `https://abc123.ngrok.io/api/twilio/webhook/status`
+
+### Option 2: localtunnel
+
+```bash
+# Install localtunnel
+npm install -g localtunnel
+
+# Start tunnel
+npx localtunnel --port 8000
+```
+
+Use the provided URL in your webhook configuration.
+
+---
+
+## Step 6: Verify Configuration
+
+### Test SMS Sending
+
+Use the test script:
+
+```bash
+# Python test script
+python scripts/test_twilio_send.py
+
+# Or use curl (PowerShell)
+.\scripts\test_twilio_curl.ps1
+
+# Or use curl (Bash)
+./scripts/test_twilio_curl.sh
+```
+
+### Test Voice Call
+
+Voice calls are automatically generated when recovery actions are triggered. Test by:
+
+1. Creating a loan default in the system
+2. Triggering a recovery action with `action_type: "voice_call"`
+3. Verify the call is received
+
+---
+
+## Webhook Endpoints
+
+CreditNexus provides the following webhook endpoints:
+
+<Endpoint method="POST" path="/api/twilio/webhook/sms" />
+
+SMS status callback endpoint. Receives delivery status updates for SMS messages.
+
+<Endpoint method="POST" path="/api/twilio/webhook/voice" />
+
+Voice status callback endpoint. Receives call status updates.
+
+<Endpoint method="POST" path="/api/twilio/webhook/status" />
+
+Generic status callback endpoint. Handles both SMS and voice status updates.
+
+<Endpoint method="POST" path="/api/twilio/webhook/voice/response" />
+
+TwiML response generator. Generates TwiML for voice call responses.
+
+**Security**: All webhook endpoints verify Twilio request signatures using `RequestValidator`.
+
+**Code Reference**: `app/api/twilio_routes.py`
+
+---
+
+## Phone Number Format
+
+Twilio requires phone numbers in **E.164 format**:
+
+- ✅ Correct: `+1234567890`, `+441234567890`
+- ❌ Incorrect: `(123) 456-7890`, `123-456-7890`, `1234567890`
+
+**Format**: `+[country code][number]` (no spaces, dashes, or parentheses)
+
+---
+
+## Troubleshooting
+
+### Issue: "Invalid phone number format"
+
+**Solution**: Ensure phone numbers are in E.164 format (`+1234567890`)
+
+### Issue: "Webhook not received"
+
+**Solutions**:
+1. Verify webhook URL is publicly accessible (use ngrok for local testing)
+2. Check firewall allows incoming POST requests
+3. Verify webhook URLs are correctly configured in Twilio Console
+4. Check application logs for webhook errors
+
+### Issue: "SMS not delivered"
+
+**Solutions**:
+1. Verify phone number has SMS capabilities
+2. Check Twilio account balance
+3. Verify recipient phone number is valid
+4. Check Twilio Console for delivery status
+
+### Issue: "Voice call fails"
+
+**Solutions**:
+1. Verify phone number has Voice capabilities
+2. Check Twilio account balance
+3. Verify TwiML response is valid
+4. Check Twilio Console for call logs
+
+### Issue: "Webhook signature verification fails"
+
+**Solutions**:
+1. Verify `TWILIO_AUTH_TOKEN` matches your Twilio account
+2. Check webhook URL matches exactly (including HTTPS)
+3. Verify request body is not modified
+
+---
+
+## Security Best Practices
+
+1. **Never commit secrets**: Keep `TWILIO_AUTH_TOKEN` in `.env` file only
+2. **Use HTTPS**: Always use HTTPS for webhook URLs in production
+3. **Verify signatures**: Webhook signature verification is automatic
+4. **Rate limiting**: Monitor Twilio usage to avoid rate limits
+5. **Phone number validation**: Always validate phone numbers before sending
+
+---
+
+## API Usage
+
+### Send SMS
+
+```python
+from app.services.twilio_service import TwilioService
+
+service = TwilioService()
+result = service.send_sms(
+    to_phone="+1234567890",
+    message="Your loan payment is overdue. Please contact us.",
+    status_callback="https://your-domain.com/api/twilio/webhook/sms"
+)
+```
+
+### Make Voice Call
+
+```python
+result = service.make_voice_call(
+    to_phone="+1234567890",
+    message="Your loan payment is overdue. Please contact us immediately.",
+    twiml_url="https://your-domain.com/api/twilio/webhook/voice/response"
+)
+```
+
+**Code Reference**: `app/services/twilio_service.py`
+
+---
+
+## Rate Limits
+
+Twilio has rate limits per account:
+
+- **SMS**: Varies by country and account type
+- **Voice**: Varies by account type
+
+**Best Practices**:
+- Implement retry logic with exponential backoff
+- Queue actions if rate limit is hit
+- Monitor usage in Twilio Console
+
+---
+
+## Cost Considerations
+
+Twilio charges per SMS and per minute for voice calls:
+
+- **SMS**: ~$0.0075 per message (varies by country)
+- **Voice**: ~$0.013 per minute (varies by country)
+
+**Tips**:
+- Use SMS for low-priority notifications
+- Use voice calls for high-priority, urgent communications
+- Monitor usage in Twilio Console
+
+---
+
+## Additional Resources
+
+- [Twilio Documentation](https://www.twilio.com/docs)
+- [E.164 Phone Number Format](https://www.twilio.com/docs/glossary/what-e164)
+- [Twilio API Reference](https://www.twilio.com/docs/usage/api)
+- [Loan Recovery Feature Documentation](/features/recovery)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/twilio_service.py`, `app/api/twilio_routes.py`

@@ -15,7 +15,19 @@
   "topbarLinks": [
     {
       "name": "GitHub",
-      "url": "https://github.com/yourusername/creditnexus"
+      "url": "https://github.com/josephrp/creditnexus"
+    },
+    {
+      "name": "Discord",
+      "url": "https://discord.gg/7YS4Cz2Deq"
+    },
+    {
+      "name": "Twitter",
+      "url": "https://x.com/josephpollack"
+    },
+    {
+      "name": "HuggingFace",
+      "url": "https://hf.co/tonic"
     }
   ],
   "topbarCtaButton": {
@@ -26,37 +38,88 @@
     {
       "name": "Documentation",
       "icon": "book-open-cover",
-      "url": "https://docs.creditnexus.com"
+      "url": "https://tonic-ai.mintlify.app"
     },
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/yourusername/creditnexus"
+      "url": "https://github.com/josephrp/creditnexus"
     }
   ],
   "navigation": {
     "groups": [
       {
+        "group": "Market Opportunity",
+        "pages": [
+          "market/overview"
+        ]
+      },
+      {
         "group": "Get Started",
         "pages": [
           "getting-started/introduction",
-          "getting-started/how-to-use",
           "getting-started/quickstart",
-          "getting-started/installation"
+          "getting-started/installation",
+          "getting-started/configuration",
+          "getting-started/how-to-use"
+        ]
+      },
+      {
+        "group": "Compliance",
+        "pages": [
+          "compliance/dora-disclosure",
+          "compliance/fdc3-compliance",
+          "compliance/openfin-compliance",
+          "compliance/cdm-compliance",
+          "compliance/gdpr-compliance",
+          "compliance/policy-compliance"
         ]
       },
       {
         "group": "Architecture",
         "pages": [
           "architecture/overview",
-          "architecture/cdm-compliance"
+          "architecture/design-patterns",
+          "architecture/features"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features/document-extraction",
+          "features/trade-execution",
+          "features/verification",
+          "features/document-generation",
+          "features/applications",
+          "features/recovery",
+          "features/securitization",
+          "features/payment-systems",
+          "features/notarization",
+          "features/signing",
+          "features/dealflow-management",
+          "features/audit-reports",
+          "features/analytics"
         ]
       },
       {
         "group": "API Reference",
         "pages": [
+          "api-reference/overview",
           "api-reference/authentication",
-          "api-reference/documents"
+          "api-reference/documents",
+          "api-reference/trades",
+          "api-reference/policies",
+          "api-reference/green-finance",
+          "api-reference/credit-risk",
+          "api-reference/applications",
+          "api-reference/deals",
+          "api-reference/analytics",
+          "api-reference/recovery",
+          "api-reference/securitization",
+          "api-reference/auditor",
+          "api-reference/gdpr",
+          "api-reference/payments",
+          "api-reference/signatures"
         ]
       },
       {
@@ -65,13 +128,31 @@
           "guides/document-extraction",
           "guides/document-generation",
           "guides/trade-execution",
-          "guides/verification"
+          "guides/verification",
+          "guides/twilio-setup",
+          "guides/digisigner-setup",
+          "guides/metamask-setup",
+          "guides/sentinelhub-setup"
+        ]
+      },
+      {
+        "group": "Roadmap",
+        "pages": [
+          "roadmap/overview"
+        ]
+      },
+      {
+        "group": "Legal",
+        "pages": [
+          "legal/license",
+          "legal/contributing"
         ]
       }
     ]
   },
   "footerSocials": {
-    "github": "https://github.com/yourusername/creditnexus",
-    "linkedin": "https://linkedin.com/company/creditnexus"
+    "github": "https://github.com/fintechtonic",
+    "twitter": "https://x.com/josephpollack",
+    "discord": "https://discord.gg/7YS4Cz2Deq"
   }
 }

@@ -1,0 +1,91 @@
+---
+title: Analytics API
+description: API endpoints for portfolio analytics and dashboard insights
+---
+
+## Analytics API
+
+API endpoints for portfolio analytics, dashboard statistics, and reporting.
+
+**Base Path**: `/api/analytics`  
+**Code Reference**: `app/api/routes.py` (analytics endpoints)
+
+---
+
+## Portfolio Analytics
+
+### Get Portfolio Analytics
+
+<Endpoint method="GET" path="/api/analytics/portfolio" />
+
+Get comprehensive portfolio analytics.
+
+**Response**: Portfolio statistics including:
+- Total portfolio value
+- Active loans count
+- Default rate
+- Average interest rate
+- Geographic distribution
+- ESG breakdown
+- Risk metrics
+
+**Code Reference**: `app/api/routes.py` (get_portfolio_analytics endpoint)
+
+---
+
+## Dashboard Analytics
+
+### Get Dashboard Analytics
+
+<Endpoint method="GET" path="/api/analytics/dashboard" />
+
+Get dashboard statistics and key metrics.
+
+**Response**: Dashboard statistics including:
+- Activity summary
+- Document statistics
+- Policy decision statistics
+- User activity
+- Recent events
+
+**Code Reference**: `app/api/routes.py` (get_dashboard_analytics endpoint)
+
+---
+
+## Template Metrics
+
+### Get Template Metrics
+
+<Endpoint method="GET" path="/api/analytics/template-metrics" />
+
+Get analytics for document template usage.
+
+**Response**: Template usage statistics and metrics
+
+---
+
+## Charts Data
+
+### Get Charts Data
+
+<Endpoint method="GET" path="/api/analytics/charts" />
+
+Get data for dashboard charts and visualizations.
+
+**Query Parameters**:
+- `chart_type`: Type of chart (portfolio, risk, activity, etc.)
+- `date_range`: Date range for data
+
+**Response**: Chart data in format suitable for visualization
+
+---
+
+## Additional Resources
+
+- [Analytics Feature](/features/analytics)
+- [Audit Reports Feature](/features/audit-reports)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/routes.py`

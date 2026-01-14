@@ -1,0 +1,124 @@
+---
+title: Credit Risk API
+description: API endpoints for credit risk assessment and capital requirements
+---
+
+## Credit Risk API
+
+API endpoints for credit risk assessment, capital requirements calculation, portfolio analysis, and stress testing.
+
+**Base Path**: `/api/credit-risk`  
+**Code Reference**: `app/api/credit_risk_routes.py`
+
+---
+
+## Credit Risk Assessment
+
+### Assess Credit Risk
+
+<Endpoint method="POST" path="/api/credit-risk/assess" />
+
+Assess credit risk for a deal or credit agreement.
+
+**Request Body**:
+```json
+{
+  "deal_id": 123,
+  "document_id": 456,
+  "credit_agreement": {...},
+  "additional_context": {
+    "borrower_financials": {...}
+  }
+}
+```
+
+**Response**: Credit risk assessment including:
+- Risk ratings
+- PD/LGD/EAD estimates
+- Risk-weighted assets (RWA)
+- Capital requirements
+- Policy evaluation results
+
+**Code Reference**: `app/api/credit_risk_routes.py` (assess_credit_risk endpoint)
+
+---
+
+## Capital Requirements
+
+### Calculate Capital Requirements
+
+<Endpoint method="POST" path="/api/credit-risk/capital-requirements" />
+
+Calculate Basel III capital requirements.
+
+**Request Body**:
+```json
+{
+  "risk_weighted_assets": 10000000.00,
+  "capital_ratio": 0.08
+}
+```
+
+**Response**: Capital requirements calculation
+
+---
+
+## Portfolio Analysis
+
+### Get Portfolio Summary
+
+<Endpoint method="POST" path="/api/credit-risk/portfolio/summary" />
+
+Get credit risk summary for portfolio.
+
+**Request Body**:
+```json
+{
+  "deal_ids": [1, 2, 3],
+  "user_id": 1
+}
+```
+
+**Response**: Portfolio risk summary including:
+- Total RWA
+- Capital requirements
+- Risk distribution
+- Concentration metrics
+
+---
+
+## Stress Testing
+
+### Run Stress Test
+
+<Endpoint method="POST" path="/api/credit-risk/stress-test" />
+
+Run stress test scenario on a deal.
+
+**Request Body**:
+```json
+{
+  "deal_id": 123,
+  "stress_scenario": "recession",
+  "pd_shock": 1.5,
+  "lgd_shock": 1.2,
+  "market_value_shock": -0.2
+}
+```
+
+**Response**: Stress test results including:
+- Impact on capital requirements
+- Risk rating changes
+- Loss estimates
+
+---
+
+## Additional Resources
+
+- [Policy Compliance](/compliance/policy-compliance)
+- [Configuration Guide](/getting-started/configuration#policy-engine-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/credit_risk_routes.py`

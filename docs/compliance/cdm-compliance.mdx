@@ -1,0 +1,221 @@
+---
+title: CDM Compliance
+description: FINOS Common Domain Model compliance in CreditNexus
+---
+
+## CDM Overview
+
+CreditNexus is fully compliant with the **FINOS Common Domain Model (CDM)**, ensuring interoperability with other financial systems and adherence to industry standards.
+
+**Code Reference**: `app/models/cdm.py`, `app/models/cdm_events.py`, `.cursor/rules/cdm-compliance.mdc`
+
+---
+
+## CDM Models
+
+All financial data is represented using CDM models:
+
+### CreditAgreement
+
+Represents credit facility agreements with parties, facilities, and terms.
+
+**Code Reference**: `app/models/cdm.py` (CreditAgreement model)
+
+### Party
+
+Represents counterparties (borrowers, lenders, guarantors).
+
+**Code Reference**: `app/models/cdm.py` (Party model)
+
+### LoanFacility
+
+Represents individual loan facilities within a credit agreement.
+
+**Code Reference**: `app/models/cdm.py` (LoanFacility model)
+
+### TradeExecution
+
+Represents trade execution events with CDM-compliant structure.
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_trade_execution)
+
+### PolicyEvaluation
+
+Represents policy decision events with evaluation trace.
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_policy_evaluation)
+
+---
+
+## Policy Validation
+
+Policy validation is embedded at the point of data creation using Pydantic model validators:
+
+```python
+@model_validator(mode='after')
+def validate_policy_compliance(self) -> 'CreditAgreement':
+    """CDM-compliant validation at point of creation."""
+    # Policy checks here
+    return self
+```
+
+**Code Reference**: `app/models/cdm.py` (model validators), `.cursor/rules/cdm-compliance.mdc`
+
+---
+
+## CDM Events
+
+All state changes and policy decisions are stored as CDM events:
+
+### TradeExecution Events
+
+Record trade executions with CDM-compliant structure:
+
+```python
+trade_event = generate_cdm_trade_execution(
+    trade_id="TRADE_001",
+    borrower="ACME Corp",
+    amount=1000000.00,
+    rate=5.25
+)
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_trade_execution)
+
+### PolicyEvaluation Events
+
+Record policy decisions with evaluation trace:
+
+```python
+policy_event = generate_cdm_policy_evaluation(
+    transaction_id="DEAL_2024_001",
+    transaction_type="facility_creation",
+    decision="BLOCK",  # or "ALLOW", "FLAG"
+    rule_applied="block_sanctioned_parties",
+    related_event_identifiers=[],
+    evaluation_trace=[...]
+)
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_policy_evaluation)
+
+### Observation Events
+
+Record observations and verifications:
+
+- Loan default observations
+- Recovery action observations
+- Verification results
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_observation, generate_cdm_loan_default)
+
+---
+
+## Event Structure
+
+CDM events include required fields:
+
+- **`eventType`**: Type of event (e.g., "TradeExecution", "PolicyEvaluation", "Observation")
+- **`eventDate`**: ISO 8601 timestamp
+- **`meta.globalKey`**: Unique identifier with issuer and assignedIdentifier
+- **`relatedEventIdentifier`**: Links to related events
+
+**Code Reference**: `app/models/cdm_events.py` (all event generators)
+
+---
+
+## CDM Compliance Principles
+
+### 1. Validation at Creation
+
+All CDM models validate policy compliance at the point of creation:
+
+```python
+class CreditAgreement(BaseModel):
+    # ... fields ...
+    
+    @model_validator(mode='after')
+    def validate_policy_compliance(self) -> 'CreditAgreement':
+        """CDM-compliant validation at point of creation."""
+        # Check sanctioned parties
+        if self.parties:
+            for party in self.parties:
+                if party.lei and self._is_sanctioned(party.lei):
+                    raise ValueError(f"Party {party.name} is sanctioned")
+        return self
+```
+
+**Code Reference**: `.cursor/rules/cdm-compliance.mdc`
+
+### 2. Event Generation
+
+All policy decisions generate CDM events:
+
+```python
+# Policy evaluation
+policy_result = policy_service.evaluate_facility_creation(agreement)
+
+# Create CDM event
+policy_event = generate_cdm_policy_evaluation(
+    transaction_id=agreement.deal_id,
+    transaction_type="facility_creation",
+    decision=policy_result.decision,
+    rule_applied=policy_result.rule_applied,
+    related_event_identifiers=[],
+    evaluation_trace=policy_result.trace
+)
+```
+
+**Code Reference**: `app/services/policy_service.py`, `app/models/cdm_events.py`
+
+### 3. State Machine Pattern
+
+All state transitions use CDM-compliant state machine pattern:
+
+- States are CDM-compliant
+- Transitions generate CDM events
+- State history is maintained
+
+**Code Reference**: `.cursor/rules/cdm-compliance.mdc`
+
+---
+
+## CDM Event Storage
+
+CDM events are stored in the database as JSONB:
+
+```python
+class PolicyDecision(Base):
+    __tablename__ = "policy_decisions"
+    
+    cdm_events: Mapped[dict] = mapped_column(JSONB)  # Store full CDM events
+```
+
+**Code Reference**: `app/db/models.py` (PolicyDecision, LoanDefault, RecoveryAction models)
+
+---
+
+## Compliance Checklist
+
+- ✅ CDM model definitions (CreditAgreement, Party, LoanFacility)
+- ✅ CDM event generation (TradeExecution, PolicyEvaluation, Observation)
+- ✅ Policy validation at creation point
+- ✅ Event storage in database (JSONB)
+- ✅ ISO 8601 date formatting
+- ✅ Global key generation
+- ✅ Related event linking
+
+---
+
+## Additional Resources
+
+- [FINOS CDM Documentation](https://www.finos.org/common-domain-model)
+- [CDM Compliance Rules](../../.cursor/rules/cdm-compliance.mdc)
+- [Policy Compliance](/compliance/policy-compliance)
+- [CDM Events Implementation](../../app/models/cdm_events.py)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Standard**: FINOS CDM  
+**Code Reference**: `app/models/cdm.py`, `app/models/cdm_events.py`, `.cursor/rules/cdm-compliance.mdc`

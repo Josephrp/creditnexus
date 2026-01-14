@@ -1,0 +1,282 @@
+---
+title: Blockchain Notarization
+description: Immutable document notarization using smart contracts on Base network
+---
+
+## Overview
+
+CreditNexus provides blockchain-based notarization for documents and deals using smart contracts on the Base network. This enables immutable, multi-party signing with MetaMask integration and x402 payment processing.
+
+**Code Reference**: `app/services/notarization_service.py`, `app/api/remote_routes.py`, `contracts/SecuritizationNotarization.sol`  
+**Frontend**: `client/src/components/NotarizationModal.tsx`
+
+---
+
+## Key Features
+
+### Multi-Party Signing
+
+- **Required Signers**: Define multiple required signers
+- **MetaMask Integration**: Each signer signs with their MetaMask wallet
+- **Signature Verification**: Ethereum signature verification
+- **Completion Tracking**: Track signing progress
+
+**Code Reference**: `app/api/remote_routes.py` (notarization endpoints)
+
+### Smart Contract Integration
+
+- **SecuritizationNotarization Contract**: Smart contract on Base network
+- **Immutable Records**: Blockchain-based transaction records
+- **Event Emission**: Smart contract events for notarization
+- **Hash Verification**: CDM payload hash verification
+
+**Code Reference**: `contracts/SecuritizationNotarization.sol`
+
+### x402 Payment Integration
+
+- **Notarization Fees**: Optional payment for notarization services
+- **USDC Payments**: Payments in USDC stablecoin
+- **Payment Skipping**: Admin users can skip payment requirement
+- **Payment Status**: Track payment completion
+
+**Code Reference**: `app/services/x402_payment_service.py`, `client/src/components/NotarizationPayment.tsx`
+
+---
+
+## Workflow
+
+### 1. Create Notarization Request
+
+1. **Select Document/Deal**: Choose document or deal to notarize
+2. **Add Signers**: Add required signer wallet addresses
+3. **Configure Message**: Set custom message prefix
+4. **Create Request**: Generate notarization record
+5. **Payment**: Process x402 payment (if required)
+
+### 2. Sign Notarization
+
+1. **Get Nonce**: Retrieve signing nonce for wallet address
+2. **Sign Message**: Sign message with MetaMask
+3. **Submit Signature**: Submit signature to API
+4. **Verification**: System verifies Ethereum signature
+5. **Completion**: Check if all signers have signed
+
+### 3. Complete Notarization
+
+1. **All Signatures**: All required signers have signed
+2. **Blockchain Submission**: Submit to smart contract (if enabled)
+3. **CDM Event**: Generate CDM notarization event
+4. **Status Update**: Update notarization status to "signed"
+
+---
+
+## API Endpoints
+
+### Create Notarization
+
+<Endpoint method="POST" path="/api/remote/deals/{deal_id}/notarize" />
+
+Create a notarization request for a deal.
+
+**Request Body**:
+```json
+{
+  "required_signers": ["0x...", "0x..."],
+  "message_prefix": "CreditNexus Notarization",
+  "auto_hydrate_deal": true,
+  "skip_payment": false
+}
+```
+
+**Response (402 Payment Required)**:
+```json
+{
+  "status_code": 402,
+  "status": "Payment Required",
+  "notarization_id": 123,
+  "payment_request": {...}
+}
+```
+
+**Code Reference**: `app/api/remote_routes.py`
+
+### Get Notarization Nonce
+
+<Endpoint method="GET" path="/api/remote/notarization/{notarization_id}/nonce" />
+
+Get signing nonce for a wallet address.
+
+**Query Parameters**:
+- `wallet_address`: Wallet address to get nonce for
+
+**Response**:
+```json
+{
+  "message": "CreditNexus Notarization\nNonce: 12345\n...",
+  "nonce": "12345",
+  "notarization_hash": "0x..."
+}
+```
+
+### Sign Notarization
+
+<Endpoint method="POST" path="/api/remote/notarization/{notarization_id}/sign" />
+
+Sign a notarization with MetaMask signature.
+
+**Request Body**:
+```json
+{
+  "wallet_address": "0x...",
+  "signature": "0x...",
+  "message": "CreditNexus Notarization\n..."
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "notarization_status": "signed",
+  "signatures_count": 2,
+  "signers_remaining": 0
+}
+```
+
+---
+
+## Smart Contract
+
+### SecuritizationNotarization Contract
+
+**Location**: `contracts/SecuritizationNotarization.sol`
+
+**Functions**:
+- `createNotarization()`: Create new notarization request
+- `addSignature()`: Add signature to notarization
+- `completeNotarization()`: Complete notarization when all signers have signed
+
+**Events**:
+- `NotarizationCreated`: Emitted when notarization is created
+- `SignatureAdded`: Emitted when signature is added
+- `NotarizationCompleted`: Emitted when notarization is completed
+
+**Code Reference**: `contracts/SecuritizationNotarization.sol`
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="SECURITIZATION_NOTARIZATION_CONTRACT" type="string">
+  SecuritizationNotarization contract address (auto-deployed if empty)
+</ParamField>
+
+<ParamField body="NOTARIZATION_FEE_ENABLED" type="boolean">
+  Enable notarization fees. Default: `true`
+</ParamField>
+
+<ParamField body="NOTARIZATION_FEE_AMOUNT" type="decimal">
+  Default notarization fee in USD. Default: `50.00`
+</ParamField>
+
+<ParamField body="NOTARIZATION_FEE_ADMIN_SKIP" type="boolean">
+  Allow admin users to skip payment requirement. Default: `true`
+</ParamField>
+
+**Setup Guide**: See [MetaMask Setup Guide](/guides/metamask-setup)
+
+---
+
+## User Interface
+
+### Notarization Modal
+
+**Location**: `client/src/components/NotarizationModal.tsx`
+
+**Features**:
+- **Signer Management**: Add/remove required signers
+- **Wallet Connection**: Connect MetaMask wallet
+- **Payment Processing**: Handle x402 payment flow
+- **Status Display**: Show signing progress
+- **Completion Handling**: Handle notarization completion
+
+**Access**: Available from document and deal detail views
+
+---
+
+## CDM Event Integration
+
+All notarizations generate CDM-compliant events:
+
+```json
+{
+  "eventType": "SecuritizationNotarization",
+  "eventDate": "2026-01-15T10:00:00Z",
+  "securitizationNotarization": {
+    "poolIdentifier": {
+      "issuer": "CreditNexus",
+      "assignedIdentifier": [{"identifier": {"value": "pool_123"}}]
+    },
+    "notarizationHash": "0x...",
+    "signers": ["0x...", "0x..."],
+    "blockchainTransactionHash": "0x...",
+    "notarizationDate": {"date": "2026-01-15"}
+  }
+}
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_securitization_notarization)
+
+---
+
+## Security Considerations
+
+1. **Signature Verification**: All signatures verified using Ethereum signature verification
+2. **Nonce Protection**: Nonces prevent replay attacks
+3. **Signer Validation**: Only required signers can sign
+4. **Hash Verification**: CDM payload hash verified
+5. **Blockchain Immutability**: Once notarized, records are immutable
+
+---
+
+## Best Practices
+
+1. **Signer Selection**: Choose appropriate signers for each notarization
+2. **Message Clarity**: Use clear, descriptive message prefixes
+3. **Payment Handling**: Process payments before notarization
+4. **Status Monitoring**: Monitor notarization status
+5. **CDM Compliance**: Ensure all notarizations generate CDM events
+
+---
+
+## Troubleshooting
+
+### Signature Verification Fails
+
+- Verify wallet address matches signer address
+- Check message format matches exactly
+- Verify signature format is correct
+- Ensure nonce is current
+
+### Payment Not Processing
+
+- Verify MetaMask is connected
+- Check network is set to Base
+- Verify USDC balance in wallet
+- Check payment payload format
+
+---
+
+## Additional Resources
+
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [Payment Systems Feature](/features/payment-systems)
+- [Configuration Guide](/getting-started/configuration#blockchain--smart-contract-configuration)
+- [CDM Compliance](/compliance/cdm-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/notarization_service.py`, `app/api/remote_routes.py`, `contracts/SecuritizationNotarization.sol`

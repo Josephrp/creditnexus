@@ -1,0 +1,161 @@
+---
+title: Recovery API
+description: API endpoints for loan recovery and default management
+---
+
+## Recovery API
+
+API endpoints for loan recovery, default detection, recovery actions, and borrower contact management.
+
+**Base Path**: `/api/recovery`  
+**Code Reference**: `app/api/recovery_routes.py`
+
+---
+
+## Default Management
+
+### List Defaults
+
+<Endpoint method="GET" path="/api/recovery/defaults" />
+
+List all loan defaults with filtering.
+
+**Query Parameters**:
+- `status`: Filter by default status
+- `loan_id`: Filter by loan ID
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of defaults
+
+**Code Reference**: `app/api/recovery_routes.py` (list_defaults endpoint)
+
+### Get Default Details
+
+<Endpoint method="GET" path="/api/recovery/defaults/{default_id}" />
+
+Get detailed information about a specific default.
+
+**Response**: Complete default information
+
+### Detect Defaults
+
+<Endpoint method="POST" path="/api/recovery/defaults/detect" />
+
+Automatically detect new defaults based on payment status.
+
+**Response**: List of newly detected defaults
+
+---
+
+## Recovery Actions
+
+### Create Recovery Action
+
+<Endpoint method="POST" path="/api/recovery/defaults/{default_id}/actions" />
+
+Create a recovery action for a default.
+
+**Request Body**:
+```json
+{
+  "action_type": "sms",
+  "message": "Your loan payment is overdue",
+  "scheduled_at": "2026-01-15T10:00:00Z"
+}
+```
+
+**Response**: Created recovery action
+
+### List Recovery Actions
+
+<Endpoint method="GET" path="/api/recovery/actions" />
+
+List all recovery actions with filtering.
+
+**Query Parameters**:
+- `default_id`: Filter by default ID
+- `action_type`: Filter by action type
+- `status`: Filter by status
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of recovery actions
+
+### Get Recovery Action Details
+
+<Endpoint method="GET" path="/api/recovery/actions/{action_id}" />
+
+Get detailed information about a recovery action.
+
+**Response**: Complete recovery action details
+
+### Execute Recovery Action
+
+<Endpoint method="POST" path="/api/recovery/actions/{action_id}/execute" />
+
+Execute a recovery action (send SMS, make call, etc.).
+
+**Response**: Execution result with status
+
+---
+
+## Borrower Contacts
+
+### List Borrower Contacts
+
+<Endpoint method="GET" path="/api/recovery/contacts" />
+
+List all borrower contacts.
+
+**Query Parameters**:
+- `loan_id`: Filter by loan ID
+- `default_id`: Filter by default ID
+
+**Response**: List of borrower contacts
+
+### Create Borrower Contact
+
+<Endpoint method="POST" path="/api/recovery/contacts" />
+
+Create a new borrower contact record.
+
+**Request Body**:
+```json
+{
+  "loan_id": "LOAN_001",
+  "contact_name": "John Doe",
+  "phone_number": "+1234567890",
+  "email": "borrower@example.com"
+}
+```
+
+**Response**: Created contact
+
+### Update Borrower Contact
+
+<Endpoint method="PUT" path="/api/recovery/contacts/{contact_id}" />
+
+Update a borrower contact.
+
+**Request Body**:
+```json
+{
+  "phone_number": "+1234567890",
+  "email": "newemail@example.com"
+}
+```
+
+**Response**: Updated contact
+
+---
+
+## Additional Resources
+
+- [Recovery Feature](/features/recovery)
+- [Twilio Setup Guide](/guides/twilio-setup)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/recovery_routes.py`

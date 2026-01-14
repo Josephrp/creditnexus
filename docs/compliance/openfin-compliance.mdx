@@ -1,0 +1,202 @@
+---
+title: OpenFin Compliance
+description: OpenFin Runtime integration and compliance
+---
+
+## OpenFin Integration
+
+CreditNexus provides native integration with **OpenFin Runtime** for enterprise desktop deployment with FDC3 2.0 interoperability.
+
+**Code Reference**: `openfin/app.json`, `openfin/fdc3-intents.json`, `openfin/provider.json`, `openfin/README.md`
+
+---
+
+## OpenFin Configuration
+
+### Application Manifest
+
+**File**: `openfin/app.json`
+
+**Key Configuration**:
+- **Platform UUID**: `creditnexus-platform`
+- **FDC3 2.0 API**: `fdc3InteropApi: "2.0"`
+- **Runtime Version**: `"stable"` (automatic latest stable)
+- **Security Realm**: `creditnexus`
+
+**Code Reference**: `openfin/app.json` (lines 1-64)
+
+### FDC3 Intent Declarations
+
+**File**: `openfin/fdc3-intents.json`
+
+Defines:
+- Application metadata (appId, version, categories)
+- Intent listeners and raisers
+- Custom context type schemas
+- User and app channel configurations
+
+**Code Reference**: `openfin/fdc3-intents.json`
+
+### Service Provider Configuration
+
+**File**: `openfin/provider.json`
+
+Configures:
+- App directory hosting
+- Channel management
+- FDC3 intent routing
+
+**Code Reference**: `openfin/provider.json`
+
+---
+
+## Runtime Requirements
+
+### Minimum Runtime Version
+
+- **FDC3 2.0 Support**: Requires OpenFin Runtime 29.108.73 or later
+- **FDC3 1.2 Support**: Requires OpenFin Runtime 21.93.65 or later
+
+The manifest uses `"version": "stable"` which automatically downloads the latest stable runtime, ensuring FDC3 2.0 compatibility.
+
+**Code Reference**: `openfin/app.json` (line 60), `openfin/README.md` (lines 40-44)
+
+---
+
+## FDC3 Integration
+
+This configuration uses OpenFin's **built-in FDC3 API** (not the deprecated FDC3 service):
+
+```json
+{
+  "platform": {
+    "defaultViewOptions": {
+      "fdc3InteropApi": "2.0"
+    }
+  }
+}
+```
+
+**Benefits**:
+- Native FDC3 2.0 support without external services
+- Better performance and reliability
+- Automatic compatibility with OpenFin Workspace
+
+**Code Reference**: `openfin/app.json` (lines 13-15), `openfin/README.md` (lines 46-62)
+
+---
+
+## Supported FDC3 Intents
+
+### Listens For (Incoming)
+
+- `ViewLoan` - Display loan details
+- `ViewDeal` - Display deal information
+- `ExtractDocument` - Extract document data
+
+### Raises (Outgoing)
+
+- `ViewLoan` - Request loan view
+- `ViewDeal` - Request deal view
+- `ExecuteTrade` - Execute trade
+
+**Code Reference**: `openfin/fdc3-intents.json`, `openfin/README.md` (lines 64-208)
+
+---
+
+## Deployment
+
+### Quick Start
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\run_openfin.ps1
+```
+
+**Mac/Linux:**
+```bash
+bash scripts/run_openfin.sh
+```
+
+This script:
+1. Starts backend server on `http://127.0.0.1:8000`
+2. Starts frontend dev server on `http://localhost:5173`
+3. Launches OpenFin with configured app manifest
+
+**Code Reference**: `README.md` (lines 539-556), `scripts/run_openfin.ps1`, `scripts/run_openfin.sh`
+
+### Production Deployment
+
+1. **Build frontend**:
+   ```bash
+   cd client
+   npm run build
+   ```
+
+2. **Update manifest URL**: Replace `${APP_URL}` with production URL
+3. **Deploy manifest**: Host `openfin/app.json` at accessible URL
+4. **Configure OpenFin**: Point OpenFin to manifest URL
+
+---
+
+## Configuration Variables
+
+All configuration files use `${APP_URL}` as a placeholder. Replace with your deployment URL:
+
+```bash
+# Replace placeholders
+sed -i 's|\${APP_URL}|https://your-app.domain.com|g' openfin/*.json
+```
+
+**Code Reference**: `openfin/README.md` (lines 28-36)
+
+---
+
+## Troubleshooting
+
+### "Port Discovery is taking a while"
+
+OpenFin runtime is downloading for the first time. Wait for completion.
+
+**Check RVM log**: `%LocalAppData%\openfin\logs\rvm.log`
+
+### "Not able to fetch the required assets"
+
+- Verify manifest URL is accessible
+- Check runtime version exists (using "stable" avoids this)
+- Ensure no firewall blocking OpenFin CDN downloads
+
+### FDC3 not working
+
+- Verify runtime version is 29.108.73 or later for FDC3 2.0
+- Check `fdc3InteropApi: "2.0"` is in platform config
+- Ensure app is properly registered in FDC3 app directory
+
+**Code Reference**: `openfin/README.md` (lines 209-226)
+
+---
+
+## Compliance Checklist
+
+- ✅ OpenFin Runtime integration
+- ✅ FDC3 2.0 API support
+- ✅ App directory registration
+- ✅ Intent handling
+- ✅ Context broadcasting
+- ✅ Channel management
+- ✅ Security realm configuration
+
+---
+
+## Additional Resources
+
+- [OpenFin Documentation](https://developers.openfin.co/)
+- [FDC3 Compliance](/compliance/fdc3-compliance)
+- [OpenFin Deployment Guide](../../openfin/README.md)
+- [System Interoperability](../../README.md#-system-interoperability-fdc3)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Runtime**: OpenFin Runtime (stable)  
+**Code Reference**: `openfin/app.json`, `openfin/fdc3-intents.json`, `openfin/provider.json`, `openfin/README.md`

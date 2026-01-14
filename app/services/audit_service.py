@@ -203,7 +203,7 @@ class AuditService:
                     "created_at": deal.created_at.isoformat() if deal.created_at else None,
                     "updated_at": deal.updated_at.isoformat() if deal.updated_at else None,
                 },
-                "audit_logs": [self._enrich_audit_log(log) for log in all_logs],
+                "audit_logs": [self._enrich_audit_log(log, db) for log in all_logs],
                 "policy_decisions": [pd.to_dict() for pd in policy_decisions],
                 "summary": {
                     "total_logs": len(all_logs),
@@ -290,7 +290,7 @@ class AuditService:
                     "created_at": loan.created_at.isoformat() if loan.created_at else None,
                     "last_verified_at": loan.last_verified_at.isoformat() if loan.last_verified_at else None,
                 },
-                "audit_logs": [self._enrich_audit_log(log) for log in all_logs],
+                "audit_logs": [self._enrich_audit_log(log, db) for log in all_logs],
                 "policy_decisions": [pd.to_dict() for pd in policy_decisions],
                 "verification_logs": [log.to_dict() for log in verification_logs],
                 "summary": {
@@ -399,6 +399,50 @@ class AuditService:
         except Exception as e:
             logger.error(f"Failed to get related audit events: {e}", exc_info=True)
             raise
+
+    def get_cdm_events(
+        self,
+        db: Session,
+        event_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Query all machine-executable CDM events across the platform.
+        """
+        try:
+            from app.db.models import PolicyDecision
+            
+            # For now, we mainly extract from PolicyDecision.cdm_events
+            # In a more mature system, we'd have a dedicated CDMEvents table
+            query = db.query(PolicyDecision.cdm_events, PolicyDecision.created_at).filter(PolicyDecision.cdm_events.isnot(None))
+            
+            # Ordering and pagination
+            total = query.count()
+            results = query.order_by(PolicyDecision.created_at.desc()).offset(offset).limit(limit).all()
+            
+            all_events = []
+            for events_json, created_at in results:
+                if not events_json:
+                    continue
+                
+                event_list = events_json if isinstance(events_json, list) else [events_json]
+                for event in event_list:
+                    # Skip if filtering by type
+                    if event_type and event.get("eventType") != event_type:
+                        continue
+                        
+                    all_events.append({
+                        "eventType": event.get("eventType", "Unknown"),
+                        "eventDate": event.get("eventDate") or created_at.isoformat(),
+                        "meta": event.get("meta"),
+                        "payload": event
+                    })
+            
+            return all_events, len(all_events)
+        except Exception as e:
+            logger.error(f"Failed to query CDM events: {e}", exc_info=True)
+            return [], 0
     
     def enrich_audit_log(
         self,
@@ -415,14 +459,15 @@ class AuditService:
         Returns:
             Enriched audit log dictionary
         """
-        return self._enrich_audit_log(audit_log)
+        return self._enrich_audit_log(audit_log, db)
     
-    def _enrich_audit_log(self, audit_log: AuditLog) -> Dict[str, Any]:
+    def _enrich_audit_log(self, audit_log: AuditLog, db: Optional[Session] = None) -> Dict[str, Any]:
         """
         Internal method to enrich audit log with related entity details.
         
         Args:
             audit_log: AuditLog instance
+            db: Optional database session for fetching related entities
             
         Returns:
             Enriched audit log dictionary
@@ -441,12 +486,34 @@ class AuditService:
             result["user"] = None
         
         # Add related entity information based on target_type
-        if audit_log.target_type and audit_log.target_id:
-            # This would require additional queries, so we'll add a placeholder
-            # that can be expanded later
-            result["related_entity"] = {
+        if audit_log.target_type and audit_log.target_id and db:
+            entity_info = {
                 "type": audit_log.target_type,
-                "id": audit_log.target_id
+                "id": audit_log.target_id,
+                "name": f"{audit_log.target_type.capitalize()} #{audit_log.target_id}"
             }
+            
+            # Fetch human-readable name for common types
+            try:
+                if audit_log.target_type == "deal":
+                    deal = db.query(Deal).filter(Deal.id == audit_log.target_id).first()
+                    if deal:
+                        entity_info["name"] = deal.deal_id
+                elif audit_log.target_type == "document":
+                    doc = db.query(Document).filter(Document.id == audit_log.target_id).first()
+                    if doc:
+                        entity_info["name"] = doc.title or doc.filename
+                elif audit_log.target_type == "workflow":
+                    wf = db.query(Workflow).filter(Workflow.id == audit_log.target_id).first()
+                    if wf and wf.document:
+                        entity_info["name"] = f"Workflow: {wf.document.title or wf.document.filename}"
+                elif audit_log.target_type == "user":
+                    target_user = db.query(User).filter(User.id == audit_log.target_id).first()
+                    if target_user:
+                        entity_info["name"] = target_user.display_name or target_user.email
+            except Exception as e:
+                logger.warning(f"Failed to enrich related entity {audit_log.target_type}:{audit_log.target_id}: {e}")
+                
+            result["related_entity"] = entity_info
         
         return result

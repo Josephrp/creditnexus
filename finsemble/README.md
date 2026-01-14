@@ -37,7 +37,7 @@ Replace `${APP_URL}` placeholder with your deployed CreditNexus URL:
 
 ```bash
 # Example for production
-export APP_URL=https://creditnexus.your-domain.com
+export APP_URL=https://josephrp.github.io/creditnexus
 
 # Replace in config files
 sed -i 's|\${APP_URL}|'"$APP_URL"'|g' finsemble/appConfig.json

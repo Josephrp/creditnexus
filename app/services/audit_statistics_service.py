@@ -331,6 +331,55 @@ class AuditStatisticsService:
         except Exception as e:
             logger.error(f"Failed to get policy decision summary: {e}", exc_info=True)
             raise
+
+    def get_cdm_event_statistics(
+        self,
+        db: Session,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get statistics for machine-executable CDM events.
+        
+        Scans PolicyDecision, GreenFinanceAssessment and other models for CDM JSON.
+        """
+        try:
+            from app.db.models import PolicyDecision
+            
+            # Count by eventType in PolicyDecision.cdm_events
+            # This is a bit complex with JSONB, so we'll do it in memory for now
+            # In production, this should be a optimized SQL query
+            
+            query = db.query(PolicyDecision.cdm_events).filter(PolicyDecision.cdm_events.isnot(None))
+            if start_date:
+                query = query.filter(PolicyDecision.created_at >= start_date)
+            if end_date:
+                query = query.filter(PolicyDecision.created_at <= end_date)
+                
+            results = query.all()
+            
+            event_counts = {}
+            total_events = 0
+            
+            for (events_json,) in results:
+                if not events_json:
+                    continue
+                
+                # events_json can be a list or a single dict
+                event_list = events_json if isinstance(events_json, list) else [events_json]
+                
+                for event in event_list:
+                    event_type = event.get("eventType", "Unknown")
+                    event_counts[event_type] = event_counts.get(event_type, 0) + 1
+                    total_events += 1
+            
+            return {
+                "total_cdm_events": total_events,
+                "event_type_distribution": event_counts
+            }
+        except Exception as e:
+            logger.error(f"Failed to get CDM event statistics: {e}", exc_info=True)
+            return {"total_cdm_events": 0, "event_type_distribution": {}}
     
     def get_anomaly_detection(
         self,

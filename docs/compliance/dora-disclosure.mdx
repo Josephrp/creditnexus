@@ -1,0 +1,160 @@
+---
+title: DORA Compliance Disclosure
+description: Digital Operational Resilience Act (DORA) compliance information
+---
+
+## DORA Compliance Disclosure
+
+**Digital Operational Resilience Act (DORA) - European Union Regulation**
+
+CreditNexus acknowledges the requirements of the Digital Operational Resilience Act (Regulation (EU) 2022/2554), which establishes cybersecurity requirements for financial entities in the European Union.
+
+---
+
+## Application Status
+
+This application is provided as a **non-production demonstration**. However, users should be aware that:
+
+- Transactions executed through this system may be **live and executory**
+- Digital signatures applied through this system have **real legal implications**
+- All signees are **legally bound** by transactions based on system configuration
+- Users are responsible for understanding the **regulatory and legal implications** of their use
+
+---
+
+## Cybersecurity Measures
+
+CreditNexus implements the following cybersecurity measures to align with DORA requirements:
+
+### Network Security
+
+- **SSL/TLS Encryption**: All API communications use HTTPS/TLS encryption
+- **Database SSL**: Production database connections require SSL/TLS (`DB_SSL_REQUIRED=true`)
+- **Firewall Rules**: Network-level security controls
+- **Rate Limiting**: API rate limiting to prevent abuse
+
+**Code Reference**: `docs/SECURITY.md` (lines 129-227), `app/core/config.py` (database SSL configuration)
+
+### Authentication & Authorization
+
+- **JWT-based Authentication**: Secure token-based authentication
+- **Role-Based Access Control (RBAC)**: Granular permission system
+- **Password Security**: Bcrypt hashing with SHA-256 pre-hashing
+- **Session Management**: Configurable token expiration
+
+**Code Reference**: `app/auth/jwt_auth.py`, `app/core/permissions.py`
+
+### Audit Logging
+
+- **Complete Audit Trail**: All state-changing operations are logged
+- **7-Year Retention**: Audit logs retained for 7 years (regulatory requirement)
+- **CDM Event Logging**: All policy decisions stored as CDM events
+
+**Code Reference**: `app/utils/audit.py`, `app/db/models.py` (AuditLog model)
+
+### Policy-as-Code Enforcement
+
+- **Real-time Compliance**: Policy engine enforces compliance at transaction time
+- **Deterministic Rules**: Policy rules are deterministic and auditable
+- **18+ Policy Rules**: Comprehensive policy coverage (sanctions, credit risk, ESG, green finance)
+
+**Code Reference**: `app/services/policy_service.py`, `app/policies/`
+
+---
+
+## DORA Article Compliance
+
+### Article 8: Secure Communication Channels
+
+✅ **Implemented**: SSL/TLS encryption for all API communications and database connections
+
+**Code Reference**: `docs/SECURITY.md` (Database SSL section)
+
+### Article 9: Incident Response
+
+✅ **Implemented**: Incident response plan and vulnerability management process
+
+**Code Reference**: `docs/INCIDENT_RESPONSE.md`, `docs/VULNERABILITY_MANAGEMENT.md`
+
+### Article 10: Business Continuity
+
+⚠️ **In Progress**: Business continuity plan documentation
+
+### Article 11: Third-Party Risk Management
+
+⚠️ **In Progress**: Third-party risk assessment framework
+
+---
+
+## Security Testing
+
+CreditNexus includes security testing in CI/CD:
+
+- **Bandit**: Python security linting
+- **Semgrep**: Security pattern detection
+- **pip-audit**: Dependency vulnerability scanning
+- **Safety**: Additional dependency security checks
+- **detect-secrets**: Secret detection in code
+
+**Code Reference**: `pyproject.toml` (lines 115-121), `.github/workflows/security.yml` (if exists)
+
+---
+
+## Data Protection
+
+### Encryption
+
+- **At Rest**: Database server encryption (PostgreSQL)
+- **In Transit**: SSL/TLS for all communications
+- **Secrets Management**: Pydantic `SecretStr` for API keys
+
+### Access Controls
+
+- **Role-Based Permissions**: Granular access control
+- **Audit Logging**: All access logged
+- **Data Minimization**: Only necessary data collected
+
+**Code Reference**: `docs/SECURITY.md` (Data Protection section)
+
+---
+
+## Compliance Status
+
+### ✅ Implemented
+
+- Security testing in CI/CD
+- Vulnerability management process
+- Incident response plan
+- SSL/TLS encryption
+- Audit logging
+- Policy-as-code enforcement
+
+### ⚠️ In Progress
+
+- Business continuity plan
+- Third-party risk assessment
+- Operational resilience documentation
+
+---
+
+## Contact
+
+For production deployment inquiries and compliance certifications, please contact:
+
+- **Security Team**: security@creditnexus.com
+- **General Inquiries**: info@creditnexus.com
+
+---
+
+## Additional Resources
+
+- [Security Documentation](/docs/SECURITY.md)
+- [Incident Response Plan](/docs/INCIDENT_RESPONSE.md)
+- [Vulnerability Management](/docs/VULNERABILITY_MANAGEMENT.md)
+- [Configuration Guide](/getting-started/configuration#database-ssl-tls-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Regulation**: Regulation (EU) 2022/2554 (DORA)  
+**Code Reference**: `docs/SECURITY.md`, `app/core/config.py`, `app/auth/jwt_auth.py`

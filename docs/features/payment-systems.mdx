@@ -1,0 +1,274 @@
+---
+title: Payment Systems (x402)
+description: Blockchain-based payment processing using x402 protocol and USDC
+---
+
+## Overview
+
+CreditNexus integrates with the x402 payment protocol for blockchain-based payment processing using USDC stablecoin on the Base network. The system provides CDM-compliant payment interfaces for loan disbursements, trade settlements, interest payments, and penalties.
+
+**Code Reference**: `app/services/x402_payment_service.py`, `app/api/routes.py` (x402 endpoints), `client/src/hooks/useX402Payment.ts`
+
+---
+
+## x402 Protocol
+
+The x402 protocol is a standard for HTTP 402 "Payment Required" responses that enables seamless payment processing in web applications. CreditNexus implements x402 for:
+
+- **Loan Disbursements**: Automated loan funding
+- **Trade Settlements**: Payment for trade executions
+- **Interest Payments**: Periodic interest distributions
+- **Penalties**: Late payment fees and penalties
+- **Notarization Fees**: Payment for blockchain notarization
+
+---
+
+## Key Features
+
+### Payment Request Generation
+
+Generate HTTP 402 responses with payment instructions:
+
+```python
+payment_request = await x402_service.request_payment(
+    amount=Decimal("1000.00"),
+    currency=Currency.USD,
+    payer=borrower_party,
+    receiver=lender_party,
+    payment_type="loan_disbursement"
+)
+```
+
+**Code Reference**: `app/services/x402_payment_service.py` (request_payment)
+
+### Payment Verification
+
+Verify payment completion on the blockchain:
+
+```python
+verification = await x402_service.verify_payment(
+    payment_payload=payment_data
+)
+```
+
+**Code Reference**: `app/services/x402_payment_service.py` (verify_payment)
+
+### CDM Integration
+
+All payments are CDM-compliant:
+- **Money Objects**: Use CDM Money type
+- **Party References**: Link to CDM Party objects
+- **Event Tracking**: Generate CDM payment events
+
+**Code Reference**: `app/models/cdm.py` (Money, Currency, Party)
+
+---
+
+## Base Network Integration
+
+### Network Configuration
+
+CreditNexus uses Base network (Coinbase Layer 2) for payments:
+
+- **Mainnet**: `https://mainnet.base.org` (production)
+- **Sepolia Testnet**: `https://sepolia.base.org` (development)
+
+**Code Reference**: `app/core/config.py` (X402_NETWORK_RPC_URL)
+
+### USDC Token
+
+Payments use USDC stablecoin on Base network:
+
+- **Mainnet Address**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- **Sepolia Address**: Check Base Sepolia documentation
+
+**Code Reference**: `app/core/config.py` (USDC_TOKEN_ADDRESS)
+
+---
+
+## Workflow
+
+### 1. Payment Request
+
+1. **Generate Request**: System generates x402 payment request
+2. **Return 402 Response**: API returns HTTP 402 with payment instructions
+3. **Client Processing**: Frontend receives payment request
+4. **Wallet Connection**: User connects MetaMask wallet
+5. **Payment Approval**: User approves payment in wallet
+
+### 2. Payment Execution
+
+1. **Submit Payment**: Client submits payment via x402 facilitator
+2. **Blockchain Transaction**: Payment processed on Base network
+3. **Transaction Hash**: Receive blockchain transaction hash
+4. **Verification**: System verifies payment on blockchain
+5. **Settlement**: Complete payment settlement
+
+### 3. Payment Confirmation
+
+1. **CDM Event**: Generate CDM payment event
+2. **Database Update**: Update payment records
+3. **Notification**: Notify relevant parties
+4. **Audit Log**: Record in audit trail
+
+---
+
+## API Integration
+
+### Trade Settlement with x402
+
+<Endpoint method="POST" path="/api/trades/{trade_id}/settle" />
+
+Settle a trade with x402 payment. Returns HTTP 402 if payment required.
+
+**Request**:
+```json
+{
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }
+}
+```
+
+**Response (402 Payment Required)**:
+```json
+{
+  "status_code": 402,
+  "status": "Payment Required",
+  "payment_request": {
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "payer": {...},
+    "receiver": {...}
+  },
+  "facilitator_url": "https://facilitator.x402.org"
+}
+```
+
+**Code Reference**: `app/api/routes.py` (settle_trade endpoint)
+
+---
+
+## Frontend Integration
+
+### useX402Payment Hook
+
+**Location**: `client/src/hooks/useX402Payment.ts`
+
+React hook for x402 payment processing:
+
+```typescript
+const { processPayment, paymentStatus, error } = useX402Payment();
+
+await processPayment({
+  amount: "1000.00",
+  currency: "USD",
+  payer: payerAddress,
+  receiver: receiverAddress
+});
+```
+
+**Code Reference**: `client/src/hooks/useX402Payment.ts`
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="X402_ENABLED" type="boolean">
+  Enable x402 payment processing. Default: `true`
+</ParamField>
+
+<ParamField body="X402_FACILITATOR_URL" type="string">
+  x402 facilitator service URL. Default: `https://facilitator.x402.org`
+</ParamField>
+
+<ParamField body="X402_NETWORK" type="string">
+  Blockchain network. Default: `"base"`
+</ParamField>
+
+<ParamField body="X402_TOKEN" type="string">
+  Token symbol. Default: `"USDC"`
+</ParamField>
+
+<ParamField body="X402_NETWORK_RPC_URL" type="string">
+  Base network RPC URL
+</ParamField>
+
+**Setup Guide**: See [MetaMask Setup Guide](/guides/metamask-setup)
+
+---
+
+## Payment Types
+
+### Loan Disbursement
+
+Initial loan funding to borrower.
+
+### Trade Settlement
+
+Payment for executed trades.
+
+### Interest Payment
+
+Periodic interest distributions.
+
+### Penalty Payment
+
+Late payment fees and penalties.
+
+### Notarization Fee
+
+Payment for blockchain notarization services.
+
+**Code Reference**: `app/services/x402_payment_service.py` (payment_type parameter)
+
+---
+
+## Security Considerations
+
+1. **Wallet Security**: Users must secure their MetaMask wallets
+2. **Transaction Verification**: All payments verified on blockchain
+3. **Amount Validation**: Validate payment amounts before processing
+4. **Network Confirmation**: Wait for blockchain confirmations
+5. **Audit Trail**: Complete CDM event trail for all payments
+
+---
+
+## Troubleshooting
+
+### Payment Not Processing
+
+- Verify MetaMask is connected
+- Check network is set to Base (Mainnet or Sepolia)
+- Verify USDC balance in wallet
+- Check transaction gas fees
+
+### Payment Verification Fails
+
+- Verify transaction hash is correct
+- Check blockchain explorer for transaction status
+- Ensure sufficient confirmations received
+- Review payment payload format
+
+---
+
+## Additional Resources
+
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [Configuration Guide](/getting-started/configuration#x402-payment-engine-configuration)
+- [x402 Protocol Documentation](https://x402.org)
+- [Base Network Documentation](https://docs.base.org)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/x402_payment_service.py`, `app/api/routes.py`, `client/src/hooks/useX402Payment.ts`

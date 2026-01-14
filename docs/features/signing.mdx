@@ -1,0 +1,277 @@
+---
+title: Digital Signing
+description: Professional e-signature workflows with DigiSigner integration
+---
+
+## Overview
+
+CreditNexus integrates with DigiSigner for professional digital signature workflows. The system supports multi-document signing, webhook notifications, and legal validity for all signed documents.
+
+**Code Reference**: `app/services/signature_service.py`, `app/api/routes.py` (signature endpoints)  
+**Setup Guide**: [`docs/guides/digisigner-setup.mdx`](/guides/digisigner-setup)
+
+---
+
+## Key Features
+
+### Multi-Document Signing
+
+- **Batch Signing**: Sign multiple documents in one request
+- **Signer Management**: Add multiple signers with roles
+- **Signing Order**: Define signing order for sequential workflows
+- **Status Tracking**: Track signature status for each signer
+
+**Code Reference**: `app/services/signature_service.py` (request_signature)
+
+### DigiSigner Integration
+
+- **API Integration**: Full DigiSigner API integration
+- **Document Upload**: Automatic document upload to DigiSigner
+- **Signature Requests**: Create and manage signature requests
+- **Webhook Support**: Real-time signature status updates
+
+**Code Reference**: `app/services/signature_service.py`
+
+### Webhook Notifications
+
+- **Document Signed**: Notification when individual signer signs
+- **Request Completed**: Notification when all signers complete
+- **Status Updates**: Real-time status updates via webhooks
+- **Automatic Processing**: Automatic document download and storage
+
+**Code Reference**: `app/api/routes.py` (digisigner_webhook endpoint)
+
+---
+
+## Workflow
+
+### 1. Request Signatures
+
+1. **Select Document**: Choose document(s) to sign
+2. **Add Signers**: Add signer email addresses and names
+3. **Configure Request**: Set subject, message, expiration
+4. **Submit Request**: Create signature request via DigiSigner
+5. **Track Status**: Monitor signature request status
+
+### 2. Signer Actions
+
+1. **Receive Email**: Signer receives email from DigiSigner
+2. **Review Document**: Signer reviews document in DigiSigner
+3. **Sign Document**: Signer signs document
+4. **Webhook Notification**: System receives webhook notification
+5. **Status Update**: Signature status updated in database
+
+### 3. Completion
+
+1. **All Signatures**: All signers have completed signing
+2. **Webhook Notification**: System receives completion webhook
+3. **Download Signed Document**: Download signed document from DigiSigner
+4. **Store Document**: Store signed document in system
+5. **Update Status**: Update document signature status
+
+---
+
+## API Endpoints
+
+### Request Document Signature
+
+<Endpoint method="POST" path="/api/documents/{document_id}/signatures" />
+
+Request signatures for a document.
+
+**Request Body**:
+```json
+{
+  "signers": [
+    {
+      "email": "signer1@example.com",
+      "name": "John Doe",
+      "role": "Borrower"
+    },
+    {
+      "email": "signer2@example.com",
+      "name": "Jane Smith",
+      "role": "Lender"
+    }
+  ],
+  "subject": "Please sign the credit agreement",
+  "message": "Please review and sign the attached credit agreement",
+  "expires_in_days": 30,
+  "urgency": "standard"
+}
+```
+
+**Response**:
+```json
+{
+  "signature_id": 123,
+  "signature_request_id": "req_abc123",
+  "status": "pending",
+  "signers": [...],
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+```
+
+**Code Reference**: `app/api/routes.py` (request_document_signature)
+
+### Get Document Signatures
+
+<Endpoint method="GET" path="/api/documents/{document_id}/signatures" />
+
+Get all signature requests for a document.
+
+**Response**: List of signature requests with status
+
+### Download Signed Document
+
+<Endpoint method="GET" path="/api/signatures/{signature_id}/download" />
+
+Download the signed document.
+
+**Response**: File download (PDF)
+
+### DigiSigner Webhook
+
+<Endpoint method="POST" path="/api/signatures/webhook" />
+
+DigiSigner webhook endpoint for signature status updates.
+
+**Events Handled**:
+- `DOCUMENT_SIGNED`: Individual signer signed
+- `SIGNATURE_REQUEST_COMPLETED`: All signers completed
+
+**Response**: `DIGISIGNER_EVENT_ACCEPTED`
+
+**Code Reference**: `app/api/routes.py` (digisigner_webhook)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="DIGISIGNER_API_KEY" type="string">
+  DigiSigner API key
+</ParamField>
+
+<ParamField body="DIGISIGNER_BASE_URL" type="string">
+  DigiSigner API base URL. Default: `https://api.digisigner.com/v1`
+</ParamField>
+
+<ParamField body="DIGISIGNER_WEBHOOK_SECRET" type="string">
+  Webhook secret for signature verification (optional but recommended)
+</ParamField>
+
+**Setup Guide**: See [DigiSigner Setup Guide](/guides/digisigner-setup)
+
+---
+
+## Signature Status
+
+### Status Values
+
+- **`pending`**: Signature request created, awaiting signers
+- **`in_progress`**: Some signers have signed, others pending
+- **`completed`**: All signers have completed signing
+- **`declined`**: One or more signers declined to sign
+- **`expired`**: Signature request expired
+
+**Code Reference**: `app/db/models.py` (DocumentSignature model)
+
+---
+
+## Database Models
+
+### DocumentSignature
+
+**Location**: `app/db/models.py`
+
+**Fields**:
+- `signature_request_id`: DigiSigner request ID
+- `digisigner_document_id`: DigiSigner document ID
+- `signature_status`: Current status
+- `signers`: Array of signer information
+- `signed_document_url`: URL to signed document
+- `signed_document_path`: Local path to signed document
+- `completed_at`: Completion timestamp
+
+**Code Reference**: `app/db/models.py` (lines 910-944)
+
+---
+
+## Webhook Events
+
+### DOCUMENT_SIGNED Event
+
+```json
+{
+  "event_time": 1435228059867,
+  "event_type": "DOCUMENT_SIGNED",
+  "document_id": "5be88823-3ff5-4ec4-8175-459dee50f7fb",
+  "signer_email": "signer@example.com"
+}
+```
+
+### SIGNATURE_REQUEST_COMPLETED Event
+
+```json
+{
+  "event_time": 1435228059868,
+  "event_type": "SIGNATURE_REQUEST_COMPLETED",
+  "signature_request": {
+    "signature_request_id": "req_abc123",
+    "is_completed": true,
+    "documents": [...]
+  }
+}
+```
+
+**Code Reference**: `app/api/routes.py` (digisigner_webhook handler)
+
+---
+
+## Best Practices
+
+1. **Signer Verification**: Verify signer email addresses before sending
+2. **Clear Communication**: Use clear subject and message text
+3. **Expiration Management**: Set appropriate expiration dates
+4. **Status Monitoring**: Monitor signature status regularly
+5. **Document Storage**: Store signed documents securely
+
+---
+
+## Troubleshooting
+
+### Webhook Not Received
+
+- Verify webhook URL is publicly accessible
+- Check DigiSigner webhook configuration
+- Review application logs for errors
+- Verify webhook secret (if configured)
+
+### Signature Request Fails
+
+- Verify document file exists and is accessible
+- Check DigiSigner API key is valid
+- Verify signer email addresses are valid
+- Review DigiSigner API error messages
+
+### Signed Document Not Downloaded
+
+- Check webhook processing logs
+- Verify signed_document_url is accessible
+- Check file storage permissions
+- Review document download endpoint
+
+---
+
+## Additional Resources
+
+- [DigiSigner Setup Guide](/guides/digisigner-setup)
+- [Configuration Guide](/getting-started/configuration#digisigner-configuration-digital-signatures)
+- [DigiSigner Setup Guide](/guides/digisigner-setup)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/signature_service.py`, `app/api/routes.py`, `app/db/models.py`

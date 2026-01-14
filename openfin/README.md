@@ -183,14 +183,14 @@ Portfolio analytics updates.
 1. Deploy your CreditNexus application to a production URL with HTTPS
 2. Replace `${APP_URL}` with your production domain:
    ```bash
-   sed -i 's|\${APP_URL}|https://creditnexus.app|g' openfin/*.json
+   sed -i 's|\${APP_URL}|https://josephrp.github.io/creditnexus|g' openfin/*.json
    ```
 3. Ensure manifests are served with correct MIME types (application/json)
 4. Register the app in your OpenFin App Directory using `fdc3-intents.json`
 5. Launch via RVM (users can open the manifest URL directly, or use a script):
    ```bash
    # Users can simply open the manifest URL in their browser:
-   # https://creditnexus.app/openfin/app.json
+   # https://josephrp.github.io/creditnexus/openfin/app.json
    # RVM will handle runtime download and app launch automatically
    ```
 
