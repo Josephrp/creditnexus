@@ -12,7 +12,7 @@ import requests
 
 from app.models.cdm import CreditAgreement
 from app.services.policy_service import FilingRequirement as PolicyFilingRequirement
-from app.services.filing_service import FilingAPIError
+from app.services.filing_exceptions import FilingAPIError
 from app.core.config import settings
 from app.utils.rate_limiter import COMPANIES_HOUSE_LIMITER
 

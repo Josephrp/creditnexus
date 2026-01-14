@@ -34,6 +34,7 @@ import { WorkflowDelegationDashboard } from '@/components/WorkflowDelegationDash
 import { WorkflowProcessingPage } from '@/components/WorkflowProcessingPage';
 import { LoanRecoverySidebar } from '@/components/LoanRecoverySidebar';
 import { AgentDashboard } from '@/apps/agent-dashboard/AgentDashboard';
+import { FilingStatusDashboard } from '@/components/FilingStatusDashboard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useThemeClasses } from '@/utils/themeUtils';
 import { Link } from 'react-router-dom';
@@ -195,6 +196,13 @@ const sidebarApps: AppConfig[] = [
     description: 'Loan recovery & default management',
     requiredPermission: PERMISSION_DEAL_VIEW,
   },
+  {
+    id: 'filings',
+    name: 'Regulatory Filings',
+    icon: <RadioTower className="h-5 w-5 text-indigo-400" />,
+    description: 'Manage regulatory filings & deadlines',
+    requiredPermission: PERMISSION_DOCUMENT_VIEW,
+  },
 ];
 
 interface PolicyDecision {
@@ -250,7 +258,7 @@ export function DesktopAppLayout() {
       'document-parser', 'document-generator', 'trade-blotter', 'green-lens',
       'ground-truth', 'verification-demo', 'demo-data', 'risk-war-room',
       'policy-editor', 'library', 'auditor', 'securitization', 'verification-config',
-      'workflow-processor', 'workflow-share', 'loan-recovery'
+      'workflow-processor', 'workflow-share', 'loan-recovery', 'agent-dashboard', 'filings'
     ];
     
     // Try to restore from sessionStorage first
@@ -281,6 +289,7 @@ export function DesktopAppLayout() {
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
       '/app/agent-dashboard': 'agent-dashboard',
+      '/app/filings': 'filings',
       '/library': 'library',
       '/auditor': 'auditor',
     };
@@ -630,6 +639,7 @@ export function DesktopAppLayout() {
       'workflow-share': '/app/workflow/share',
       'workflow-processor': '/app/workflow/process',
       'loan-recovery': '/app/loan-recovery',
+      'filings': '/app/filings',
     };
     const path = appToPath[app];
     
@@ -1032,6 +1042,7 @@ export function DesktopAppLayout() {
             </div>
           )}
           {activeApp === 'agent-dashboard' && <AgentDashboard />}
+          {activeApp === 'filings' && <FilingStatusDashboard />}
           {activeApp === 'securitization' && (() => {
             // Check if we're on a tranche purchase page
             if (location.pathname.includes('/tranches/') && location.pathname.includes('/purchase')) {
@@ -1092,7 +1103,7 @@ export function DesktopAppLayout() {
               <span>FINOS CDM Compliant</span>
               <div className="flex items-center gap-2 ml-2 pl-2 border-l border-slate-600">
                 <Link 
-                  to="/licence" 
+                  to="/license" 
                   className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
                 >
                   License

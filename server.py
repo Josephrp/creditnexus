@@ -1,6 +1,7 @@
 """FastAPI application entry point for CreditNexus backend."""
 
 import logging
+# Trigger reload
 import os
 import asyncio
 from contextlib import asynccontextmanager
@@ -173,7 +174,17 @@ async def lifespan(app: FastAPI):
                     from app.db.models import User
                     db = SessionLocal()
                     try:
-                        demo_user = db.query(User).filter(User.email == "demo@creditnexus.app").first()
+                        # Workaround for non-deterministic encryption: fetch and filter
+                        demo_user = None
+                        all_users = db.query(User).all()
+                        for u in all_users:
+                            try:
+                                if u.email == "demo@creditnexus.app":
+                                    demo_user = u
+                                    break
+                            except Exception:
+                                continue
+                        
                         if not demo_user:
                             logger.info("No demo user found. Creating demo user...")
                             from app.auth.jwt_auth import get_password_hash

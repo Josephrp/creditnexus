@@ -95,6 +95,7 @@
           "features/document-extraction",
           "features/trade-execution",
           "features/verification",
+          "features/workflow-delegation",
           "features/document-generation",
           "features/applications",
           "features/recovery",

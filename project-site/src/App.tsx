@@ -84,7 +84,9 @@ function App() {
                 Documentation
               </a>
               <a
-                href="/apply"
+                href="https://github.com/FinTechTonic/creditnexus"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center px-6 py-3 border border-slate-600 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
               >
                 <Rocket className="h-5 w-5 mr-2" />
@@ -762,7 +764,7 @@ function App() {
               className="inline-flex items-center px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
             >
               <Rocket className="h-5 w-5 mr-2" />
-              Start Application
+              Get Started
             </a>
             <a
               href="https://tonic-ai.mintlify.app"
@@ -786,14 +788,14 @@ function App() {
             </div>
             <div className="flex items-center gap-6">
               <a
-                href="/licence"
+                href="/LICENSE.md"
                 className="text-slate-400 hover:text-slate-100 transition-colors text-sm"
               >
                 License
               </a>
               <span className="text-slate-400">•</span>
               <a
-                href="/rail"
+                href="/RAIL.md"
                 className="text-slate-400 hover:text-slate-100 transition-colors text-sm"
               >
                 RAIL

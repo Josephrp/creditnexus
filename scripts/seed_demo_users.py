@@ -416,8 +416,20 @@ def seed_demo_users(db, force: bool = False, seed_all_roles: bool = True) -> int
         if user_data.get("profile_data") is None:
             user_data["profile_data"] = _generate_comprehensive_profile_data(role, user_data["email"])
         
-        # Check if user already exists
-        existing_user = db.query(User).filter(User.email == user_data["email"]).first()
+    # Check if user already exists
+    
+    # Workaround for non-deterministic encryption: Fetch all users and filter locally
+    # Searching by User.email == ... fails because every encryption produces a different ciphertext
+    existing_user = None
+    all_users = db.query(User).all()
+    for u in all_users:
+        try:
+            if u.email == user_data["email"]:
+                existing_user = u
+                break
+        except Exception:
+            # If decryption fails, skip (might be a user with different key)
+            continue
         
         if existing_user:
             if force:

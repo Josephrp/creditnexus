@@ -14,7 +14,7 @@ import { useThemeClasses } from '@/utils/themeUtils';
 import { fetchWithAuth } from '@/context/AuthContext';
 
 interface LicenseViewerProps {
-  licenseType?: 'licence' | 'rail';
+  licenseType?: 'license' | 'licence' | 'rail';
   onClose?: () => void;
 }
 
@@ -68,7 +68,7 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
   const classes = useThemeClasses();
   
   // Determine license type from props or URL params
-  const type = licenseType || (params.licenseType as 'licence' | 'rail') || 'licence';
+  const type = licenseType || (params.licenseType as 'license' | 'licence' | 'rail') || 'license';
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,9 +79,12 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
         setLoading(true);
         setError(null);
         
+        // Normalize type for API and file fetch
+        const normalizedType = (type === 'licence' || type === 'license') ? 'license' : 'rail';
+        
         // Try to fetch from API first
         try {
-          const response = await fetchWithAuth(`/api/licenses/${type}`);
+          const response = await fetchWithAuth(`/api/licenses/${normalizedType}`);
           if (response.ok) {
             const data = await response.json();
             setContent(data.content || '');
@@ -94,8 +97,8 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
 
         // Fallback: try to fetch directly from public folder or root
         try {
-          const filePath = type === 'licence' ? '/LICENCE.md' : '/RAIL.md';
-          const response = await fetch(filePath);
+          const fileName = normalizedType === 'license' ? 'LICENSE.md' : 'RAIL.md';
+          const response = await fetch(`/${fileName}`);
           if (response.ok) {
             const text = await response.text();
             setContent(text);
@@ -107,7 +110,7 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
         }
 
         // If both fail, show error
-        setError('License file not found. Please ensure LICENCE.md or RAIL.md exists in the root directory.');
+        setError(`License file not found. Please ensure ${normalizedType === 'license' ? 'LICENSE.md' : 'RAIL.md'} exists in the root directory.`);
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load license file');
@@ -126,7 +129,7 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
     }
   };
 
-  const title = type === 'licence' ? 'License' : 'Responsible AI License (RAIL)';
+  const title = (type === 'licence' || type === 'license') ? 'License' : 'Responsible AI License (RAIL)';
   const htmlContent = content ? markdownToHtml(content) : '';
 
   return (

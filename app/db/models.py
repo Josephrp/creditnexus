@@ -1299,6 +1299,27 @@ class Deal(Base):
 
     def to_dict(self):
         """Convert model to dictionary."""
+        # Extract borrower info from deal_data or first document
+        deal_data = self.deal_data or {}
+        
+        borrower_name = deal_data.get("borrower_name")
+        if not borrower_name and self.documents:
+            borrower_name = self.documents[0].borrower_name
+        if not borrower_name:
+            borrower_name = "Unknown"
+            
+        total_commitment = deal_data.get("total_commitment")
+        if total_commitment is None and self.documents:
+            total_commitment = float(self.documents[0].total_commitment) if self.documents[0].total_commitment else 0
+        if total_commitment is None:
+            total_commitment = 0
+            
+        currency = deal_data.get("currency")
+        if not currency and self.documents:
+            currency = self.documents[0].currency
+        if not currency:
+            currency = "USD"
+
         return {
             "id": self.id,
             "deal_id": self.deal_id,
@@ -1308,6 +1329,9 @@ class Deal(Base):
             "deal_type": self.deal_type,
             "is_demo": self.is_demo,
             "deal_data": self.deal_data,
+            "borrower_name": borrower_name,
+            "total_commitment": total_commitment,
+            "currency": currency,
             "folder_path": self.folder_path,
             "verification_required": self.verification_required,
             "verification_completed_at": self.verification_completed_at.isoformat() if self.verification_completed_at else None,
@@ -1802,6 +1826,7 @@ class WorkflowDelegation(Base):
             "sender_user_id": self.sender_user_id,
             "receiver_user_id": self.receiver_user_id,
             "receiver_email": self.receiver_email,
+            "link_payload": self.link_payload,
             "workflow_metadata": self.workflow_metadata,
             "whitelist_config": self.whitelist_config,
             "status": self.status,

@@ -463,7 +463,7 @@ function App() {
             <span>FINOS CDM Compliant</span>
             <div className={`flex items-center gap-2 ml-2 pl-2 border-l ${classes.border.muted}`}>
               <Link 
-                to="/licence" 
+                to="/license" 
                 className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
               >
                 License

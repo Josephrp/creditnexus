@@ -1,0 +1,62 @@
+---
+title: "Workflow Delegation"
+description: "Cross-terminal workflow distribution via secure encrypted links and CDM-compliant state synchronization."
+---
+
+## Overview
+
+CreditNexus provides a sophisticated workflow delegation system that allows users to distribute financial tasks (verification, notarization, document review) across different terminals or to external parties. This is achieved through self-contained, encrypted links that carry the necessary context (CDM data, document references, and metadata) without requiring the receiver to have prior access to the sender's local database.
+
+## Key Concepts
+
+### 1. Self-Contained Encrypted Links
+Links are generated with an encrypted payload that contains the entire state required to process the workflow. This ensures that even in decentralized or isolated environments, the receiver can "hydrate" the workflow context immediately.
+
+*   **Encryption**: Payloads are encrypted using Fernet (symmetric encryption) with a shared `LINK_ENCRYPTION_KEY`.
+*   **Base64url Encoding**: The encrypted binary data is encoded into a URL-safe format.
+*   **Versioned Payloads**: Supports versioned payloads (v3.0 current) for backward compatibility with legacy verification (v2.0) and payment (v1.0) links.
+
+### 2. Workflow Types
+The delegation system supports various workflow categories:
+
+| Type | Purpose | Required Metadata |
+| :--- | :--- | :--- |
+| `verification` | Deal and CDM compliance verification | `deal_id`, `cdm_payload` |
+| `notarization` | Multi-party blockchain signature collection | `required_signers`, `notarization_id` |
+| `document_review` | Legal, financial, or compliance document review | `document_id`, `review_type` |
+| `deal_approval` | Formal approval of a deal proposal | `deal_id`, `flow_type: approval` |
+| `custom` | Extensible custom business workflows | `custom_workflow_type`, `metadata` |
+
+### 3. State Synchronization (Callback Mechanism)
+Once a delegated task is completed by the receiver, the system automatically synchronizes the state back to the sender via a secure callback mechanism.
+
+*   **Callback URL**: The sender's instance includes a unique callback URL in the payload.
+*   **Async Processing**: State updates are sent asynchronously with automatic retry logic and exponential backoff.
+*   **Metadata Return**: Completion data (e.g., signature hashes, review comments) is bundled into the sync payload.
+
+## The Workflow Lifecycle
+
+### Phase 1: Delegation (Sender)
+1.  User selects a deal or document and clicks "Generate Workflow Link".
+2.  Backend generates a `workflow_id` (UUID) and creates a `WorkflowDelegation` record.
+3.  The `LinkPayloadGenerator` bundles CDM data and file references into an encrypted v3.0 payload.
+4.  The link is presented to the user for sharing (FDC3, email, or manual copy).
+
+### Phase 2: Processing (Receiver)
+1.  Receiver opens the link (e.g., `https://creditnexus.ai/app/workflow/process?payload=...`).
+2.  The backend validates the payload, checks for expiration, and decrypts the context.
+3.  If a `whitelist_config` is present, the receiver's instance dynamically adjusts permissions for the shared files.
+4.  The receiver performs the required action (approves, signs, or reviews).
+
+### Phase 3: Completion & Sync
+1.  Receiver clicks "Complete".
+2.  Receiver's terminal sends a state update to its own local DB.
+3.  The `WorkflowDelegationService` triggers the `callback_url` to notify the sender's terminal.
+4.  The sender's terminal updates its status to "Completed" and logs the audit event.
+
+## Security & Compliance
+
+*   **Audit Logging**: Every state transition (Creation, Processing, Completion) is logged via `log_audit_action` with full metadata and requester IP.
+*   **Expiration Enforcement**: Links automatically expire after a configurable period (default 72 hours).
+*   **CDM Integrity**: All shared data follows the FINOS Common Domain Model standards, ensuring data consistency across different terminals.
+*   **FDC3 Integration**: Links can be broadcasted via FDC3 `WorkflowLinkContext`, enabling seamless desktop interoperability between different financial applications.

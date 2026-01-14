@@ -39,6 +39,7 @@ interface WorkflowDelegation {
   sender_user_id: number
   receiver_user_id?: number
   receiver_email?: string
+  link_payload?: string
   status: string
   expires_at: string
   completed_at?: string
@@ -141,19 +142,22 @@ export function WorkflowDelegationDashboard() {
 
   const handleProcessLink = (delegation: WorkflowDelegation) => {
     // Navigate to processing page with the workflow link
-    navigate(`/app/workflow/process?payload=${encodeURIComponent(delegation.workflow_id)}`)
+    // Use link_payload if available, otherwise fallback to workflow_id
+    const payload = delegation.link_payload || delegation.workflow_id
+    navigate(`/app/workflow/process?payload=${encodeURIComponent(payload)}`)
   }
 
   const handleShareLink = async (delegation: WorkflowDelegation) => {
     // Get the full link from the delegation
-    // For now, construct it from workflow_id
-    const link = `${window.location.origin}/app/workflow/process?payload=${delegation.workflow_id}`
+    // Use link_payload if available, otherwise fallback to workflow_id
+    const payload = delegation.link_payload || delegation.workflow_id
+    const link = `${window.location.origin}/app/workflow/process?payload=${encodeURIComponent(payload)}`
     
     setSharerData({
       workflowId: delegation.workflow_id,
       workflowType: delegation.workflow_type,
       link: link,
-      encryptedPayload: delegation.workflow_id, // This would be the actual encrypted payload
+      encryptedPayload: payload,
       metadata: delegation.workflow_metadata || {},
     })
     setShowSharer(true)

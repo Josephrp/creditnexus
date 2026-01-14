@@ -32,7 +32,7 @@ export function Footer({ className = '' }: FooterProps) {
     legal: [
       { label: 'Compliance', path: '/compliance' },
       { label: 'Security', path: '/security' },
-      { label: 'License', path: '/licence' },
+      { label: 'License', path: '/license' },
       { label: 'RAIL', path: '/rail' },
     ],
   };

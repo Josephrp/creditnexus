@@ -311,6 +311,14 @@ export const router = createBrowserRouter(
       </ProtectedRoute>
     ),
   },
+  {
+    path: '/app/filings',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
   
   // Application routes
   {
@@ -447,8 +455,12 @@ export const router = createBrowserRouter(
   
   // License routes (public)
   {
+    path: '/license',
+    element: <LicenseViewer licenseType="license" />,
+  },
+  {
     path: '/licence',
-    element: <LicenseViewer licenseType="licence" />,
+    element: <LicenseViewer licenseType="license" />,
   },
   {
     path: '/rail',
