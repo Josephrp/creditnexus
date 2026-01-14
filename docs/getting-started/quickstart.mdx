@@ -10,7 +10,6 @@ Before you begin, ensure you have:
 - Python 3.11+ installed
 - Node.js 20+ installed
 - PostgreSQL database
-- OpenAI API key (or access to vLLM/HuggingFace)
 
 ## Installation
 
@@ -100,8 +99,40 @@ npm run dev
 
 5. **Generate Documents**: Use the Document Generator to create LMA templates from your data
 
+## OpenFin Desktop Integration (Optional)
+
+CreditNexus supports **OpenFin Runtime** for enterprise desktop deployment with FDC3 2.0 interoperability.
+
+### Quick Launch
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\launch_openfin.sh
+```
+
+**Mac/Linux:**
+```bash
+bash scripts/launch_openfin.sh
+```
+
+This will:
+1. Check that backend and frontend services are running
+2. Verify the FDC3 App Directory is accessible at `http://localhost:8000/api/fdc3/apps`
+3. Launch OpenFin with the configured app manifest
+
+### FDC3 2.0 Compliance
+
+CreditNexus is fully compliant with FDC3 2.0 standards:
+- ✅ **App Directory API**: Automatically served at `/api/fdc3/apps`
+- ✅ **Context Types**: All custom contexts use `finos.creditnexus.*` namespace
+- ✅ **Intent Handling**: Full support for intent listeners and raisers
+- ✅ **Native OpenFin Integration**: Uses built-in FDC3 2.0 API
+
+> 📖 **Learn More**: See [FDC3 Compliance](/compliance/fdc3-compliance) and [OpenFin Compliance](/compliance/openfin-compliance) for detailed setup and configuration.
+
 ## Next Steps
 
 - Read the [Architecture Overview](/architecture/overview) to understand the system design
 - Explore [API Reference](/api-reference/authentication) for integration options
 - Check out [Guides](/guides/document-extraction) for detailed workflows
+- Set up [OpenFin Desktop Integration](/compliance/openfin-compliance) for enterprise deployment

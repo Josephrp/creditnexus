@@ -233,7 +233,7 @@ export function DocumentParser({
     if (!editableData) return;
 
     const context: CreditNexusLoanContext = {
-      type: 'fdc3.creditnexus.loan',
+      type: 'finos.creditnexus.loan',
       id: {
         LIN: editableData.loan_identification_number,
         DealID: editableData.deal_id,
