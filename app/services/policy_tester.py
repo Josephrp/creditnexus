@@ -153,7 +153,7 @@ class PolicyTester:
         default_transaction = {
             "transaction_id": kwargs.get("transaction_id", "TEST_001"),
             "transaction_type": transaction_type,
-            "timestamp": "2024-01-01T00:00:00Z",
+            "timestamp": "2026-01-15T00:00:00Z",
             "originator": {
                 "id": kwargs.get("originator_id", "TEST_ORIGINATOR"),
                 "name": kwargs.get("originator_name", "Test Originator"),

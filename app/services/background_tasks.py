@@ -1,10 +1,12 @@
 """
-Background Tasks for Filing and Signature Management.
+Background Tasks for Filing, Signature, and Loan Recovery Management.
 
 This module contains scheduled background tasks for:
 1. Deadline monitoring (daily at 9 AM)
 2. Signature status updates (hourly)
 3. Filing status verification (daily)
+4. Loan default detection (daily at 9 AM)
+5. Recovery action processing (hourly)
 """
 
 import logging
@@ -16,6 +18,7 @@ from app.db import get_db
 from app.agents.deadline_verifier import DeadlineVerifier
 from app.agents.signature_verifier import SignatureVerifier
 from app.agents.filing_verifier import FilingVerifier
+from app.services.loan_recovery_service import LoanRecoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +199,97 @@ async def verify_filing_statuses() -> Dict[str, Any]:
         }
 
 
+async def detect_loan_defaults_task() -> Dict[str, Any]:
+    """
+    Background task to detect loan defaults and covenant breaches.
+    
+    Runs daily at 9 AM to check for payment defaults and covenant breaches,
+    creating LoanDefault records and triggering recovery actions.
+    
+    Returns:
+        Task execution result with counts of detected defaults
+    """
+    logger.info("Starting loan default detection task")
+    
+    try:
+        db = next(get_db())
+        recovery_service = LoanRecoveryService(db)
+        
+        # Detect payment defaults
+        payment_defaults = recovery_service.detect_payment_defaults()
+        payment_count = len(payment_defaults)
+        
+        # Detect covenant breaches
+        covenant_breaches = recovery_service.detect_covenant_breaches()
+        covenant_count = len(covenant_breaches)
+        
+        total_defaults = payment_count + covenant_count
+        
+        logger.info(
+            f"Loan default detection completed: {payment_count} payment defaults, "
+            f"{covenant_count} covenant breaches, {total_defaults} total"
+        )
+        
+        return {
+            "status": "success",
+            "timestamp": datetime.utcnow().isoformat(),
+            "payment_defaults": payment_count,
+            "covenant_breaches": covenant_count,
+            "total_defaults": total_defaults
+        }
+    except Exception as e:
+        logger.error(f"Error in loan default detection task: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
+    finally:
+        db.close()
+
+
+async def process_recovery_actions_task() -> Dict[str, Any]:
+    """
+    Background task to process scheduled recovery actions.
+    
+    Runs hourly to execute recovery actions that are scheduled and due,
+    sending SMS/voice messages via Twilio.
+    
+    Returns:
+        Task execution result with counts of processed actions
+    """
+    logger.info("Starting recovery action processing task")
+    
+    try:
+        db = next(get_db())
+        recovery_service = LoanRecoveryService(db)
+        
+        # Process scheduled actions
+        result = recovery_service.process_scheduled_actions()
+        
+        processed_count = result.get("processed_count", 0)
+        
+        logger.info(
+            f"Recovery action processing completed: {processed_count} actions processed"
+        )
+        
+        return {
+            "status": "success",
+            "timestamp": datetime.utcnow().isoformat(),
+            "processed_count": processed_count,
+            **result
+        }
+    except Exception as e:
+        logger.error(f"Error in recovery action processing task: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
+    finally:
+        db.close()
+
+
 # Task schedule configuration
 TASK_SCHEDULE = {
     "deadline_monitoring": {
@@ -213,6 +307,17 @@ TASK_SCHEDULE = {
         "task": verify_filing_statuses,
         "schedule": "daily",
         "time": time(10, 0),  # 10 AM
+        "enabled": True
+    },
+    "loan_default_detection": {
+        "task": detect_loan_defaults_task,
+        "schedule": "daily",
+        "time": time(9, 0),  # 9 AM
+        "enabled": True
+    },
+    "recovery_action_processing": {
+        "task": process_recovery_actions_task,
+        "schedule": "hourly",
         "enabled": True
     }
 }

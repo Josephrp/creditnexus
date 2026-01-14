@@ -94,7 +94,7 @@ export function GroundTruthDashboard() {
     }, [fetchAssets]);
 
     useEffect(() => {
-        if (context?.type === 'fdc3.creditnexus.loan' && context.loan?.document_text) {
+        if (context?.type === 'finos.creditnexus.loan' && context.loan?.document_text) {
             setLoanId(context.loan.loan_identification_number || context.loan.deal_id || '');
             setDocumentText(context.loan.document_text);
             setShowCreateForm(true);

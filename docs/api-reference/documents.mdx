@@ -26,7 +26,7 @@ Extract structured CDM data from a credit agreement document.
 import requests
 
 response = requests.post(
-    "https://api.creditnexus.com/api/extract",
+    "http://localhost:8000/api/extract",
     headers={"Authorization": "Bearer YOUR_TOKEN"},
     json={"text": document_text}
 )
@@ -35,7 +35,7 @@ agreement = data["agreement"]
 ```
 
 ```bash cURL
-curl -X POST https://api.creditnexus.com/api/extract \
+curl -X POST http://localhost:8000/api/extract \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text": "..."}'

@@ -1,0 +1,104 @@
+---
+title: Applications API
+description: API endpoints for loan application management
+---
+
+## Applications API
+
+API endpoints for managing individual and business loan applications.
+
+**Base Path**: `/api` (application endpoints in main routes)  
+**Code Reference**: `app/api/routes.py` (application endpoints)
+
+---
+
+## Application Management
+
+### Create Application
+
+<Endpoint method="POST" path="/api/applications" />
+
+Create a new loan application.
+
+**Request Body**:
+```json
+{
+  "application_type": "business",
+  "application_data": {
+    "company_name": "ACME Corp",
+    "requested_amount": 1000000.00,
+    "purpose": "Working capital"
+  }
+}
+```
+
+**Response**: Created application with ID
+
+**Code Reference**: `app/api/routes.py` (create_application endpoint)
+
+### List Applications
+
+<Endpoint method="GET" path="/api/applications" />
+
+List all applications with filtering.
+
+**Query Parameters**:
+- `status`: Filter by status
+- `application_type`: Filter by type (individual, business)
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of applications
+
+### Get Application Details
+
+<Endpoint method="GET" path="/api/applications/{application_id}" />
+
+Get detailed information about an application.
+
+**Response**: Complete application details
+
+### Update Application
+
+<Endpoint method="PUT" path="/api/applications/{application_id}" />
+
+Update an application.
+
+**Request Body**:
+```json
+{
+  "application_data": {
+    "updated_field": "value"
+  }
+}
+```
+
+**Response**: Updated application
+
+### Update Application Status
+
+<Endpoint method="PUT" path="/api/applications/{application_id}/status" />
+
+Update application status (approve, reject, etc.).
+
+**Request Body**:
+```json
+{
+  "status": "approved",
+  "notes": "Application approved"
+}
+```
+
+**Response**: Updated application
+
+---
+
+## Additional Resources
+
+- [Applications Feature](/features/applications)
+- [Dealflow Management Feature](/features/dealflow-management)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/routes.py`

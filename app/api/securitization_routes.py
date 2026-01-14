@@ -50,8 +50,8 @@ class CreateSecuritizationPoolRequest(BaseModel):
         ...,
         description="List of tranches with name, class, size, interest_rate, priority, risk_rating"
     )
-    payment_waterfall_rules: List[Dict[str, Any]] = Field(
-        ...,
+    payment_waterfall_rules: Optional[List[Dict[str, Any]]] = Field(
+        None,
         description="List of payment waterfall rules with priority, tranche_id, payment_type, percentage"
     )
 
@@ -123,7 +123,22 @@ async def create_securitization_pool(
             if asset.get("asset_type") == "deal":
                 asset_dict["deal_id"] = asset.get("deal_id") or asset.get("asset_id")
             elif asset.get("asset_type") == "loan_asset":
-                asset_dict["loan_asset_id"] = asset.get("loan_asset_id") or asset.get("asset_id")
+                # Convert asset_id (string) to integer for loan_asset_id
+                loan_asset_id = asset.get("loan_asset_id")
+                if loan_asset_id is None:
+                    # Try to convert asset_id to int if loan_asset_id not provided
+                    asset_id = asset.get("asset_id")
+                    if asset_id:
+                        try:
+                            loan_asset_id = int(asset_id)
+                        except (ValueError, TypeError):
+                            loan_asset_id = None
+                elif isinstance(loan_asset_id, str):
+                    try:
+                        loan_asset_id = int(loan_asset_id)
+                    except (ValueError, TypeError):
+                        loan_asset_id = None
+                asset_dict["loan_asset_id"] = loan_asset_id
             underlying_assets.append(asset_dict)
         
         # Convert tranche data format

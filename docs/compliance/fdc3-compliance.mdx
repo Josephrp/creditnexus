@@ -1,0 +1,168 @@
+---
+title: FDC3 Compliance
+description: FDC3 2.0 desktop interoperability compliance
+---
+
+## FDC3 2.0 Compliance
+
+CreditNexus is fully compliant with the **FDC3 2.0** (Financial Desktop Connectivity and Collaboration Consortium) standard, enabling seamless interoperability with other financial desktop applications.
+
+**Code Reference**: `client/src/context/FDC3Context.tsx` (lines 234-492), `client/src/hooks/useFDC3.ts`, `openfin/fdc3-intents.json`
+
+---
+
+## FDC3 Implementation
+
+### Context Broadcasting
+
+CreditNexus broadcasts FDC3 contexts for seamless data sharing:
+
+```typescript
+// Broadcast credit agreement context
+await broadcast({
+  type: 'fdc3.creditnexus.agreement',
+  agreement: creditAgreementData
+});
+```
+
+**Code Reference**: `client/src/context/FDC3Context.tsx` (lines 320-333)
+
+### Intent Handling
+
+CreditNexus listens for and raises FDC3 intents:
+
+**Supported Intents**:
+- `ViewLoan` - View loan details
+- `ViewDeal` - View deal information
+- `ExtractDocument` - Extract document data
+- `ExecuteTrade` - Execute trade
+
+**Code Reference**: `openfin/fdc3-intents.json`, `client/src/context/FDC3Context.tsx` (lines 339-353)
+
+### App Channels
+
+CreditNexus uses custom app channels for workflow orchestration:
+
+- `creditnexus.workflow` - Workflow events
+- `creditnexus.extraction` - Document extraction events
+- `creditnexus.portfolio` - Portfolio updates
+
+**Code Reference**: `client/src/context/FDC3Context.tsx` (lines 258-274)
+
+---
+
+## Context Types
+
+CreditNexus defines custom context types in the `finos.creditnexus.*` namespace:
+
+### Credit Agreement Context
+
+```typescript
+{
+  type: 'fdc3.creditnexus.agreement',
+  agreement: {
+    dealId: string,
+    borrower: string,
+    amount: number,
+    // ... CDM-compliant data
+  }
+}
+```
+
+### Loan Context
+
+```typescript
+{
+  type: 'fdc3.creditnexus.loan',
+  loan: {
+    loanId: string,
+    status: string,
+    // ... loan data
+  }
+}
+```
+
+**Code Reference**: `client/src/context/FDC3Context.tsx` (context type definitions)
+
+---
+
+## System Interoperability Flow
+
+The platform components work as a "Chain of Command" using FDC3:
+
+1. **Extract**: Document Parser broadcasts loan data
+2. **Trade**: Trade Blotter receives signal and pre-fills trade ticket
+3. **Analyze**: GreenLens picks up signal for ESG analysis
+4. **Verify**: Verification Demo broadcasts breach alerts
+5. **Surveil**: Risk War Room listens for alerts and highlights assets
+
+**Code Reference**: `README.md` (lines 507-517)
+
+---
+
+## OpenFin Integration
+
+CreditNexus integrates with OpenFin Runtime for FDC3 2.0 support:
+
+**Configuration**: `openfin/app.json`
+- FDC3 2.0 API: `fdc3InteropApi: "2.0"`
+- Runtime Version: `"stable"` (automatic latest stable)
+
+**Code Reference**: `openfin/app.json` (line 14), `openfin/README.md`
+
+---
+
+## FDC3 App Directory
+
+CreditNexus is registered in the FDC3 app directory:
+
+**App Metadata**:
+- App ID: `creditnexus`
+- Version: `1.0.0`
+- Categories: `["financial", "compliance", "verification"]`
+
+**Code Reference**: `openfin/fdc3-intents.json`
+
+---
+
+## Compliance Checklist
+
+- ✅ FDC3 2.0 API implementation
+- ✅ Context broadcasting
+- ✅ Intent handling (listen and raise)
+- ✅ App channels
+- ✅ Custom context types
+- ✅ OpenFin integration
+- ✅ FDC3 app directory registration
+
+---
+
+## Testing FDC3 Integration
+
+### Test Context Broadcasting
+
+1. Open Document Parser
+2. Extract a document
+3. Click "Broadcast to Desktop"
+4. Verify context is received by other FDC3 apps
+
+### Test Intent Handling
+
+1. Open Trade Blotter
+2. Verify it receives `ViewLoan` intents
+3. Test intent raising from other apps
+
+---
+
+## Additional Resources
+
+- [FDC3 Specification](https://fdc3.finos.org/)
+- [OpenFin Integration](/compliance/openfin-compliance)
+- [System Interoperability](../../README.md#-system-interoperability-fdc3)
+- [FDC3 Context Implementation](../../client/src/context/FDC3Context.tsx)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Standard**: FDC3 2.0  
+**Code Reference**: `client/src/context/FDC3Context.tsx`, `openfin/fdc3-intents.json`, `openfin/app.json`

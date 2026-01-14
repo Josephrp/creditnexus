@@ -17,6 +17,7 @@ export interface DemoSeedRequest {
   generate_deals?: boolean;
   deal_count?: number;
   dry_run?: boolean;
+  complete_partial_data?: boolean;
 }
 
 export interface DemoSeedResponse {
@@ -76,7 +77,17 @@ export interface UseDemoDataReturn {
   seedData: (request: DemoSeedRequest) => Promise<DemoSeedResponse>;
   generateDeals: (count: number) => Promise<DemoSeedResponse>;
   getSeedingStatus: (stage?: string) => Promise<SeedingStatusResponse>;
-  resetDemoData: () => Promise<{ status: string; message: string }>;
+  resetDemoData: (options?: {
+    includeUsers?: boolean;
+    includeTemplates?: boolean;
+    includePolicies?: boolean;
+  }) => Promise<{ status: string; message: string; deleted?: Record<string, number> }>;
+  completePartialData: (options?: {
+    completeDeals?: boolean;
+    completeLoanAssets?: boolean;
+    completeApplications?: boolean;
+    completeDocuments?: boolean;
+  }) => Promise<DemoSeedResponse>;
   getGeneratedDeals: (params?: {
     page?: number;
     limit?: number;
@@ -270,13 +281,29 @@ export function useDemoData(): UseDemoDataReturn {
 
   /**
    * Reset demo data (delete all demo deals and related data).
+   * 
+   * @param options - Reset options
+   * @param options.includeUsers - Also delete demo users (default: false)
+   * @param options.includeTemplates - Also delete templates (default: false)
+   * @param options.includePolicies - Also delete policies (default: false)
    */
-  const resetDemoData = useCallback(async (): Promise<{ status: string; message: string }> => {
+  const resetDemoData = useCallback(async (options?: {
+    includeUsers?: boolean;
+    includeTemplates?: boolean;
+    includePolicies?: boolean;
+  }): Promise<{ status: string; message: string; deleted?: Record<string, number> }> => {
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetchWithAuth('/api/demo/seed/reset', {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (options?.includeUsers) params.append('include_users', 'true');
+      if (options?.includeTemplates) params.append('include_templates', 'true');
+      if (options?.includePolicies) params.append('include_policies', 'true');
+      
+      const url = `/api/demo/seed/reset${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
       
@@ -297,6 +324,59 @@ export function useDemoData(): UseDemoDataReturn {
       return data;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reset demo data';
+      setError(errorMessage);
+      addToast(errorMessage, 'error');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  /**
+   * Complete missing fields in partially filled synthetic data points.
+   */
+  const completePartialData = useCallback(async (options?: {
+    completeDeals?: boolean;
+    completeLoanAssets?: boolean;
+    completeApplications?: boolean;
+    completeDocuments?: boolean;
+  }): Promise<DemoSeedResponse> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const params = new URLSearchParams();
+      if (options?.completeDeals !== undefined) params.append('complete_deals', options.completeDeals.toString());
+      if (options?.completeLoanAssets !== undefined) params.append('complete_loan_assets', options.completeLoanAssets.toString());
+      if (options?.completeApplications !== undefined) params.append('complete_applications', options.completeApplications.toString());
+      if (options?.completeDocuments !== undefined) params.append('complete_documents', options.completeDocuments.toString());
+      
+      const url = `/api/demo/seed/complete${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetchWithAuth(url, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail?.message || 'Failed to complete partial data');
+      }
+      
+      const data: DemoSeedResponse = await response.json();
+      
+      // Show success notification
+      if (data.status === 'success') {
+        const totalCompleted = Object.values(data.created).reduce((sum, count) => sum + count, 0);
+        addToast(`Successfully completed ${totalCompleted} partially filled data point(s)`, 'success');
+      } else if (data.status === 'partial') {
+        const totalCompleted = Object.values(data.created).reduce((sum, count) => sum + count, 0);
+        addToast(`Completed ${totalCompleted} data point(s) with some errors`, 'warning');
+      } else {
+        addToast('Failed to complete partial data', 'error');
+      }
+      
+      return data;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to complete partial data';
       setError(errorMessage);
       addToast(errorMessage, 'error');
       throw err;
@@ -412,6 +492,7 @@ export function useDemoData(): UseDemoDataReturn {
     generateDeals,
     getSeedingStatus,
     resetDemoData,
+    completePartialData,
     getGeneratedDeals,
     loading,
     error,

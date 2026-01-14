@@ -1,0 +1,273 @@
+---
+title: One-Click Audit Reports
+description: Automated audit report generation with CDM event exploration
+---
+
+## Overview
+
+The One-Click Audit Reports feature provides automated audit report generation, CDM event exploration, policy decision tracking, and comprehensive compliance verification. Reports can be exported in multiple formats (PDF, CSV, JSON, XLSX).
+
+**Code Reference**: `app/services/audit_report_service.py`, `app/api/auditor_routes.py`  
+**Frontend**: `client/src/apps/auditor/AuditReportGenerator.tsx`, `client/src/apps/auditor/AuditorRouter.tsx`
+
+---
+
+## Key Features
+
+### Report Generation
+
+- **Automated Generation**: One-click report generation
+- **Multiple Templates**: Standard, comprehensive, and executive templates
+- **Customizable Sections**: Include/exclude report sections
+- **Date Range Filtering**: Filter by date range
+- **Entity Selection**: Generate reports for specific deals, loans, or filings
+
+**Code Reference**: `app/services/audit_report_service.py`
+
+### CDM Event Explorer
+
+- **Event Browsing**: Browse and filter CDM events
+- **Event Types**: Filter by event type (TradeExecution, PolicyEvaluation, etc.)
+- **Transaction Linking**: Link events to transactions
+- **Event Details**: View complete CDM event data
+- **Related Events**: Navigate related events
+
+**Code Reference**: `client/src/apps/auditor/CDMEventExplorer.tsx`
+
+### Policy Decisions Explorer
+
+- **Decision Tracking**: Track all policy decisions
+- **Decision Types**: Filter by decision (ALLOW, BLOCK, FLAG)
+- **Rule Analysis**: Analyze which rules were applied
+- **Evaluation Trace**: View complete evaluation trace
+- **Transaction Context**: View transaction context for decisions
+
+**Code Reference**: `client/src/apps/auditor/PolicyDecisionsExplorer.tsx`
+
+### Export Functionality
+
+- **Multiple Formats**: Export in PDF, CSV, JSON, XLSX
+- **Custom Exports**: Customize export format and content
+- **Batch Export**: Export multiple reports at once
+- **Scheduled Exports**: Schedule automatic report exports
+
+**Code Reference**: `app/services/audit_export_service.py`
+
+---
+
+## Report Types
+
+### Overview Report
+
+Comprehensive overview of all audit activity:
+- Total audit logs
+- Policy decisions summary
+- CDM events count
+- Activity trends
+- User activity summary
+
+### Deal Report
+
+Audit trail for specific deal:
+- Deal information
+- All related audit logs
+- Policy decisions
+- CDM events
+- Document history
+
+### Loan Report
+
+Audit trail for specific loan:
+- Loan information
+- Verification history
+- Policy decisions
+- CDM events
+- Recovery actions
+
+### Filing Report
+
+Audit trail for regulatory filing:
+- Filing information
+- Filing status
+- Policy decisions
+- CDM events
+- Compliance verification
+
+### Custom Report
+
+Customizable report with selected sections:
+- Custom date range
+- Custom entity selection
+- Custom section selection
+- Custom template
+
+**Code Reference**: `app/services/audit_report_service.py`
+
+---
+
+## Workflow
+
+### 1. Generate Report
+
+1. **Select Report Type**: Choose report type (overview, deal, loan, filing, custom)
+2. **Set Date Range**: Select date range for report
+3. **Select Entities**: Choose specific entities (if applicable)
+4. **Choose Template**: Select report template
+5. **Configure Sections**: Include/exclude report sections
+6. **Generate**: Generate report
+
+### 2. Review Report
+
+1. **View Report**: Review generated report
+2. **Explore Events**: Navigate CDM events
+3. **Analyze Decisions**: Review policy decisions
+4. **Verify Compliance**: Verify compliance status
+5. **Export**: Export report in desired format
+
+### 3. Export Report
+
+1. **Select Format**: Choose export format (PDF, CSV, JSON, XLSX)
+2. **Configure Export**: Set export options
+3. **Download**: Download exported report
+4. **Archive**: Archive report for future reference
+
+---
+
+## API Endpoints
+
+### Generate Audit Report
+
+<Endpoint method="POST" path="/api/auditor/reports/generate" />
+
+Generate an audit report.
+
+**Request Body**:
+```json
+{
+  "report_type": "overview",
+  "date_range": {
+    "start": "2026-01-15T00:00:00Z",
+    "end": "2026-12-31T23:59:59Z"
+  },
+  "entity_selection": {
+    "type": "deal",
+    "ids": [1, 2, 3]
+  },
+  "template": "comprehensive",
+  "include_sections": {
+    "audit_logs": true,
+    "policy_decisions": true,
+    "cdm_events": true,
+    "statistics": true
+  }
+}
+```
+
+**Response**: Generated report data
+
+**Code Reference**: `app/api/auditor_routes.py`
+
+### Export Report
+
+<Endpoint method="GET" path="/api/auditor/reports/{report_id}/export" />
+
+Export a generated report.
+
+**Query Parameters**:
+- `format`: Export format (pdf, csv, json, xlsx)
+
+**Response**: File download
+
+### Get CDM Events
+
+<Endpoint method="GET" path="/api/auditor/cdm-events" />
+
+Browse and filter CDM events.
+
+**Query Parameters**:
+- `event_type`: Filter by event type
+- `transaction_id`: Filter by transaction ID
+- `start_date`: Start date filter
+- `end_date`: End date filter
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of CDM events
+
+### Get Policy Decisions
+
+<Endpoint method="GET" path="/api/auditor/policy-decisions" />
+
+Browse and filter policy decisions.
+
+**Query Parameters**:
+- `decision`: Filter by decision (ALLOW, BLOCK, FLAG)
+- `rule_applied`: Filter by rule name
+- `transaction_type`: Filter by transaction type
+- `start_date`: Start date filter
+- `end_date`: End date filter
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of policy decisions
+
+**Code Reference**: `app/api/auditor_routes.py`
+
+---
+
+## User Interface
+
+### Auditor Router
+
+**Location**: `client/src/apps/auditor/AuditorRouter.tsx`
+
+**Features**:
+- **Dashboard**: Audit dashboard with statistics
+- **Report Generator**: Report generation interface
+- **CDM Event Explorer**: CDM event browsing
+- **Policy Decisions Explorer**: Policy decision tracking
+- **Export Interface**: Report export interface
+
+### Audit Report Generator
+
+**Location**: `client/src/apps/auditor/AuditReportGenerator.tsx`
+
+**Features**:
+- **Report Configuration**: Configure report parameters
+- **Template Selection**: Choose report template
+- **Section Selection**: Include/exclude sections
+- **Preview**: Preview generated report
+- **Export**: Export report in multiple formats
+
+**Code Reference**: `client/src/apps/auditor/`
+
+---
+
+## Permissions
+
+All auditor endpoints require `AUDIT_VIEW` permission. Export endpoints require `AUDIT_EXPORT` permission.
+
+**Code Reference**: `app/core/permissions.py`
+
+---
+
+## Best Practices
+
+1. **Regular Reports**: Generate reports regularly for compliance
+2. **Date Range Selection**: Use appropriate date ranges
+3. **Entity Filtering**: Filter by specific entities when needed
+4. **Template Selection**: Choose appropriate template for audience
+5. **Export Archiving**: Archive exported reports for audit trail
+
+---
+
+## Additional Resources
+
+- [Auditor API Reference](/api-reference/auditor)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/audit_report_service.py`, `app/api/auditor_routes.py`, `client/src/apps/auditor/`

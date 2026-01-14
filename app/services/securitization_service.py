@@ -119,14 +119,87 @@ class SecuritizationService:
                 })
             
             elif asset_type == "loan_asset" and loan_asset_id:
+                # Ensure loan_asset_id is an integer
+                if isinstance(loan_asset_id, str):
+                    try:
+                        loan_asset_id = int(loan_asset_id)
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Invalid loan_asset_id format: {loan_asset_id}")
                 loan = self.db.query(LoanAsset).filter(LoanAsset.id == loan_asset_id).first()
                 if not loan:
                     raise ValueError(f"Loan asset {loan_asset_id} not found")
                 
-                # Extract value from loan
-                if loan.principal_amount:
-                    asset_value = Decimal(str(loan.principal_amount))
+                # Extract value from loan - try multiple sources
+                asset_value = Decimal("0")
+                
+                # 1. Try to get from loan asset metadata
+                if loan.asset_metadata and isinstance(loan.asset_metadata, dict):
+                    principal = loan.asset_metadata.get("principal_amount") or loan.asset_metadata.get("principal")
+                    if principal:
+                        asset_value = Decimal(str(principal))
+                
+                # 2. Try to get from SPT data
+                if asset_value <= 0 and loan.spt_data and isinstance(loan.spt_data, dict):
+                    principal = loan.spt_data.get("principal_amount") or loan.spt_data.get("principal")
+                    if principal:
+                        asset_value = Decimal(str(principal))
+                
+                # 3. Try to find related document via loan_id and get total_commitment
+                if asset_value <= 0 and loan.loan_id:
+                    from app.db.models import Document, DocumentVersion
+                    from app.models.cdm import CreditAgreement
+                    
+                    # Search documents for credit agreement matching loan_id
+                    documents = self.db.query(Document).filter(
+                        Document.current_version_id.isnot(None)
+                    ).all()
+                    
+                    for doc in documents:
+                        if doc.current_version_id:
+                            version = self.db.query(DocumentVersion).filter(
+                                DocumentVersion.id == doc.current_version_id
+                            ).first()
+                            if version and version.extracted_data:
+                                try:
+                                    agreement = CreditAgreement(**version.extracted_data)
+                                    # Check if loan_id matches deal_id or loan_identification_number
+                                    if (agreement.deal_id == loan.loan_id or 
+                                        agreement.loan_identification_number == loan.loan_id):
+                                        # Get total commitment from document or facilities
+                                        if doc.total_commitment:
+                                            asset_value = Decimal(str(doc.total_commitment))
+                                        elif agreement.facilities:
+                                            for facility in agreement.facilities:
+                                                if facility.commitment_amount:
+                                                    asset_value += facility.commitment_amount.amount
+                                        break
+                                except Exception:
+                                    continue
+                    
+                    # 4. If still not found, try to get from deal via document
+                    if asset_value <= 0:
+                        for doc in documents:
+                            if doc.deal_id:
+                                from app.db.models import Deal
+                                deal = self.db.query(Deal).filter(Deal.id == doc.deal_id).first()
+                                if deal and deal.deal_data and isinstance(deal.deal_data, dict):
+                                    # Check if loan_id matches in deal_data
+                                    if deal.deal_data.get("loan_id") == loan.loan_id:
+                                        commitment = deal.deal_data.get("total_commitment")
+                                        if commitment:
+                                            asset_value = Decimal(str(commitment))
+                                        elif doc.total_commitment:
+                                            asset_value = Decimal(str(doc.total_commitment))
+                                        break
+                
+                if asset_value > 0:
                     total_pool_value += asset_value
+                else:
+                    raise ValueError(
+                        f"Could not determine principal amount for loan asset {loan_asset_id} (loan_id: {loan.loan_id}). "
+                        f"Please ensure the loan is associated with a document or deal with a total_commitment, "
+                        f"or provide principal_amount in asset_metadata or spt_data."
+                    )
                 
                 validated_assets.append({
                     "asset_id": f"loan_{loan_asset_id}",

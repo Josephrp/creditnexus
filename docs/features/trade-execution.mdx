@@ -1,0 +1,218 @@
+---
+title: Trade Execution
+description: LMA trade confirmation and settlement with CDM compliance
+---
+
+## Overview
+
+The Trade Execution feature enables LMA (Loan Market Association) trade confirmation and settlement with CDM-compliant event generation, policy enforcement, and x402 payment integration.
+
+**Code Reference**: `client/src/apps/trade-blotter/TradeBlotter.tsx`, `app/api/routes.py` (trade endpoints), `app/models/cdm_events.py`
+
+---
+
+## Key Features
+
+### LMA Trade Tickets
+
+- **Pre-filled Tickets**: Automatic pre-filling from FDC3 loan context
+- **Trade Details**: Trade price, amount, settlement date
+- **Party Information**: Borrower and lender details
+- **Facility Mapping**: Map to specific loan facilities
+
+**Code Reference**: `client/src/apps/trade-blotter/TradeBlotter.tsx`
+
+### Policy Evaluation
+
+- **Pre-Trade Check**: Policy evaluation before trade execution
+- **Decision Types**: ALLOW, BLOCK, or FLAG decisions
+- **Rule Tracking**: Track which policy rules were applied
+- **Evaluation Trace**: Complete evaluation trace for audit
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_trade_execution)
+
+### Settlement
+
+- **Settlement Date**: Calculate settlement date (T+5 business days)
+- **x402 Payment**: Optional x402 payment for settlement
+- **CDM Events**: Generate TradeExecution CDM events
+- **Status Tracking**: Track trade status (pending, confirmed, settled)
+
+**Code Reference**: `app/api/routes.py` (execute_trade, settle_trade endpoints)
+
+---
+
+## Workflow
+
+### 1. Receive Loan Context
+
+1. **FDC3 Broadcast**: Receive loan context from Document Parser
+2. **Auto-Populate**: Trade Blotter auto-populates with loan data
+3. **Review Data**: Review borrower, facilities, and amounts
+4. **Select Facility**: Choose facility for trade
+
+### 2. Configure Trade
+
+1. **Set Trade Price**: Enter trade price (par, premium, discount)
+2. **Set Trade Amount**: Enter trade amount
+3. **Calculate Settlement**: System calculates settlement date
+4. **Review Details**: Review all trade details
+
+### 3. Execute Trade
+
+1. **Policy Check**: System evaluates policy rules
+2. **Decision Review**: Review policy decision (ALLOW/BLOCK/FLAG)
+3. **Execute**: Execute trade if allowed
+4. **CDM Event**: Generate TradeExecution CDM event
+5. **Settlement**: Process settlement (with optional x402 payment)
+
+---
+
+## API Endpoints
+
+### Execute Trade
+
+<Endpoint method="POST" path="/api/trades/execute" />
+
+Execute a trade with policy evaluation.
+
+**Request Body**:
+```json
+{
+  "credit_agreement_id": 123,
+  "facility_id": "FACILITY_001",
+  "trade_price": 100.0,
+  "trade_amount": 1000000.00,
+  "settlement_date": "2026-01-20",
+  "buyer": {...},
+  "seller": {...}
+}
+```
+
+**Response**: Trade execution result with CDM events
+
+**Code Reference**: `app/api/routes.py` (execute_trade endpoint)
+
+### Settle Trade
+
+<Endpoint method="POST" path="/api/trades/{trade_id}/settle" />
+
+Settle a trade with optional x402 payment.
+
+**Request Body** (Optional):
+```json
+{
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }
+}
+```
+
+**Response**: Settlement confirmation or 402 Payment Required
+
+**Code Reference**: `app/api/routes.py` (settle_trade endpoint)
+
+---
+
+## FDC3 Integration
+
+Trade Blotter listens for FDC3 loan context:
+
+```typescript
+// Receives context from Document Parser
+const context = useFDC3();
+if (context?.loan) {
+  // Auto-populate trade ticket
+  setLoanData(context.loan);
+}
+```
+
+**Code Reference**: `client/src/apps/trade-blotter/TradeBlotter.tsx` (FDC3 context handling)
+
+---
+
+## CDM Event Generation
+
+All trade executions generate CDM-compliant events:
+
+```json
+{
+  "eventType": "TradeExecution",
+  "eventDate": "2026-01-15T10:00:00Z",
+  "trade": {
+    "tradeId": "TRADE_001",
+    "executionDate": {"date": "2026-01-15"},
+    "settlementDate": {"date": "2026-01-20"},
+    "price": 100.0,
+    "quantity": 1000000.00,
+    "buyer": {...},
+    "seller": {...}
+  }
+}
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_trade_execution)
+
+---
+
+## Policy Evaluation
+
+Trade execution includes policy evaluation:
+
+- **Sanctions Screening**: Check buyer/seller against sanctions lists
+- **Credit Risk**: Evaluate credit risk limits
+- **Regulatory Compliance**: Check regulatory requirements
+- **ESG Compliance**: Verify ESG requirements
+
+**Decision Handling**:
+- **BLOCK**: Trade is blocked, cannot proceed
+- **FLAG**: Trade is flagged for review
+- **ALLOW**: Trade proceeds normally
+
+**Code Reference**: `app/services/policy_service.py` (evaluate_trade_execution)
+
+---
+
+## User Interface
+
+### Trade Blotter
+
+**Location**: `client/src/apps/trade-blotter/TradeBlotter.tsx`
+
+**Features**:
+- **FDC3 Integration**: Auto-receives loan context
+- **Trade Configuration**: Configure trade details
+- **Policy Display**: Show policy evaluation results
+- **Payment Integration**: x402 payment processing
+- **Status Tracking**: Track trade status
+
+**Access**: Navigate to "Trade Blotter" in sidebar
+
+---
+
+## Best Practices
+
+1. **Verify Data**: Verify loan data before executing trade
+2. **Policy Review**: Review policy evaluation results
+3. **Settlement Planning**: Plan settlement date appropriately
+4. **Payment Processing**: Process payments for settlement
+5. **CDM Compliance**: Ensure all trades generate CDM events
+
+---
+
+## Additional Resources
+
+- [Trade Execution Guide](/guides/trade-execution)
+- [Payment Systems Feature](/features/payment-systems)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/apps/trade-blotter/TradeBlotter.tsx`, `app/api/routes.py`, `app/models/cdm_events.py`

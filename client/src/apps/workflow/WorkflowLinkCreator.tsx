@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectItem } from '@/components/ui/select'
 import { Copy, Check, Share2, FileText, Loader2, Settings, User, Mail } from 'lucide-react'
-import { WorkflowLinkSharer } from './WorkflowLinkSharer'
+import { WorkflowLinkSharer } from '@/components/WorkflowLinkSharer'
 import { fetchWithAuth } from '@/context/AuthContext'
 
 interface Document {
@@ -31,7 +31,7 @@ type WorkflowType =
   | 'deal_review'
   | 'custom'
 
-interface VerificationLinkCreatorProps {
+interface WorkflowLinkCreatorProps {
   dealId?: number
   documentId?: number
   verificationId?: string
@@ -54,12 +54,12 @@ interface Deal {
   deal_type: string | null
 }
 
-export function VerificationLinkCreator({
+export function WorkflowLinkCreator({
   dealId: propDealId,
   documentId: propDocumentId,
   verificationId,
   onLinkGenerated
-}: VerificationLinkCreatorProps) {
+}: WorkflowLinkCreatorProps) {
   // Workflow configuration
   const [workflowType, setWorkflowType] = useState<WorkflowType>('verification')
   const [customWorkflowType, setCustomWorkflowType] = useState('')

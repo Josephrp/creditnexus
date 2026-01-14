@@ -61,6 +61,9 @@ export function AdminSignupDashboard() {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalUser, setApprovalUser] = useState<SignupUser | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
 
   useEffect(() => {
     fetchSignups();
@@ -99,6 +102,11 @@ export function AdminSignupDashboard() {
     }
   };
 
+  const handleApproveClick = (user: SignupUser) => {
+    setApprovalUser(user);
+    setShowApprovalModal(true);
+  };
+
   const handleApprove = async (userId: number) => {
     try {
       setIsApproving(userId);
@@ -116,11 +124,38 @@ export function AdminSignupDashboard() {
       if (selectedSignup?.id === userId) {
         setSelectedSignup(null);
       }
+      if (approvalUser?.id === userId) {
+        setApprovalUser(null);
+        setShowApprovalModal(false);
+      }
+      // Remove from selected users if in bulk selection
+      setSelectedUsers(prev => prev.filter(id => id !== userId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve signup');
     } finally {
       setIsApproving(null);
     }
+  };
+
+  const handleBulkApprove = async () => {
+    for (const userId of selectedUsers) {
+      await handleApprove(userId);
+    }
+    setSelectedUsers([]);
+  };
+
+  const handleBulkReject = async () => {
+    if (!rejectReason.trim() || rejectReason.trim().length < 10) {
+      setError('Rejection reason must be at least 10 characters');
+      return;
+    }
+    
+    for (const userId of selectedUsers) {
+      await handleReject(userId);
+    }
+    setSelectedUsers([]);
+    setShowRejectModal(false);
+    setRejectReason('');
   };
 
   const handleReject = async (userId: number) => {
@@ -277,6 +312,47 @@ export function AdminSignupDashboard() {
         </CardContent>
       </Card>
 
+      {/* Bulk Actions */}
+      {selectedUsers.length > 0 && (
+        <Card className="bg-emerald-500/10 border-emerald-500/20 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-emerald-300">
+                {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleBulkApprove}
+                  disabled={isApproving !== null}
+                  className="bg-emerald-600 hover:bg-emerald-500"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Approve All
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setShowRejectModal(true)}
+                  disabled={isRejecting !== null}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject All
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedUsers([])}
+                  className="border-slate-600 text-slate-300"
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="p-4 bg-red-900/30 border border-red-700 rounded-lg flex items-start gap-3">
@@ -303,6 +379,20 @@ export function AdminSignupDashboard() {
             <Card key={signup.id} className="bg-slate-800 border-slate-700 hover:border-slate-600 transition-colors">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.includes(signup.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedUsers(prev => [...prev, signup.id]);
+                        } else {
+                          setSelectedUsers(prev => prev.filter(id => id !== signup.id));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-emerald-600 focus:ring-emerald-500"
+                    />
+                  </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <div className={`p-2 rounded-lg ${getStatusColor(signup.signup_status)}`}>
@@ -335,13 +425,15 @@ export function AdminSignupDashboard() {
                           {signup.profile_data.company && (
                             <span className="flex items-center gap-1 mb-1">
                               <Building2 className="h-3 w-3" />
-                              {signup.profile_data.company}
+                              {typeof signup.profile_data.company === 'object' 
+                                ? (signup.profile_data.company as any)?.name || (signup.profile_data.company as any)?.legal_name || 'Company'
+                                : String(signup.profile_data.company)}
                             </span>
                           )}
                           {signup.profile_data.job_title && (
                             <span className="flex items-center gap-1">
                               <FileText className="h-3 w-3" />
-                              {signup.profile_data.job_title}
+                              {String(signup.profile_data.job_title)}
                             </span>
                           )}
                         </div>
@@ -366,7 +458,7 @@ export function AdminSignupDashboard() {
                         {hasPermission('USER_APPROVE') && (
                           <Button
                             size="sm"
-                            onClick={() => handleApprove(signup.id)}
+                            onClick={() => handleApproveClick(signup)}
                             disabled={isApproving === signup.id}
                             className="bg-emerald-600 hover:bg-emerald-500"
                           >
@@ -429,17 +521,68 @@ export function AdminSignupDashboard() {
         </div>
       )}
 
+      {/* Approval Confirmation Modal */}
+      {showApprovalModal && approvalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-slate-800 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-slate-100">Confirm Approval</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-slate-300">
+                Are you sure you want to approve signup for <strong>{approvalUser.display_name}</strong> ({approvalUser.email})?
+              </p>
+              <p className="text-sm text-slate-400">
+                Role: {approvalUser.role.replace('_', ' ')}
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowApprovalModal(false);
+                    setApprovalUser(null);
+                  }}
+                  className="border-slate-600 text-slate-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleApprove(approvalUser.id)}
+                  disabled={isApproving === approvalUser.id}
+                  className="bg-emerald-600 hover:bg-emerald-500"
+                >
+                  {isApproving === approvalUser.id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    'Confirm Approval'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Reject Modal */}
-      {showRejectModal && selectedSignup && (
+      {showRejectModal && (selectedSignup || selectedUsers.length > 0) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <Card className="w-full max-w-md bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle className="text-slate-100">Reject Signup</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-slate-300">
-                Rejecting signup for <strong>{selectedSignup.display_name}</strong> ({selectedSignup.email})
-              </p>
+              {selectedUsers.length > 0 ? (
+                <p className="text-slate-300">
+                  Rejecting {selectedUsers.length} signup{selectedUsers.length > 1 ? 's' : ''}
+                </p>
+              ) : selectedSignup ? (
+                <p className="text-slate-300">
+                  Rejecting signup for <strong>{selectedSignup.display_name}</strong> ({selectedSignup.email})
+                </p>
+              ) : null}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Rejection Reason (minimum 10 characters) *
@@ -465,13 +608,24 @@ export function AdminSignupDashboard() {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => handleReject(selectedSignup.id)}
-                  disabled={!rejectReason.trim() || rejectReason.trim().length < 10 || isRejecting === selectedSignup.id}
+                  onClick={() => {
+                    if (selectedUsers.length > 0) {
+                      handleBulkReject();
+                    } else if (selectedSignup) {
+                      handleReject(selectedSignup.id);
+                    }
+                  }}
+                  disabled={
+                    !rejectReason.trim() || 
+                    rejectReason.trim().length < 10 || 
+                    (selectedSignup && isRejecting === selectedSignup.id) ||
+                    (selectedUsers.length > 0 && isRejecting !== null)
+                  }
                 >
-                  {isRejecting === selectedSignup.id ? (
+                  {(selectedSignup && isRejecting === selectedSignup.id) || (selectedUsers.length > 0 && isRejecting !== null) ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    'Reject'
+                    selectedUsers.length > 0 ? `Reject ${selectedUsers.length}` : 'Reject'
                   )}
                 </Button>
               </div>
@@ -542,12 +696,33 @@ export function AdminSignupDashboard() {
                 <div>
                   <label className="text-xs text-slate-400 mb-2 block">Profile Data</label>
                   <div className="p-3 bg-slate-900 rounded-lg space-y-2">
-                    {Object.entries(selectedSignup.profile_data).map(([key, value]) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-sm text-slate-400 capitalize">{key.replace('_', ' ')}:</span>
-                        <span className="text-sm text-slate-100">{String(value)}</span>
-                      </div>
-                    ))}
+                    {Object.entries(selectedSignup.profile_data).map(([key, value]) => {
+                      // Handle objects, arrays, and null/undefined values
+                      let displayValue: string;
+                      if (value === null || value === undefined) {
+                        displayValue = 'N/A';
+                      } else if (typeof value === 'object' && !Array.isArray(value)) {
+                        // If it's an object, stringify it or show key-value pairs
+                        displayValue = JSON.stringify(value, null, 2);
+                      } else if (Array.isArray(value)) {
+                        displayValue = value.join(', ');
+                      } else {
+                        displayValue = String(value);
+                      }
+                      
+                      return (
+                        <div key={key} className="flex justify-between">
+                          <span className="text-sm text-slate-400 capitalize">{key.replace('_', ' ')}:</span>
+                          <span className="text-sm text-slate-100 break-words max-w-md text-right">
+                            {typeof value === 'object' && !Array.isArray(value) ? (
+                              <pre className="text-xs whitespace-pre-wrap">{displayValue}</pre>
+                            ) : (
+                              displayValue
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

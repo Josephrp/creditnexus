@@ -1,0 +1,281 @@
+---
+title: Securitization API
+description: API endpoints for securitization workflow and structured finance
+---
+
+## Securitization API
+
+Complete API for managing securitization pools, tranches, notarization, and payment distribution.
+
+**Base Path**: `/api/securitization`  
+**Code Reference**: `app/api/securitization_routes.py`
+
+---
+
+## Pool Management
+
+### Create Securitization Pool
+
+<Endpoint method="POST" path="/api/securitization/pools" />
+
+Create a new securitization pool with underlying assets and tranches.
+
+**Request Body**:
+```json
+{
+  "pool_name": "Agricultural Loan Pool 2024",
+  "pool_type": "ABS",
+  "originator_user_id": 1,
+  "trustee_user_id": 2,
+  "servicer_user_id": 3,
+  "underlying_asset_ids": [
+    {
+      "asset_id": 1,
+      "asset_type": "loan",
+      "value": 100000.00,
+      "currency": "USD"
+    }
+  ],
+  "tranche_data": [
+    {
+      "name": "Senior Tranche",
+      "class": "A",
+      "size": 800000.00,
+      "interest_rate": 5.5,
+      "priority": 1,
+      "risk_rating": "AAA"
+    }
+  ],
+  "payment_waterfall_rules": [
+    {
+      "priority": 1,
+      "tranche_id": 1,
+      "payment_type": "interest",
+      "percentage": 100.0
+    }
+  ]
+}
+```
+
+**Response**: Securitization pool details with CDM events
+
+---
+
+### List Securitization Pools
+
+<Endpoint method="GET" path="/api/securitization/pools" />
+
+List all securitization pools with filtering and pagination.
+
+**Query Parameters**:
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20)
+- `pool_type`: Filter by pool type (ABS, CLO, MBS)
+- `status`: Filter by status
+
+**Response**: Paginated list of pools
+
+---
+
+### Get Pool Details
+
+<Endpoint method="GET" path="/api/securitization/pools/{pool_id}" />
+
+Get detailed information about a specific securitization pool.
+
+**Response**: Complete pool details including assets, tranches, and payment waterfall
+
+---
+
+### Add Assets to Pool
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/assets" />
+
+Add underlying assets to an existing pool.
+
+**Request Body**:
+```json
+{
+  "underlying_asset_ids": [
+    {
+      "asset_id": 2,
+      "asset_type": "loan",
+      "value": 50000.00,
+      "currency": "USD"
+    }
+  ]
+}
+```
+
+---
+
+### Add Tranches to Pool
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/tranches" />
+
+Add tranches to an existing pool.
+
+**Request Body**:
+```json
+{
+  "tranche_data": [
+    {
+      "name": "Mezzanine Tranche",
+      "class": "B",
+      "size": 150000.00,
+      "interest_rate": 7.0,
+      "priority": 2,
+      "risk_rating": "BBB"
+    }
+  ]
+}
+```
+
+---
+
+## Notarization
+
+### Notarize Securitization Pool
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/notarize" />
+
+Notarize a securitization pool on the blockchain with multi-party signatures.
+
+**Request Body**:
+```json
+{
+  "signer_user_ids": [1, 2, 3],
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "50.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  },
+  "skip_payment": false
+}
+```
+
+**Response**: Notarization record with blockchain transaction hash
+
+---
+
+## Tranche Management
+
+### Purchase Tranche
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/tranches/{tranche_id}/purchase" />
+
+Purchase a tranche with x402 payment.
+
+**Request Body**:
+```json
+{
+  "tranche_id": 1,
+  "buyer_user_id": 4,
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "800000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }
+}
+```
+
+**Response**: Purchase confirmation with ERC-721 token details
+
+---
+
+### Mint Tranche Tokens
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/tranches/{tranche_id}/mint" />
+
+Mint ERC-721 tokens for a tranche.
+
+**Request Body**:
+```json
+{
+  "token_metadata": {
+    "name": "Agricultural Loan Pool 2024 - Senior Tranche",
+    "description": "Senior tranche token",
+    "image": "https://..."
+  },
+  "recipient_addresses": ["0x...", "0x..."]
+}
+```
+
+**Response**: Token minting confirmation with token IDs
+
+---
+
+## Payment Distribution
+
+### Distribute Payments
+
+<Endpoint method="POST" path="/api/securitization/pools/{pool_id}/payments/distribute" />
+
+Distribute payments to tranche holders according to waterfall rules.
+
+**Request Body**:
+```json
+{
+  "payment_amount": 10000.00,
+  "payment_type": "interest",
+  "payment_payloads": [
+    {
+      "from": "0x...",
+      "to": "0x...",
+      "amount": "8000.00",
+      "currency": "USD",
+      "network": "base",
+      "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    }
+  ]
+}
+```
+
+**Response**: Payment distribution summary with CDM events
+
+---
+
+## Error Responses
+
+### 400 Bad Request
+Invalid request parameters or missing required fields.
+
+### 403 Forbidden
+Policy block or insufficient permissions.
+
+### 404 Not Found
+Pool, tranche, or asset not found.
+
+### 402 Payment Required
+x402 payment required for notarization or purchase.
+
+---
+
+## CDM Events
+
+All securitization operations generate CDM events:
+- **SecuritizationCreation**: Pool creation
+- **SecuritizationNotarization**: Blockchain notarization
+- **TrancheMinting**: Token minting
+- **PaymentDistribution**: Payment distribution
+
+**Code Reference**: `app/models/cdm_events.py`
+
+---
+
+## Additional Resources
+
+- [Securitization Feature](/features/securitization)
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [Configuration Guide](/getting-started/configuration#blockchain--smart-contract-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/securitization_routes.py`

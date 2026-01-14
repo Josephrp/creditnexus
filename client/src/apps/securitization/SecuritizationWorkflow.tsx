@@ -3,9 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectItem } from '@/components/ui/select';
+import { useToast } from '@/components/ui/toast';
+import { Tooltip } from '@/components/ui/tooltip';
 import { 
   Building2, 
-  Wallet, 
   CheckCircle, 
   AlertCircle,
   Loader2,
@@ -13,11 +15,9 @@ import {
   Trash2,
   ArrowRight,
   Shield,
-  FileText,
-  DollarSign
+  FileText
 } from 'lucide-react';
-import { fetchWithAuth, useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
+import { fetchWithAuth } from '@/context/AuthContext';
 // import { useX402Payment } from '@/hooks/useX402Payment';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -54,18 +54,32 @@ interface PoolConfiguration {
   pool_type: string;
   originator_id: number | null;
   trustee_id: number | null;
+  servicer_id: number | null;
   underlying_assets: SelectedAsset[];
   tranches: TrancheDefinition[];
+  payment_waterfall_rules: Array<{
+    priority: number;
+    tranche_id?: string;
+    payment_type: string;
+    percentage: number;
+  }>;
+}
+
+interface User {
+  id: number;
+  display_name: string;
+  email: string;
+  role: string;
 }
 
 export function SecuritizationWorkflow() {
-  const { user } = useAuth();
-  const { isConnected, account } = useWallet();
   // const { processPayment, isProcessing: paymentProcessing } = useX402Payment();
+  const { addToast } = useToast();
   
   const [activeStep, setActiveStep] = useState<'assets' | 'configure' | 'review' | 'notarize'>('assets');
   const [availableAssets, setAvailableAssets] = useState<AvailableAsset[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<SelectedAsset[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [poolConfig, setPoolConfig] = useState<PoolConfiguration>({
@@ -73,15 +87,32 @@ export function SecuritizationWorkflow() {
     pool_type: 'ABS',
     originator_id: null,
     trustee_id: null,
+    servicer_id: null,
     underlying_assets: [],
-    tranches: []
+    tranches: [],
+    payment_waterfall_rules: []
   });
   const [creating, setCreating] = useState(false);
   const [createdPoolId, setCreatedPoolId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAvailableAssets();
+    fetchUsers();
   }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetchWithAuth('/api/users?limit=100');
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      // Don't show error toast for users fetch failure - it's not critical
+    }
+  };
 
   const fetchAvailableAssets = async () => {
     setLoading(true);
@@ -212,17 +243,22 @@ export function SecuritizationWorkflow() {
         asset_type: asset.asset_type,
         asset_id: asset.asset_id,
         deal_id: asset.deal_id,
-        loan_asset_id: asset.loan_id,
+        // For loan_asset, use asset_id (which is the numeric database ID) not loan_id (which is the string identifier)
+        loan_asset_id: asset.asset_type === 'loan_asset' ? parseInt(asset.asset_id) : undefined,
         value: asset.allocation_amount || parseFloat(asset.value || '0'),
         currency: asset.currency
       }));
 
       const tranches = poolConfig.tranches.map(t => ({
+        name: t.tranche_name,
         tranche_name: t.tranche_name,
+        class: t.tranche_class,
         tranche_class: t.tranche_class,
-        size: t.size,
+        size: t.size.amount,
+        currency: t.size.currency || 'USD',
         interest_rate: t.interest_rate,
         risk_rating: t.risk_rating,
+        priority: t.payment_priority,
         payment_priority: t.payment_priority
       }));
 
@@ -234,8 +270,10 @@ export function SecuritizationWorkflow() {
           pool_type: poolConfig.pool_type,
           originator_user_id: poolConfig.originator_id,
           trustee_user_id: poolConfig.trustee_id,
+          servicer_user_id: poolConfig.servicer_id || null,
           underlying_asset_ids: underlying_assets,
-          tranche_data: tranches
+          tranche_data: tranches,
+          payment_waterfall_rules: poolConfig.payment_waterfall_rules.length > 0 ? poolConfig.payment_waterfall_rules : null
         })
       });
 
@@ -247,8 +285,11 @@ export function SecuritizationWorkflow() {
       const data = await response.json();
       setCreatedPoolId(data.pool_id);
       setActiveStep('notarize');
+      addToast('Pool created successfully!', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create pool');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create pool';
+      setError(errorMessage);
+      addToast(errorMessage, 'error');
     } finally {
       setCreating(false);
     }
@@ -301,15 +342,18 @@ export function SecuritizationWorkflow() {
                   </div>
                   
                   <div className="space-y-2">
-                    {availableAssets.map((asset) => {
+                    {availableAssets.map((asset, index) => {
                       const isSelected = selectedAssets.some(a =>
                         (asset.asset_type === 'deal' && a.deal_id === asset.deal_id) ||
                         (asset.asset_type === 'loan_asset' && a.loan_id === asset.loan_id)
                       );
                       
+                      // Generate unique key using asset_id or fallback to index
+                      const uniqueKey = asset.asset_id || `${asset.asset_type}_${asset.deal_id || asset.loan_id || index}`;
+                      
                       return (
                         <div
-                          key={`${asset.type}_${asset.deal_id || asset.loan_asset_id}`}
+                          key={uniqueKey}
                           className={`p-4 rounded-lg border ${
                             isSelected
                               ? 'bg-emerald-900/20 border-emerald-500/50'
@@ -346,8 +390,8 @@ export function SecuritizationWorkflow() {
                                 max="100"
                                 value={
                                   selectedAssets.find(a =>
-                                    (asset.type === 'deal' && a.deal_id === asset.deal_id) ||
-                                    (asset.type === 'loan_asset' && a.loan_asset_id === asset.loan_asset_id)
+                                    (asset.asset_type === 'deal' && a.deal_id === asset.deal_id) ||
+                                    (asset.asset_type === 'loan_asset' && a.loan_id === asset.loan_id)
                                   )?.allocation_percentage || 100
                                 }
                                 onChange={(e) => {
@@ -410,24 +454,49 @@ export function SecuritizationWorkflow() {
                   </select>
                 </div>
                 <div>
-                  <Label>Originator ID</Label>
-                  <Input
-                    type="number"
-                    value={poolConfig.originator_id || ''}
-                    onChange={(e) => setPoolConfig(prev => ({ ...prev, originator_id: parseInt(e.target.value) || null }))}
-                    placeholder="User ID"
-                    className="bg-slate-900 border-slate-700"
-                  />
+                  <Label>Originator</Label>
+                  <Select
+                    value={poolConfig.originator_id?.toString() || ''}
+                    onValueChange={(value) => setPoolConfig(prev => ({ ...prev, originator_id: value ? parseInt(value) : null }))}
+                    className="bg-slate-900 border-slate-700 text-slate-100"
+                  >
+                    <option value="" disabled>Select originator</option>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {user.display_name} ({user.email})
+                      </SelectItem>
+                    ))}
+                  </Select>
                 </div>
                 <div>
-                  <Label>Trustee ID</Label>
-                  <Input
-                    type="number"
-                    value={poolConfig.trustee_id || ''}
-                    onChange={(e) => setPoolConfig(prev => ({ ...prev, trustee_id: parseInt(e.target.value) || null }))}
-                    placeholder="User ID"
-                    className="bg-slate-900 border-slate-700"
-                  />
+                  <Label>Trustee</Label>
+                  <Select
+                    value={poolConfig.trustee_id?.toString() || ''}
+                    onValueChange={(value) => setPoolConfig(prev => ({ ...prev, trustee_id: value ? parseInt(value) : null }))}
+                    className="bg-slate-900 border-slate-700 text-slate-100"
+                  >
+                    <option value="" disabled>Select trustee</option>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {user.display_name} ({user.email})
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <Label>Servicer (Optional)</Label>
+                  <Select
+                    value={poolConfig.servicer_id?.toString() || ''}
+                    onValueChange={(value) => setPoolConfig(prev => ({ ...prev, servicer_id: value ? parseInt(value) : null }))}
+                    className="bg-slate-900 border-slate-700 text-slate-100"
+                  >
+                    <option value="">None (Optional)</option>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {user.display_name} ({user.email})
+                      </SelectItem>
+                    ))}
+                  </Select>
                 </div>
               </div>
 
@@ -471,15 +540,30 @@ export function SecuritizationWorkflow() {
                         </div>
                         <div>
                           <Label>Size (Amount)</Label>
-                          <Input
-                            type="number"
-                            value={tranche.size.amount}
-                            onChange={(e) => handleTrancheChange(index, 'size', {
-                              ...tranche.size,
-                              amount: parseFloat(e.target.value) || 0
-                            })}
-                            className="bg-slate-800 border-slate-700"
-                          />
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              value={tranche.size.amount}
+                              onChange={(e) => handleTrancheChange(index, 'size', {
+                                ...tranche.size,
+                                amount: parseFloat(e.target.value) || 0
+                              })}
+                              className="bg-slate-800 border-slate-700 flex-1"
+                            />
+                            <Select
+                              value={tranche.size.currency || 'USD'}
+                              onValueChange={(value) => handleTrancheChange(index, 'size', {
+                                ...tranche.size,
+                                currency: value
+                              })}
+                              className="bg-slate-800 border-slate-700 text-slate-100 w-24"
+                            >
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="EUR">EUR</SelectItem>
+                              <SelectItem value="GBP">GBP</SelectItem>
+                              <SelectItem value="JPY">JPY</SelectItem>
+                            </Select>
+                          </div>
                         </div>
                         <div>
                           <Label>Interest Rate (%)</Label>
@@ -521,6 +605,111 @@ export function SecuritizationWorkflow() {
                       </Button>
                     </div>
                   ))}
+                </div>
+
+                <div className="pt-4 border-t border-slate-700 mt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <Label className="text-lg font-semibold">Payment Waterfall Rules (Optional)</Label>
+                    <Button
+                      onClick={() => {
+                        setPoolConfig(prev => ({
+                          ...prev,
+                          payment_waterfall_rules: [
+                            ...prev.payment_waterfall_rules,
+                            {
+                              priority: prev.payment_waterfall_rules.length + 1,
+                              payment_type: 'principal',
+                              percentage: 0
+                            }
+                          ]
+                        }));
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-500/50 text-blue-400"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Rule
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {poolConfig.payment_waterfall_rules.map((rule, index) => (
+                      <div key={index} className="p-4 bg-slate-900 rounded-lg border border-slate-700">
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <Label>Priority</Label>
+                            <Input
+                              type="number"
+                              value={rule.priority}
+                              onChange={(e) => {
+                                setPoolConfig(prev => ({
+                                  ...prev,
+                                  payment_waterfall_rules: prev.payment_waterfall_rules.map((r, i) =>
+                                    i === index ? { ...r, priority: parseInt(e.target.value) || 1 } : r
+                                  )
+                                }));
+                              }}
+                              className="bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <Label>Payment Type</Label>
+                            <Select
+                              value={rule.payment_type}
+                              onValueChange={(value) => {
+                                setPoolConfig(prev => ({
+                                  ...prev,
+                                  payment_waterfall_rules: prev.payment_waterfall_rules.map((r, i) =>
+                                    i === index ? { ...r, payment_type: value } : r
+                                  )
+                                }));
+                              }}
+                              className="bg-slate-800 border-slate-700 text-slate-100"
+                            >
+                              <option value="principal">Principal</option>
+                              <option value="interest">Interest</option>
+                              <option value="both">Both</option>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Percentage (%)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={rule.percentage}
+                              onChange={(e) => {
+                                setPoolConfig(prev => ({
+                                  ...prev,
+                                  payment_waterfall_rules: prev.payment_waterfall_rules.map((r, i) =>
+                                    i === index ? { ...r, percentage: parseFloat(e.target.value) || 0 } : r
+                                  )
+                                }));
+                              }}
+                              className="bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setPoolConfig(prev => ({
+                              ...prev,
+                              payment_waterfall_rules: prev.payment_waterfall_rules.filter((_, i) => i !== index)
+                            }));
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    {poolConfig.payment_waterfall_rules.length === 0 && (
+                      <p className="text-sm text-slate-400 italic">No payment waterfall rules configured. Rules will be auto-generated if not specified.</p>
+                    )}
+                  </div>
                 </div>
 
                 {poolConfig.tranches.length > 0 && (
@@ -578,9 +767,35 @@ export function SecuritizationWorkflow() {
                       <span className="text-slate-100">{poolConfig.pool_type}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-slate-400">Originator:</span>
+                      <span className="text-slate-100">
+                        {poolConfig.originator_id ? users.find(u => u.id === poolConfig.originator_id)?.display_name || `User ${poolConfig.originator_id}` : 'Not set'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Trustee:</span>
+                      <span className="text-slate-100">
+                        {poolConfig.trustee_id ? users.find(u => u.id === poolConfig.trustee_id)?.display_name || `User ${poolConfig.trustee_id}` : 'Not set'}
+                      </span>
+                    </div>
+                    {poolConfig.servicer_id && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Servicer:</span>
+                        <span className="text-slate-100">
+                          {users.find(u => u.id === poolConfig.servicer_id)?.display_name || `User ${poolConfig.servicer_id}`}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
                       <span className="text-slate-400">Total Value:</span>
                       <span className="text-slate-100">${totalPoolValue.toLocaleString()}</span>
                     </div>
+                    {poolConfig.payment_waterfall_rules.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Payment Waterfall Rules:</span>
+                        <span className="text-slate-100">{poolConfig.payment_waterfall_rules.length} rule(s)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -627,23 +842,43 @@ export function SecuritizationWorkflow() {
                 >
                   Back
                 </Button>
-                <Button
-                  onClick={handleCreatePool}
-                  disabled={creating || Math.abs(totalPoolValue - trancheTotal) > 0.01}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                <Tooltip
+                  content={
+                    !poolConfig.pool_name ? 'Pool name is required' :
+                    !poolConfig.originator_id ? 'Originator is required' :
+                    !poolConfig.trustee_id ? 'Trustee is required' :
+                    selectedAssets.length === 0 ? 'At least one asset must be selected' :
+                    poolConfig.tranches.length === 0 ? 'At least one tranche must be added' :
+                    Math.abs(totalPoolValue - trancheTotal) > 0.01 ? `Tranche total (${trancheTotal.toLocaleString()}) must equal pool value (${totalPoolValue.toLocaleString()})` :
+                    'Create pool'
+                  }
                 >
-                  {creating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating Pool...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Create Pool
-                    </>
-                  )}
-                </Button>
+                  <Button
+                    onClick={handleCreatePool}
+                    disabled={
+                      creating || 
+                      !poolConfig.pool_name || 
+                      !poolConfig.originator_id || 
+                      !poolConfig.trustee_id ||
+                      selectedAssets.length === 0 ||
+                      poolConfig.tranches.length === 0 ||
+                      Math.abs(totalPoolValue - trancheTotal) > 0.01
+                    }
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating Pool...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Create Pool
+                      </>
+                    )}
+                  </Button>
+                </Tooltip>
               </div>
             </CardContent>
           </Card>

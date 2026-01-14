@@ -5,7 +5,7 @@ import type { AuditEvent } from '@/components/audit/AuditTimeline';
 import { AuditFilters, AuditFilters as AuditFiltersType } from '@/components/audit/AuditFilters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, RefreshCw, TrendingUp, Users, FileText, Shield } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, Users, FileText, Shield, FileSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface DashboardStatistics {
@@ -37,10 +37,14 @@ interface DashboardStatistics {
       FLAG: number;
     };
   };
+  cdm_events?: {
+    total_cdm_events: number;
+    event_type_distribution: Record<string, number>;
+  };
   recent_events: AuditEvent[];
 }
 
-export function AuditDashboard() {
+export function AuditDashboard({ showLogsOnly = false }: { showLogsOnly?: boolean }) {
   const navigate = useNavigate();
   const [statistics, setStatistics] = useState<DashboardStatistics | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
@@ -176,6 +180,40 @@ export function AuditDashboard() {
     );
   }
   
+  if (showLogsOnly) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-slate-100">Audit Logs Explorer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <AuditFilters
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                availableFilters={{
+                  actions: statistics?.top_actions?.map(a => a.action),
+                  targetTypes: Object.keys(statistics?.overview?.target_types || {}),
+                  users: statistics?.top_users?.map(u => ({
+                    id: u.user_id,
+                    name: u.user_name,
+                    email: u.user_email
+                  }))
+                }}
+              />
+              <AuditTimeline
+                events={auditLogs}
+                onEventClick={handleEventClick}
+                height={600}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -235,12 +273,19 @@ export function AuditDashboard() {
 
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-300">Unique Users</CardTitle>
-            <Users className="h-4 w-4 text-slate-400" />
+            <CardTitle className="text-sm font-medium text-slate-300">CDM Events</CardTitle>
+            <FileSearch className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-slate-100">
-              {statistics?.overview?.unique_users || 0}
+              {statistics?.cdm_events?.total_cdm_events || 0}
+            </div>
+            <div className="flex flex-wrap gap-1 mt-2 text-[10px]">
+              {Object.entries(statistics?.cdm_events?.event_type_distribution || {}).slice(0, 3).map(([type, count]) => (
+                <span key={type} className="bg-emerald-900/30 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                  {type}: {count}
+                </span>
+              ))}
             </div>
           </CardContent>
         </Card>

@@ -79,7 +79,7 @@ export function VerificationWidget({
 
     // Handle FDC3 context
     useEffect(() => {
-        if (context?.type === 'fdc3.creditnexus.loan' && context.loan?.document_text) {
+        if (context?.type === 'finos.creditnexus.loan' && context.loan?.document_text) {
             const loan = context.loan;
             setExtractedText(loan.document_text || '');
             setLogs([]);

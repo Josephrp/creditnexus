@@ -77,7 +77,7 @@ export function WorkflowProcessingPage() {
 
   // Get payload from URL or FDC3 context
   const payloadFromUrl = searchParams.get('payload')
-  const workflowContext = context?.type === 'fdc3.creditnexus.workflow' ? context as WorkflowLinkContext : null
+  const workflowContext = context?.type === 'finos.creditnexus.workflow' ? context as WorkflowLinkContext : null
   const encryptedPayload = payloadFromUrl || workflowContext?.linkPayload
 
   useEffect(() => {

@@ -1,0 +1,195 @@
+---
+title: Document Generation
+description: Generate LMA templates from CDM data with AI-powered assistance
+---
+
+## Overview
+
+The Document Generation feature enables creation of LMA (Loan Market Association) templates from CDM data with AI-powered field population, interactive chatbot assistance, and comprehensive template management.
+
+**Code Reference**: `client/src/apps/document-generator/DocumentGenerator.tsx`, `app/generation/service.py`, `app/chains/decision_support_chain.py`
+
+---
+
+## Key Features
+
+### Template-Based Generation
+
+- **LMA Templates**: Standard LMA template library
+- **CDM Data Hydration**: Automatic field mapping from CDM data
+- **Field Overrides**: Manual field value overrides
+- **Template Preview**: Preview templates before generation
+
+**Code Reference**: `app/generation/service.py` (DocumentGenerationService)
+
+### AI-Powered Assistance
+
+- **Decision Support Chatbot**: Interactive AI assistant for template selection
+- **Field Population**: AI-powered field filling for missing data
+- **Template Recommendations**: AI suggests appropriate templates
+- **Context Awareness**: Deal-aware assistance with deal context
+
+**Code Reference**: `app/chains/decision_support_chain.py`, `client/src/apps/document-generator/ChatbotPanel.tsx`
+
+### Multi-Input Support
+
+- **CDM Data Input**: Manual CDM data entry
+- **Document Library**: Select from previously extracted documents
+- **Deal Context**: Load CDM data from deals
+- **Field Editing**: Interactive field editing interface
+
+**Code Reference**: `client/src/apps/document-generator/DocumentGenerator.tsx`
+
+---
+
+## Workflow
+
+### 1. Select Data Source
+
+1. **Choose Input Mode**: Manual CDM, library document, or deal
+2. **Load Data**: Load CDM data from selected source
+3. **Review Data**: Review CDM data completeness
+4. **Edit if Needed**: Edit CDM data using field editor
+
+### 2. Select Template
+
+1. **Browse Templates**: Browse available LMA templates
+2. **AI Recommendations**: Get AI recommendations based on CDM data
+3. **Template Preview**: Preview template structure
+4. **Select Template**: Choose template for generation
+
+### 3. Configure Generation
+
+1. **Review Mappings**: Review CDM to template field mappings
+2. **Field Overrides**: Set field overrides if needed
+3. **Missing Fields**: Review missing fields
+4. **AI Assistance**: Use chatbot for field filling guidance
+
+### 4. Generate Document
+
+1. **Generate**: Click "Generate Document"
+2. **AI Processing**: AI fills missing fields
+3. **Document Rendering**: Render final document
+4. **Download/Save**: Download or save generated document
+
+---
+
+## API Endpoints
+
+### Generate Document
+
+<Endpoint method="POST" path="/api/templates/generate" />
+
+Generate a document from a template using CDM data.
+
+**Request Body**:
+```json
+{
+  "template_id": 1,
+  "cdm_data": {...},
+  "document_id": 123,
+  "source_document_id": 123,
+  "field_overrides": {
+    "parties[role='Borrower'].lei": "12345678901234567890"
+  }
+}
+```
+
+**Response**: Generated document with download URL
+
+**Code Reference**: `app/api/routes.py` (generate_document endpoint)
+
+### Get Template Mappings
+
+<Endpoint method="GET" path="/api/templates/{template_id}/mappings" />
+
+Get field mappings for a template.
+
+**Response**: Template field mappings
+
+---
+
+## Decision Support Chatbot
+
+### Chatbot Features
+
+- **Template Selection**: Help select appropriate templates
+- **Field Filling**: Assist with missing field values
+- **CDM Schema Help**: Explain CDM schema and structure
+- **Best Practices**: Provide guidance on document generation
+- **Deal Context**: Use deal context for better assistance
+
+**Code Reference**: `app/chains/decision_support_chain.py` (DecisionSupportChatbot)
+
+### Chatbot Interface
+
+**Location**: `client/src/apps/document-generator/ChatbotPanel.tsx`
+
+**Features**:
+- **Conversation History**: Maintain conversation context
+- **Knowledge Base**: Access to template and CDM documentation
+- **Deal Integration**: Load deal context for assistance
+- **Template Suggestions**: AI-powered template recommendations
+
+---
+
+## Template Management
+
+### Template Storage
+
+- **Database Storage**: Templates stored in database
+- **File Storage**: Template files stored in file system
+- **Version Control**: Template versioning support
+- **Active/Inactive**: Enable/disable templates
+
+**Code Reference**: `app/db/models.py` (LMATemplate model)
+
+### Field Mappings
+
+- **Automatic Mapping**: Automatic CDM to template field mapping
+- **Custom Mappings**: Custom field mapping configuration
+- **Mapping Preview**: Preview mappings before generation
+- **Mapping Validation**: Validate mappings for completeness
+
+**Code Reference**: `app/generation/service.py` (field mapping logic)
+
+---
+
+## User Interface
+
+### Document Generator
+
+**Location**: `client/src/apps/document-generator/DocumentGenerator.tsx`
+
+**Features**:
+- **Input Tabs**: Multiple input modes (manual, library, deal)
+- **Template Grid**: Browse and select templates
+- **CDM Preview**: Preview CDM data structure
+- **Field Editor**: Edit individual fields
+- **Chatbot Panel**: Interactive AI assistant
+- **Generation Status**: Track generation progress
+
+**Access**: Navigate to "Document Generator" in top navigation
+
+---
+
+## Best Practices
+
+1. **Complete CDM Data**: Ensure CDM data is complete before generation
+2. **Template Selection**: Choose appropriate template for deal type
+3. **Field Review**: Review all field mappings and values
+4. **AI Assistance**: Use chatbot for guidance on missing fields
+5. **Document Review**: Always review generated documents before use
+
+---
+
+## Additional Resources
+
+- [Document Generation Guide](/guides/document-generation)
+- [Document Extraction Feature](/features/document-extraction)
+- [Configuration Guide](/getting-started/configuration#langchain-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/apps/document-generator/DocumentGenerator.tsx`, `app/generation/service.py`, `app/chains/decision_support_chain.py`

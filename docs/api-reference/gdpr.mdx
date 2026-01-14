@@ -1,0 +1,244 @@
+---
+title: GDPR API
+description: API endpoints for GDPR compliance (data export and deletion)
+---
+
+## GDPR API
+
+API endpoints for GDPR compliance including data export (Right to Access) and data deletion (Right to Erasure).
+
+**Base Path**: `/api/gdpr`  
+**Code Reference**: `app/api/gdpr_routes.py`
+
+---
+
+## Data Export
+
+### Export User Data
+
+<Endpoint method="POST" path="/api/gdpr/export" />
+
+Export all user data for GDPR compliance (Right to Access).
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "format": "json"
+}
+```
+
+**Response**:
+```json
+{
+  "user_id": 1,
+  "email": "user@example.com",
+  "exported_at": "2026-01-15T10:00:00Z",
+  "format": "json",
+  "data": {
+    "user_profile": {...},
+    "documents": [...],
+    "workflows": [...],
+    "policy_decisions": [...],
+    "audit_logs": [...],
+    "applications": [...],
+    "deals": [...],
+    "inquiries": [...],
+    "meetings": [...]
+  }
+}
+```
+
+**Permissions**: Users can export their own data. Admins can export any user's data.
+
+---
+
+## Data Deletion
+
+### Delete User Data
+
+<Endpoint method="POST" path="/api/gdpr/delete" />
+
+Delete user data for GDPR compliance (Right to Erasure).
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "confirm": true,
+  "reason": "User requested data deletion"
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "User data deleted successfully",
+  "deletion_summary": {
+    "user_id": 1,
+    "email": "user@example.com",
+    "deleted_at": "2026-01-15T10:00:00Z",
+    "soft_delete": true,
+    "items_deleted": {
+      "documents": 5,
+      "workflows": 3,
+      "policy_decisions": 10,
+      "audit_logs": 50,
+      "applications": 2,
+      "deals": 1,
+      "inquiries": 0,
+      "meetings": 0,
+      "refresh_tokens": 3
+    }
+  }
+}
+```
+
+**Permissions**: Users can delete their own data. Admins can delete any user's data (except themselves).
+
+**Note**: By default, data is soft-deleted (anonymized) to preserve audit trails. Hard delete is available but not recommended.
+
+---
+
+## Compliance Status
+
+### Get GDPR Compliance Status
+
+<Endpoint method="GET" path="/api/gdpr/status" />
+
+Get GDPR compliance status and available actions.
+
+**Response**:
+```json
+{
+  "gdpr_compliant": true,
+  "available_actions": {
+    "export": "/api/gdpr/export",
+    "delete": "/api/gdpr/delete"
+  },
+  "data_retention_policy": {
+    "audit_logs": "7 years",
+    "user_data": "Until deletion requested",
+    "documents": "Until deletion requested",
+    "financial_data": "Per regulatory requirements"
+  },
+  "user_rights": [
+    "Right to access (data export)",
+    "Right to erasure (data deletion)",
+    "Right to data portability",
+    "Right to rectification (update profile)"
+  ],
+  "automated_cleanup": true
+}
+```
+
+---
+
+## Data Retention Cleanup
+
+### Run Data Retention Cleanup
+
+<Endpoint method="POST" path="/api/gdpr/retention/cleanup" />
+
+Run automated data retention cleanup (admin only).
+
+**Query Parameters**:
+- `dry_run`: Run in dry-run mode (default: true)
+
+**Request Body**:
+```json
+{
+  "dry_run": true
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "dry_run": true,
+  "results": {
+    "items_processed": 100,
+    "items_deleted": 5,
+    "items_anonymized": 10
+  }
+}
+```
+
+**Permissions**: Admin only
+
+---
+
+## Exported Data Structure
+
+The exported data includes:
+
+- **User Profile**: Account information, preferences, wallet address
+- **Documents**: All uploaded documents and metadata
+- **Workflows**: All workflow assignments and approvals
+- **Policy Decisions**: All policy decisions involving the user
+- **Audit Logs**: All audit log entries for the user
+- **Applications**: All loan/credit applications
+- **Deals**: All deals where user is applicant
+- **Inquiries**: All support inquiries
+- **Meetings**: All scheduled meetings
+
+---
+
+## Deletion Behavior
+
+### Soft Delete (Default)
+
+- User email anonymized: `deleted_{user_id}@deleted.local`
+- Display name set to "Deleted User"
+- Profile data cleared
+- Wallet address removed
+- Documents anonymized
+- Refresh tokens revoked
+- **Audit logs preserved** for compliance
+
+### Hard Delete (Not Recommended)
+
+- Complete removal from database
+- **Loses audit trail** (not recommended for compliance)
+
+---
+
+## Error Responses
+
+### 400 Bad Request
+- Missing `confirm=true` for deletion
+- Invalid email format
+- Admin attempting self-deletion
+
+### 403 Forbidden
+- User attempting to export/delete another user's data (non-admin)
+- Non-admin attempting cleanup
+
+### 404 Not Found
+- User not found
+
+---
+
+## Audit Logging
+
+All GDPR operations are logged in the audit trail:
+- **Export**: Logged with `EXPORT` action
+- **Deletion**: Logged with `DELETE` action
+- **Cleanup**: Logged with `UPDATE` action
+
+**Code Reference**: `app/utils/audit.py`
+
+---
+
+## Additional Resources
+
+- [GDPR Compliance](/compliance/gdpr-compliance)
+- [Security Documentation](https://github.com/josephrp/creditnexus/blob/main/SECURITY.md)
+- [Configuration Guide](/getting-started/configuration#authentication-configuration)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/gdpr_routes.py`

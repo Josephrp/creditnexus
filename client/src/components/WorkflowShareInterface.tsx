@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -22,12 +22,13 @@ import {
   Copy,
   Check
 } from 'lucide-react'
-import { VerificationLinkCreator } from './VerificationLinkCreator'
+import { WorkflowLinkCreator } from '@/apps/workflow/WorkflowLinkCreator'
 import { WorkflowProcessingPage } from './WorkflowProcessingPage'
 import { WorkflowDelegationDashboard } from './WorkflowDelegationDashboard'
 import { WorkflowLinkSharer } from './WorkflowLinkSharer'
 import { useFDC3 } from '@/context/FDC3Context'
 import type { WorkflowLinkContext } from '@/context/FDC3Context'
+import { useThemeClasses } from '@/utils/themeUtils'
 
 type ShareView = 'create' | 'process' | 'dashboard' | 'share'
 
@@ -50,7 +51,9 @@ export function WorkflowShareInterface({
 }: WorkflowShareInterfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { context, listenForWorkflowLinks } = useFDC3()
+  const classes = useThemeClasses()
   
   const [activeView, setActiveView] = useState<ShareView>(initialView)
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
@@ -135,18 +138,18 @@ export function WorkflowShareInterface({
       case 'create':
         return (
           <div className="space-y-4">
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className={`${classes.background.card} ${classes.border.default}`}>
               <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2">
+                <CardTitle className={`${classes.text.primary} flex items-center gap-2`}>
                   <Send className="h-5 w-5" />
                   Create Workflow Link
                 </CardTitle>
-                <CardDescription className="text-slate-400">
+                <CardDescription className={classes.text.secondary}>
                   Delegate workflows to remote users via encrypted links
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <VerificationLinkCreator
+                <WorkflowLinkCreator
                   dealId={dealId}
                   documentId={documentId}
                   onLinkGenerated={handleLinkGenerated}
@@ -159,13 +162,13 @@ export function WorkflowShareInterface({
       case 'process':
         return (
           <div className="space-y-4">
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className={`${classes.background.card} ${classes.border.default}`}>
               <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2">
+                <CardTitle className={`${classes.text.primary} flex items-center gap-2`}>
                   <Eye className="h-5 w-5" />
                   Process Workflow
                 </CardTitle>
-                <CardDescription className="text-slate-400">
+                <CardDescription className={classes.text.secondary}>
                   Review and process a workflow link
                 </CardDescription>
               </CardHeader>
@@ -186,27 +189,33 @@ export function WorkflowShareInterface({
       case 'share':
         return sharerData ? (
           <div className="space-y-4">
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className={`${classes.background.card} ${classes.border.default}`}>
               <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2">
+                <CardTitle className={`${classes.text.primary} flex items-center gap-2`}>
                   <Share2 className="h-5 w-5" />
                   Share Workflow Link
                 </CardTitle>
-                <CardDescription className="text-slate-400">
+                <CardDescription className={classes.text.secondary}>
                   Share this workflow link via desktop (FDC3), native sharing, or copy to clipboard
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <WorkflowLinkSharer {...sharerData} />
+                <WorkflowLinkSharer 
+                  {...sharerData} 
+                  onClose={() => {
+                    setSharerData(null)
+                    navigateToView('create')
+                  }}
+                />
               </CardContent>
             </Card>
           </div>
         ) : (
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className={`${classes.background.card} ${classes.border.default}`}>
             <CardContent className="pt-6">
               <div className="text-center py-12">
-                <LinkIcon className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                <p className="text-slate-400 mb-4">No workflow link to share</p>
+                <LinkIcon className={`h-12 w-12 ${classes.text.muted} mx-auto mb-4`} />
+                <p className={`${classes.text.secondary} mb-4`}>No workflow link to share</p>
                 <Button onClick={() => navigateToView('create')} className="bg-blue-600 hover:bg-blue-700">
                   Create Workflow Link
                 </Button>
@@ -220,26 +229,51 @@ export function WorkflowShareInterface({
     }
   }
 
+  const handleClose = () => {
+    // Check if we came from a specific route
+    const from = (location.state as { from?: string })?.from;
+    if (from) {
+      navigate(from);
+    } else {
+      // Default to dashboard or previous page
+      navigate(-1);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Header with Close Button */}
+      <div className="flex items-center justify-between">
+        <h1 className={`text-2xl font-bold ${classes.text.primary}`}>Workflow Share</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleClose}
+          className={`${classes.text.secondary} ${classes.interactive.hover.text} ${classes.interactive.hover.background}`}
+        >
+          <X className="h-4 w-4 mr-2" />
+          Close
+        </Button>
+      </div>
+
       {/* Navigation Tabs */}
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className={`${classes.background.card} ${classes.border.default}`}>
         <CardContent className="pt-6">
           <Tabs value={activeView} onValueChange={(v) => navigateToView(v as ShareView)}>
-            <TabsList className="grid w-full grid-cols-4 bg-slate-900">
-              <TabsTrigger value="create" className="data-[state=active]:bg-slate-800">
+            <TabsList className={`grid w-full grid-cols-4 ${classes.background.primary}`}>
+              <TabsTrigger value="create" className={`data-[state=active]:${classes.background.card}`}>
                 <Send className="h-4 w-4 mr-2" />
                 Create
               </TabsTrigger>
-              <TabsTrigger value="process" className="data-[state=active]:bg-slate-800">
+              <TabsTrigger value="process" className={`data-[state=active]:${classes.background.card}`}>
                 <Eye className="h-4 w-4 mr-2" />
                 Process
               </TabsTrigger>
-              <TabsTrigger value="dashboard" className="data-[state=active]:bg-slate-800">
+              <TabsTrigger value="dashboard" className={`data-[state=active]:${classes.background.card}`}>
                 <Settings className="h-4 w-4 mr-2" />
                 Dashboard
               </TabsTrigger>
-              <TabsTrigger value="share" className="data-[state=active]:bg-slate-800">
+              <TabsTrigger value="share" className={`data-[state=active]:${classes.background.card}`}>
                 <Share2 className="h-4 w-4 mr-2" />
                 Share
               </TabsTrigger>

@@ -1,0 +1,505 @@
+---
+title: Roadmap
+description: Future development plans and roadmap for CreditNexus
+---
+
+## Roadmap Overview
+
+This document outlines the planned features and improvements for CreditNexus. The roadmap is organized by priority and estimated timeline, focusing on transformative capabilities that will revolutionize debt financing and banking integration.
+
+---
+
+## Vision: Days, Not Weeks
+
+### The Ultimate Goal
+
+**Transform debt raising from weeks to days** by creating a fully automated, compliant, and intelligent financing platform that integrates seamlessly with banking backends.
+
+**Key Enablers**:
+- **Quantitative Intelligence**: AI-powered financial analysis and risk assessment
+- **Context-Driven Recovery**: Intelligent, personalized borrower communication
+- **Extended Policy Engine**: Comprehensive compliance automation
+- **Banking Backend Integration**: Compliant applications get priority integration
+- **End-to-End Automation**: From application to funding in days
+
+---
+
+## High Priority Items
+
+### Quantitative Intelligence & Business Intelligence
+
+**Status**: Planned  
+**Timeline**: Q2-Q3 2025  
+**Reference**: [Quantitative Intelligence Implementation Plan](../../dev/QUANTITATIVE_INTELLIGENCE_IMPLEMENTATION_PLAN_IMPROVED.md)
+
+#### Accounting Document Extraction
+
+- **AI-Powered Extraction**: Extract structured data from balance sheets, income statements, cash flow statements, and tax returns
+- **Quantitative Validation**: Automatic validation of accounting equations (Assets = Liabilities + Equity, Revenue - Expenses = Net Income)
+- **Multi-Period Support**: Handle quarterly and annual statements with comparative periods
+- **CDM Event Integration**: All extractions generate CDM-compliant events
+
+**Code Reference**: `app/chains/accounting_extraction_chain.py` (planned)
+
+#### DeepResearch Orchestrator
+
+- **Iterative Research Pattern**: Multi-stage research workflow with search, read, answer, reflect, and coding actions
+- **Knowledge Accumulation**: Build comprehensive knowledge bases from web research
+- **CDM Event Tracking**: Research queries generate CDM events linked to deals
+- **Deal Flow Integration**: Research results automatically update deal timelines
+
+**Code Reference**: `app/agents/deep_research_agent.py` (planned)
+
+#### PeopleHub Business Intelligence
+
+- **LinkedIn Integration**: Automated LinkedIn profile fetching and analysis
+- **Web Research**: Comprehensive web research with content scraping and summarization
+- **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
+- **Buying & Savings Behavior**: Financial behavior analysis for credit assessment
+- **Audit Reports**: Automated business intelligence reports
+
+**Code Reference**: `app/workflows/peoplehub_research_graph.py` (planned)
+
+#### Web Search Service
+
+- **Serper API Integration**: Google search and news search capabilities
+- **Content Extraction**: Automated web content extraction with trafilatura
+- **Reranking**: Local or remote reranking for improved relevance
+- **Analytics**: Request tracking and performance monitoring
+- **Rate Limiting**: Configurable rate limits (default: 360/hour)
+
+**Code Reference**: `app/services/web_search_service.py` (planned)
+
+---
+
+### Context-Driven Recovery Communications
+
+**Status**: Planned  
+**Timeline**: Q2 2025
+
+#### Intelligent Communication Strategy
+
+- **Borrower Context Analysis**: Analyze borrower's financial situation, communication history, and preferences
+- **Personalized Messaging**: Generate context-aware recovery messages based on:
+  - Payment history and patterns
+  - Previous communication responses
+  - Psychometric profile (if available)
+  - Financial behavior analysis
+  - Preferred communication channels
+- **Optimal Timing**: Determine best times to contact borrowers based on historical data
+- **Escalation Intelligence**: Smart escalation paths based on borrower response patterns
+
+#### Multi-Channel Orchestration
+
+- **Channel Selection**: Automatically choose optimal communication channel (SMS, voice, email) based on context
+- **Message Sequencing**: Intelligent message sequences that adapt based on borrower responses
+- **Response Analysis**: Analyze borrower responses to adjust communication strategy
+- **Success Prediction**: Predict likelihood of successful recovery based on context
+
+#### Integration Points
+
+- **DeepResearch Integration**: Research borrower's financial situation and recent activities
+- **PeopleHub Integration**: Use psychometric profiles to tailor communication style
+- **Accounting Data Integration**: Use financial statements to understand borrower's capacity
+- **Deal Timeline Integration**: All communications tracked in deal timeline
+
+**Code Reference**: `app/services/loan_recovery_service.py` (enhancement planned)
+
+---
+
+### Extended Policy Engine
+
+**Status**: Planned  
+**Timeline**: Q2-Q3 2025
+
+#### Current Capabilities
+
+The policy engine currently supports:
+- **18+ Policy Rules** across 5 categories (Compliance, Credit Risk, Green Finance, AML, Regulatory)
+- **YAML-Based Rules**: Policy-as-code with hot-reload support
+- **CDM Compliance**: All policy decisions generate CDM events
+- **Vendor-Agnostic Interface**: Support for multiple policy engine vendors
+
+**Code Reference**: `app/services/policy_service.py`, `app/policies/`
+
+#### Planned Extensions
+
+##### 1. Quantitative Analysis Policies
+
+- **Financial Statement Analysis**: Policies based on balance sheet, income statement, and cash flow metrics
+- **Ratio-Based Rules**: Debt-to-equity ratios, current ratios, quick ratios
+- **Trend Analysis**: Policies that evaluate financial trends over time
+- **Cash Flow Policies**: Policies based on operating cash flow, free cash flow
+
+**Integration**: Accounting document extraction → Policy evaluation → CDM events
+
+##### 2. Psychometric-Based Policies
+
+- **Risk Tolerance Assessment**: Policies that consider borrower's risk tolerance profile
+- **Behavioral Scoring**: Credit decisions based on buying and savings behaviors
+- **Personality-Based Rules**: Policies that factor in Big Five personality traits
+- **Decision-Making Style**: Policies that adapt to borrower's decision-making patterns
+
+**Integration**: PeopleHub research → Psychometric analysis → Policy evaluation
+
+##### 3. Research-Driven Policies
+
+- **Web Research Integration**: Policies that incorporate web research findings
+- **News and Media Analysis**: Policies based on recent news and media coverage
+- **Reputation Scoring**: Policies that factor in online reputation and credibility
+- **Industry Analysis**: Policies based on industry trends and market conditions
+
+**Integration**: DeepResearch queries → Research results → Policy evaluation
+
+##### 4. Dynamic Policy Rules
+
+- **Market-Adaptive Rules**: Policies that adjust based on market conditions
+- **Time-Based Rules**: Policies that change based on time of year, economic cycles
+- **Regulatory Update Integration**: Automatic policy updates when regulations change
+- **Machine Learning Policies**: Policies that learn from historical decisions
+
+##### 5. Multi-Dimensional Policy Evaluation
+
+- **Composite Scoring**: Combine multiple policy dimensions into composite scores
+- **Weighted Decision Making**: Policies with configurable weights for different factors
+- **Confidence Scoring**: Policies that provide confidence levels for decisions
+- **Explainable AI**: Detailed explanations for policy decisions
+
+**Code Reference**: `app/services/policy_service.py` (extensions planned)
+
+---
+
+### Banking Backend Integration Paradigm
+
+**Status**: Planned  
+**Timeline**: Q3-Q4 2025
+
+#### The Compliance Advantage
+
+**Core Principle**: Applications that demonstrate full compliance and provide comprehensive audit trails have better chances of integration with banking backends.
+
+#### Integration Readiness Features
+
+##### 1. Compliance Certification
+
+- **Automated Compliance Reports**: One-click generation of comprehensive compliance reports
+- **Regulatory Mapping**: Automatic mapping of transactions to regulatory requirements
+- **Audit Trail Completeness**: Complete CDM event trail for all operations
+- **Policy Decision Transparency**: Full visibility into policy evaluation decisions
+
+##### 2. Standardized Data Formats
+
+- **FINOS CDM Compliance**: All data in FINOS Common Domain Model format
+- **Banking API Standards**: Support for banking industry API standards (Open Banking, PSD2)
+- **Data Interoperability**: Seamless data exchange with banking systems
+- **Schema Validation**: Automatic validation against banking schemas
+
+##### 3. Real-Time Compliance Monitoring
+
+- **Continuous Policy Evaluation**: Real-time policy checks throughout transaction lifecycle
+- **Compliance Dashboard**: Real-time compliance status for all transactions
+- **Regulatory Alerts**: Automatic alerts for regulatory changes
+- **Compliance Scoring**: Automated compliance score calculation
+
+##### 4. Integration APIs
+
+- **Banking Backend Connectors**: Pre-built connectors for major banking systems
+- **API Gateway**: Secure API gateway for banking system integration
+- **Webhook Support**: Real-time notifications to banking systems
+- **Data Synchronization**: Bidirectional data sync with banking backends
+
+##### 5. Certification and Accreditation
+
+- **Compliance Certifications**: Support for industry certifications (SOC 2, ISO 27001)
+- **Regulatory Approvals**: Documentation for regulatory approval processes
+- **Third-Party Audits**: Support for third-party compliance audits
+- **Banking Partnership Programs**: Integration with banking partnership programs
+
+#### Benefits for Banking Integration
+
+- **Reduced Integration Time**: Pre-compliant applications reduce integration complexity
+- **Lower Risk**: Comprehensive audit trails reduce operational risk
+- **Faster Approval**: Compliance-ready applications get faster approval
+- **Better Terms**: Compliant applications may receive better financing terms
+
+---
+
+### Fast Debt Raising: Days, Not Weeks
+
+**Status**: Vision  
+**Timeline**: Q4 2025 - Q1 2026
+
+#### The 48-Hour Debt Raising Vision
+
+Transform the traditional weeks-long debt raising process into a **48-72 hour automated workflow**.
+
+#### Current Process (Weeks)
+
+1. **Application Submission** (Days 1-3)
+2. **Document Collection** (Days 4-7)
+3. **Manual Review** (Days 8-14)
+4. **Due Diligence** (Days 15-21)
+5. **Risk Assessment** (Days 22-28)
+6. **Approval Process** (Days 29-35)
+7. **Documentation** (Days 36-42)
+8. **Funding** (Days 43-49)
+
+#### Future Process (Days)
+
+1. **Automated Application** (Hour 0-2)
+   - AI-powered application form completion
+   - Automatic document extraction from uploaded files
+   - Real-time validation and error correction
+
+2. **Instant Quantitative Analysis** (Hour 2-4)
+   - Automated accounting document extraction
+   - Financial ratio calculation
+   - Cash flow analysis
+   - Risk scoring
+
+3. **Automated Due Diligence** (Hour 4-12)
+   - DeepResearch queries for company background
+   - PeopleHub research for key personnel
+   - Web search for news and media coverage
+   - Automated compliance checks
+
+4. **Real-Time Policy Evaluation** (Hour 12-18)
+   - Multi-dimensional policy evaluation
+   - Quantitative analysis integration
+   - Psychometric profile integration
+   - Research-driven risk assessment
+
+5. **Automated Documentation** (Hour 18-24)
+   - LMA template generation
+   - AI-powered field population
+   - Automated compliance checks
+   - Digital signature workflows
+
+6. **Banking Backend Integration** (Hour 24-36)
+   - Automated submission to banking systems
+   - Real-time status updates
+   - Compliance certification delivery
+   - Audit trail transmission
+
+7. **Automated Funding** (Hour 36-48)
+   - x402 payment protocol integration
+   - USDC stablecoin disbursement
+   - Automated settlement
+   - CDM event generation
+
+#### Key Enablers
+
+##### 1. End-to-End Automation
+
+- **Zero Manual Intervention**: Fully automated workflow from application to funding
+- **Parallel Processing**: Multiple analysis steps run in parallel
+- **Intelligent Routing**: Automatic routing based on application characteristics
+- **Exception Handling**: Automated handling of edge cases
+
+##### 2. Pre-Compliance
+
+- **Compliance-First Design**: All applications are compliance-ready from the start
+- **Real-Time Policy Checks**: Continuous policy evaluation throughout process
+- **Automated Audit Trails**: Complete CDM event trail generated automatically
+- **Regulatory Mapping**: Automatic mapping to regulatory requirements
+
+##### 3. Banking Integration
+
+- **API-First Architecture**: Direct integration with banking backends
+- **Standardized Formats**: FINOS CDM and banking API standards
+- **Real-Time Synchronization**: Bidirectional data sync
+- **Compliance Certification**: Automatic delivery of compliance certificates
+
+##### 4. Intelligent Analysis
+
+- **Quantitative Intelligence**: Automated financial analysis
+- **Business Intelligence**: Automated company and personnel research
+- **Risk Assessment**: Multi-dimensional risk scoring
+- **Decision Support**: AI-powered decision recommendations
+
+##### 5. Digital Workflows
+
+- **Digital Signatures**: Automated signature workflows
+- **Blockchain Notarization**: Automated notarization for securitization
+- **Payment Automation**: Automated payment processing
+- **Document Generation**: Automated document creation
+
+#### Success Metrics
+
+- **Time to Application**: < 2 hours (from start to complete application)
+- **Time to Analysis**: < 4 hours (quantitative and qualitative analysis)
+- **Time to Decision**: < 24 hours (policy evaluation and risk assessment)
+- **Time to Documentation**: < 48 hours (document generation and signing)
+- **Time to Funding**: < 72 hours (from application to funds disbursement)
+
+---
+
+## Medium Priority Items
+
+### LMA Formal Membership
+
+**Status**: Planned  
+**Timeline**: Q1 2025
+
+- Apply for formal LMA (Loan Market Association) membership
+- Gain access to official LMA templates and standards
+- Participate in LMA working groups
+- Contribute to LMA standards development
+
+---
+
+### Plugin Architecture for SaaS/Microsoft Integration
+
+**Status**: Planned  
+**Timeline**: Q2 2025
+
+- Develop plugin architecture for SaaS integrations
+- Microsoft Office/Teams integration
+- API-based plugin system
+- Third-party plugin marketplace
+
+---
+
+### Enhanced Data Processing Workflows
+
+**Status**: In Progress  
+**Timeline**: Q1 2025
+
+- Improved extraction accuracy
+- Enhanced error handling
+- Better performance optimization
+- Advanced caching strategies
+
+---
+
+## Integration & Partnerships
+
+### Securitization Connectors
+
+**Status**: Planned  
+**Timeline**: Q3 2025
+
+- Alpaca integration
+- Polymarket integration
+- Additional exchange connectors
+- Real-time market data feeds
+
+---
+
+### Insurance Partnerships
+
+**Status**: Planned  
+**Timeline**: Q3 2025
+
+- Insurance provider integrations
+- Risk transfer capabilities
+- Insurance product offerings
+- Claims processing integration
+
+---
+
+### Structured Financial Products Access
+
+**Status**: Planned  
+**Timeline**: Q4 2025
+
+- Access to structured products markets
+- Product catalog integration
+- Pricing and analytics
+- Trading capabilities
+
+---
+
+### Banking Backend Partnerships
+
+**Status**: Planned  
+**Timeline**: Q3-Q4 2025
+
+- Direct integration with major banks
+- API partnerships with banking platforms
+- Compliance certification programs
+- Co-marketing opportunities
+
+---
+
+## Technical Improvements
+
+### Performance Optimization
+
+**Status**: Ongoing  
+**Timeline**: Continuous
+
+- Database query optimization
+- LLM call optimization
+- Caching improvements
+- Background task optimization
+- Parallel processing for quantitative analysis
+
+---
+
+### Security Enhancements
+
+**Status**: Ongoing  
+**Timeline**: Continuous
+
+- Security audit improvements
+- Penetration testing
+- Compliance certifications
+- Security monitoring
+- Banking-grade security standards
+
+---
+
+### User Experience Improvements
+
+**Status**: Ongoing  
+**Timeline**: Continuous
+
+- UI/UX enhancements
+- Mobile responsiveness
+- Accessibility improvements
+- Performance optimizations
+- Real-time status updates
+
+---
+
+## Research & Development
+
+### AI/ML Enhancements
+
+**Status**: Ongoing  
+**Timeline**: Continuous
+
+- Advanced LLM integration (GPT-4o, Claude, local models)
+- Fine-tuned models for financial analysis
+- Multi-modal document processing
+- Predictive analytics for risk assessment
+- Machine learning for policy optimization
+
+---
+
+### Blockchain Integration
+
+**Status**: Ongoing  
+**Timeline**: Continuous
+
+- Enhanced smart contract functionality
+- Multi-chain support
+- DeFi protocol integration
+- Tokenization improvements
+- Cross-chain interoperability
+
+---
+
+## Additional Resources
+
+- [GitHub Issues](https://github.com/josephrp/creditnexus/issues)
+- [Documentation](/getting-started/introduction)
+- [Quantitative Intelligence Plan](../../dev/QUANTITATIVE_INTELLIGENCE_IMPLEMENTATION_PLAN_IMPROVED.md)
+- [Market Opportunity](/market/overview)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Status**: Active Development  
+**Vision**: Transform debt raising from weeks to days through intelligent automation and compliance-first design

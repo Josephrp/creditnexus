@@ -90,6 +90,9 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [availableDocuments, setAvailableDocuments] = useState<any[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [requestingSignature, setRequestingSignature] = useState(false);
+  const [showSignatureRequest, setShowSignatureRequest] = useState(false);
+  const [signatureId, setSignatureId] = useState<number | null>(null);
 
   // Load templates and documents on mount
   useEffect(() => {
@@ -376,11 +379,11 @@ export function DocumentGenerator({ initialCdmData, onDocumentGenerated }: Docum
           };
           
           try {
-            // Cast to CreditNexusContext for broadcast (GeneratedDocumentContext extends Context)
-            // Note: GeneratedDocumentContext should be added to CreditNexusContext union type
-            await broadcast(context as any);
+            // GeneratedDocumentContext is part of CreditNexusContext union type
+            await broadcast(context);
           } catch (err) {
             // Don't fail the generation if broadcast fails
+            console.warn('[FDC3] Failed to broadcast generated document context:', err);
           }
         }
         

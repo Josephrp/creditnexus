@@ -202,7 +202,91 @@ def get_industry_context(industry: str) -> str:
 - Require financing for inventory, expansion, working capital, turnaround
 - Have seasonal cash flow patterns
 - Use financing for inventory, store expansion, working capital, restructuring
-- Common loan purposes: Inventory financing, expansion, working capital, turnaround"""
+- Common loan purposes: Inventory financing, expansion, working capital, turnaround""",
+        
+        "Financial Services": """Financial Services companies typically:
+- Require financing for regulatory capital, expansion, acquisitions
+- Have regulatory capital requirements
+- Use financing for capital adequacy, expansion, strategic acquisitions
+- Common loan purposes: Regulatory capital, expansion, acquisitions""",
+        
+        "Transportation": """Transportation companies typically:
+- Require financing for vehicles, fleet expansion, infrastructure, working capital
+- Have vehicles and equipment as collateral
+- Use financing for fleet expansion, vehicle purchase, infrastructure, working capital
+- Common loan purposes: Fleet expansion, vehicle purchase, infrastructure""",
+        
+        "Construction": """Construction companies typically:
+- Require financing for equipment, project finance, working capital
+- Have equipment and contracts as collateral
+- Use financing for equipment purchase, project finance, working capital
+- Common loan purposes: Equipment, project finance, working capital""",
+        
+        "Telecommunications": """Telecommunications companies typically:
+- Require financing for infrastructure, network expansion, equipment
+- Have infrastructure and equipment as collateral
+- Use financing for network expansion, infrastructure, equipment purchase
+- Common loan purposes: Network expansion, infrastructure, equipment""",
+        
+        "Media": """Media companies typically:
+- Require financing for content production, acquisitions, working capital
+- Have intellectual property and content as assets
+- Use financing for content production, acquisitions, working capital
+- Common loan purposes: Content production, acquisitions, working capital""",
+        
+        "Hospitality": """Hospitality companies typically:
+- Require financing for property acquisition, renovation, working capital
+- Have real estate and equipment as collateral
+- Use financing for property acquisition, renovation, working capital
+- Common loan purposes: Property acquisition, renovation, working capital""",
+        
+        "Education": """Education companies typically:
+- Require financing for facilities, equipment, expansion, working capital
+- Have real estate and equipment as collateral
+- Use financing for facility expansion, equipment purchase, working capital
+- Common loan purposes: Facility expansion, equipment, working capital""",
+        
+        "Pharmaceuticals": """Pharmaceutical companies typically:
+- Require financing for R&D, manufacturing, regulatory compliance, expansion
+- Have intellectual property and facilities as assets
+- Use financing for R&D, manufacturing facilities, regulatory compliance
+- Common loan purposes: R&D, manufacturing facilities, regulatory compliance""",
+        
+        "Food & Beverage": """Food & Beverage companies typically:
+- Require financing for facilities, equipment, inventory, working capital
+- Have facilities, equipment, and inventory as collateral
+- Use financing for facility expansion, equipment purchase, inventory, working capital
+- Common loan purposes: Facility expansion, equipment, inventory, working capital""",
+        
+        "Automotive": """Automotive companies typically:
+- Require financing for manufacturing facilities, equipment, R&D, working capital
+- Have manufacturing facilities and equipment as collateral
+- Use financing for facility expansion, equipment purchase, R&D, working capital
+- Common loan purposes: Facility expansion, equipment, R&D, working capital""",
+        
+        "Aerospace": """Aerospace companies typically:
+- Require financing for R&D, manufacturing facilities, equipment, working capital
+- Have facilities, equipment, and intellectual property as assets
+- Use financing for R&D, manufacturing facilities, equipment purchase
+- Common loan purposes: R&D, manufacturing facilities, equipment""",
+        
+        "Chemicals": """Chemicals companies typically:
+- Require financing for manufacturing facilities, equipment, R&D, working capital
+- Have manufacturing facilities and equipment as collateral
+- Use financing for facility expansion, equipment purchase, R&D, working capital
+- Common loan purposes: Facility expansion, equipment, R&D, working capital""",
+        
+        "Utilities": """Utilities companies typically:
+- Require financing for infrastructure, equipment, expansion, working capital
+- Have infrastructure and equipment as collateral
+- Use financing for infrastructure expansion, equipment purchase, working capital
+- Common loan purposes: Infrastructure expansion, equipment, working capital""",
+        
+        "Mining": """Mining companies typically:
+- Require financing for equipment, exploration, development, working capital
+- Have equipment and mineral rights as assets
+- Use financing for equipment purchase, exploration, development, working capital
+- Common loan purposes: Equipment, exploration, development, working capital"""
     }
     
     return contexts.get(industry, "Standard business financing needs.")
@@ -337,12 +421,177 @@ def get_scenario_config(scenario: str) -> Dict[str, Any]:
 
 def get_industry_weights() -> Dict[str, float]:
     """Get industry distribution weights for deal generation."""
+    # Normalized weights (sum to 1.0)
     return {
-        "Technology": 0.25,
-        "Manufacturing": 0.20,
-        "Energy": 0.15,
-        "Healthcare": 0.15,
-        "Agriculture": 0.10,
-        "Real Estate": 0.10,
-        "Retail": 0.05
+        "Technology": 0.12,
+        "Manufacturing": 0.10,
+        "Energy": 0.08,
+        "Healthcare": 0.08,
+        "Agriculture": 0.06,
+        "Real Estate": 0.08,
+        "Retail": 0.05,
+        "Financial Services": 0.08,
+        "Transportation": 0.06,
+        "Construction": 0.06,
+        "Telecommunications": 0.05,
+        "Media": 0.04,
+        "Hospitality": 0.05,
+        "Education": 0.04,
+        "Pharmaceuticals": 0.03,
+        "Food & Beverage": 0.03,
+        "Automotive": 0.03,
+        "Aerospace": 0.02,
+        "Chemicals": 0.02,
+        "Utilities": 0.02,
+        "Mining": 0.02
     }
+
+
+def get_industry_config(industry: str) -> Dict[str, Any]:
+    """
+    Get industry-specific configuration for loan generation.
+    
+    Args:
+        industry: Industry name
+        
+    Returns:
+        Dictionary with industry-specific loan amounts, terms, rates, collateral types
+    """
+    configs = {
+        "Technology": {
+            "loan_amount_range": (500000, 25000000),
+            "term_range": (2, 5),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Equipment", "Accounts Receivable", "Intellectual Property"]
+        },
+        "Manufacturing": {
+            "loan_amount_range": (1000000, 30000000),
+            "term_range": (3, 7),
+            "interest_rate_range": (0.035, 0.075),
+            "collateral_types": ["Real Estate", "Equipment", "Inventory"]
+        },
+        "Energy": {
+            "loan_amount_range": (2000000, 50000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Project Assets"]
+        },
+        "Healthcare": {
+            "loan_amount_range": (1000000, 25000000),
+            "term_range": (3, 7),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Accounts Receivable"]
+        },
+        "Agriculture": {
+            "loan_amount_range": (500000, 15000000),
+            "term_range": (1, 5),
+            "interest_rate_range": (0.04, 0.07),
+            "collateral_types": ["Real Estate", "Equipment", "Inventory", "Crops"]
+        },
+        "Real Estate": {
+            "loan_amount_range": (2000000, 50000000),
+            "term_range": (5, 15),
+            "interest_rate_range": (0.035, 0.07),
+            "collateral_types": ["Real Estate"]
+        },
+        "Retail": {
+            "loan_amount_range": (500000, 20000000),
+            "term_range": (2, 5),
+            "interest_rate_range": (0.045, 0.09),
+            "collateral_types": ["Inventory", "Accounts Receivable", "Equipment"]
+        },
+        "Financial Services": {
+            "loan_amount_range": (5000000, 50000000),
+            "term_range": (3, 7),
+            "interest_rate_range": (0.03, 0.06),
+            "collateral_types": ["Securities", "Accounts Receivable", "Real Estate"]
+        },
+        "Transportation": {
+            "loan_amount_range": (1000000, 30000000),
+            "term_range": (3, 8),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Vehicles", "Equipment", "Real Estate"]
+        },
+        "Construction": {
+            "loan_amount_range": (1000000, 25000000),
+            "term_range": (2, 5),
+            "interest_rate_range": (0.045, 0.09),
+            "collateral_types": ["Equipment", "Accounts Receivable", "Real Estate"]
+        },
+        "Telecommunications": {
+            "loan_amount_range": (2000000, 40000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Infrastructure", "Equipment", "Real Estate"]
+        },
+        "Media": {
+            "loan_amount_range": (500000, 15000000),
+            "term_range": (2, 5),
+            "interest_rate_range": (0.045, 0.09),
+            "collateral_types": ["Intellectual Property", "Accounts Receivable", "Equipment"]
+        },
+        "Hospitality": {
+            "loan_amount_range": (2000000, 30000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Accounts Receivable"]
+        },
+        "Education": {
+            "loan_amount_range": (1000000, 20000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.035, 0.07),
+            "collateral_types": ["Real Estate", "Equipment"]
+        },
+        "Pharmaceuticals": {
+            "loan_amount_range": (2000000, 40000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Intellectual Property", "Real Estate", "Equipment"]
+        },
+        "Food & Beverage": {
+            "loan_amount_range": (500000, 20000000),
+            "term_range": (2, 5),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Inventory", "Equipment", "Real Estate"]
+        },
+        "Automotive": {
+            "loan_amount_range": (2000000, 40000000),
+            "term_range": (3, 7),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Inventory"]
+        },
+        "Aerospace": {
+            "loan_amount_range": (5000000, 50000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Intellectual Property"]
+        },
+        "Chemicals": {
+            "loan_amount_range": (2000000, 30000000),
+            "term_range": (3, 7),
+            "interest_rate_range": (0.04, 0.08),
+            "collateral_types": ["Real Estate", "Equipment", "Inventory"]
+        },
+        "Utilities": {
+            "loan_amount_range": (5000000, 50000000),
+            "term_range": (5, 15),
+            "interest_rate_range": (0.035, 0.07),
+            "collateral_types": ["Infrastructure", "Real Estate", "Equipment"]
+        },
+        "Mining": {
+            "loan_amount_range": (2000000, 40000000),
+            "term_range": (5, 10),
+            "interest_rate_range": (0.045, 0.09),
+            "collateral_types": ["Equipment", "Mineral Rights", "Real Estate"]
+        }
+    }
+    
+    # Default config for unknown industries
+    default_config = {
+        "loan_amount_range": (1000000, 20000000),
+        "term_range": (3, 7),
+        "interest_rate_range": (0.04, 0.08),
+        "collateral_types": ["Real Estate", "Equipment", "Accounts Receivable"]
+    }
+    
+    return configs.get(industry, default_config)

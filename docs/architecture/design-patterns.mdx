@@ -1,0 +1,342 @@
+---
+title: Design Patterns
+description: Core design patterns used in CreditNexus architecture
+---
+
+## Design Patterns Overview
+
+CreditNexus follows established design patterns to ensure maintainability, testability, and scalability. This document outlines the key patterns used throughout the codebase.
+
+**Code Reference**: `.cursor/rules/architecture.mdc`, `.cursor/rules/service-layer.mdc`
+
+---
+
+## Dependency Injection Pattern
+
+### Overview
+
+FastAPI's dependency injection system is used throughout the application to manage dependencies and ensure testability.
+
+**Code Reference**: `app/db/__init__.py`, `app/auth/jwt_auth.py`, `app/services/policy_service.py`
+
+### Implementation
+
+```python
+# ✅ CORRECT: Dependency injection
+@router.post("/extract")
+async def extract_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: PolicyService = Depends(get_policy_service)
+):
+    # Use injected dependencies
+    pass
+```
+
+### Key Principles
+
+- **ALWAYS** use FastAPI's `Depends()` for dependency injection
+- **ALWAYS** create dependency functions in appropriate modules
+- **NEVER** create database sessions directly - always use `get_db()` dependency
+- **NEVER** access global state directly - inject dependencies
+
+---
+
+## Service Layer Pattern
+
+### Overview
+
+Business logic is encapsulated in service classes, separating concerns from API routes and database models.
+
+**Code Reference**: `app/services/` directory
+
+### Implementation
+
+```python
+class PolicyService:
+    """Service for policy evaluation."""
+    
+    def __init__(self, policy_engine: PolicyEngineInterface):
+        self.engine = policy_engine
+    
+    def evaluate_facility_creation(
+        self,
+        credit_agreement: CreditAgreement
+    ) -> PolicyDecision:
+        # Business logic here
+        pass
+```
+
+### Key Principles
+
+- **ALWAYS** create service classes for business logic
+- **ALWAYS** keep services stateless (no instance variables)
+- **ALWAYS** inject dependencies into service constructors
+- **ALWAYS** use service layer between API routes and database models
+
+---
+
+## Repository Pattern (Implicit)
+
+### Overview
+
+SQLAlchemy models serve as repositories, providing query methods and data access.
+
+**Code Reference**: `app/db/models.py`
+
+### Implementation
+
+```python
+# ✅ CORRECT: SQLAlchemy query patterns
+document = db.query(Document)\
+    .options(joinedload(Document.versions))\
+    .options(joinedload(Document.workflow))\
+    .filter(Document.id == doc_id)\
+    .first()
+```
+
+### Key Principles
+
+- Use SQLAlchemy models directly as repositories
+- **ALWAYS** use `joinedload()` for eager loading relationships
+- **ALWAYS** use query methods on models, not raw SQL
+- **ALWAYS** handle transactions explicitly with `db.commit()` / `db.rollback()`
+
+---
+
+## Factory Pattern
+
+### Overview
+
+Factory functions centralize object creation and configuration.
+
+**Code Reference**: `app/core/llm_client.py`, `app/services/policy_engine_factory.py`
+
+### Implementation
+
+```python
+def get_chat_model(model: Optional[str] = None) -> BaseChatModel:
+    """Factory function for creating LLM clients."""
+    config = _get_llm_config()
+    return create_chat_model(
+        provider=config["provider"],
+        model=model or config["model"],
+        api_key=config["api_key"]
+    )
+```
+
+### Key Principles
+
+- **ALWAYS** use factory functions for creating complex objects
+- **ALWAYS** centralize configuration in factory functions
+- Examples: `get_chat_model()`, `get_policy_engine()`, `load_ssl_context()`
+
+---
+
+## Lifespan Management Pattern
+
+### Overview
+
+FastAPI's lifespan context manager handles application startup and shutdown.
+
+**Code Reference**: `server.py` (lifespan function)
+
+### Implementation
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    from app.core.llm_client import init_llm_config
+    init_llm_config(settings)
+    
+    from app.services.policy_service import init_policy_engine
+    init_policy_engine(settings)
+    
+    yield
+    
+    # Shutdown
+    from app.services.policy_service import get_policy_config_loader
+    loader = get_policy_config_loader()
+    if loader:
+        loader.stop_file_watcher()
+```
+
+### Key Principles
+
+- **ALWAYS** use FastAPI's `lifespan` context manager
+- **ALWAYS** initialize global resources in `lifespan` function
+- **ALWAYS** clean up resources in shutdown phase
+- **ALWAYS** handle initialization errors gracefully
+
+---
+
+## CDM Event Pattern
+
+### Overview
+
+All state changes and policy decisions are stored as CDM-compliant events.
+
+**Code Reference**: `app/models/cdm_events.py`
+
+### Implementation
+
+```python
+from app.models.cdm_events import generate_cdm_policy_evaluation
+
+policy_event = generate_cdm_policy_evaluation(
+    transaction_id=agreement.deal_id,
+    transaction_type="facility_creation",
+    decision=policy_result.decision,
+    rule_applied=policy_result.rule_applied,
+    related_event_identifiers=[],
+    evaluation_trace=policy_result.trace
+)
+```
+
+### Key Principles
+
+- **ALWAYS** generate CDM events for state changes
+- **ALWAYS** include required CDM fields: `eventType`, `eventDate`, `meta.globalKey`
+- **ALWAYS** link events to transactions via `transaction_id`
+- **ALWAYS** store events in database
+
+---
+
+## Policy-as-Code Pattern
+
+### Overview
+
+Policy rules are defined as YAML files and evaluated deterministically.
+
+**Code Reference**: `app/policies/`, `app/services/policy_service.py`
+
+### Implementation
+
+```yaml
+# app/policies/compliance/sanctions_screening.yaml
+- name: block_sanctioned_parties
+  when:
+    any:
+      - field: originator.lei
+        op: in
+        value: ["SANCTIONED_LEI_LIST"]
+  action: block
+  priority: 100
+```
+
+### Key Principles
+
+- **ALWAYS** define policies as YAML files
+- **ALWAYS** evaluate policies deterministically
+- **ALWAYS** store policy decisions as CDM events
+- **ALWAYS** handle three decision types: `ALLOW`, `BLOCK`, `FLAG`
+
+---
+
+## LLM Abstraction Pattern
+
+### Overview
+
+LLM clients are abstracted to support multiple providers (OpenAI, vLLM, HuggingFace).
+
+**Code Reference**: `app/core/llm_client.py`
+
+### Implementation
+
+```python
+# ✅ CORRECT: Use abstraction
+from app.core.llm_client import get_chat_model
+
+def create_extraction_chain():
+    llm = get_chat_model()  # Uses global config
+    return llm.with_structured_output(ExtractionResult)
+```
+
+### Key Principles
+
+- **NEVER** directly instantiate `ChatOpenAI` or `OpenAIEmbeddings`
+- **ALWAYS** use `get_chat_model()` and `get_embeddings_model()`
+- **ALWAYS** support multiple providers via configuration
+- **ALWAYS** use provider-agnostic interfaces
+
+---
+
+## Audit Trail Pattern
+
+### Overview
+
+All state-changing operations are logged with audit trails.
+
+**Code Reference**: `app/utils/audit.py`
+
+### Implementation
+
+```python
+from app.utils.audit import log_audit_action
+
+log_audit_action(
+    db, AuditAction.CREATE, "document", doc.id, current_user.id,
+    metadata={"filename": file.filename}
+)
+```
+
+### Key Principles
+
+- **ALWAYS** log audit actions for state changes
+- **ALWAYS** include user ID and timestamp
+- **ALWAYS** include relevant metadata
+- **ALWAYS** link audit logs to entities
+
+---
+
+## Error Handling Pattern
+
+### Overview
+
+Consistent error handling with appropriate HTTP status codes and error messages.
+
+**Code Reference**: `app/api/routes.py` (error handling)
+
+### Implementation
+
+```python
+try:
+    result = extract_data_smart(text=text)
+    return result
+except ValueError as e:
+    logger.warning(f"Validation error: {e}")
+    raise HTTPException(
+        status_code=422,
+        detail={"status": "validation_error", "message": str(e)}
+    )
+except HTTPException:
+    raise
+except Exception as e:
+    logger.error(f"Unexpected error: {e}", exc_info=True)
+    raise HTTPException(
+        status_code=500,
+        detail={"status": "error", "message": "Internal server error"}
+    )
+```
+
+### Key Principles
+
+- **ALWAYS** use `HTTPException` for API errors
+- **ALWAYS** log errors before raising
+- **ALWAYS** provide clear error messages
+- **ALWAYS** use appropriate status codes
+
+---
+
+## Additional Resources
+
+- [Architecture Overview](/architecture/overview)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Service Layer Rules](/.cursor/rules/service-layer.mdc)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `.cursor/rules/architecture.mdc`, `app/services/`, `app/core/llm_client.py`

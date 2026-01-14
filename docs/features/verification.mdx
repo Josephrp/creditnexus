@@ -1,0 +1,243 @@
+---
+title: Verification
+description: Satellite-based verification for sustainability-linked loans
+---
+
+## Overview
+
+The Verification feature provides satellite-based ground truth verification for sustainability-linked loans using Sentinel-2 imagery, NDVI analysis, and TorchGeo ResNet-50 land use classification. It includes both live verification workflows and portfolio monitoring dashboards.
+
+**Code Reference**: `client/src/components/VerificationDashboard.tsx`, `client/src/components/GroundTruthDashboard.tsx`, `app/agents/verifier.py`, `app/agents/classifier.py`
+
+---
+
+## Key Features
+
+### Live Verification Workflow
+
+- **Document Upload**: Upload credit agreement PDF
+- **SPT Extraction**: Extract Sustainability Performance Targets (SPTs)
+- **Address Geocoding**: Convert addresses to coordinates
+- **Satellite Imagery**: Fetch Sentinel-2 imagery
+- **NDVI Analysis**: Calculate Normalized Difference Vegetation Index
+- **Compliance Check**: Determine COMPLIANCE or BREACH status
+
+**Code Reference**: `client/src/components/VerificationDashboard.tsx`, `app/agents/verifier.py`
+
+### Ground Truth Dashboard
+
+- **Portfolio View**: Monitor all verified assets on global map
+- **Status Indicators**: Green (Compliant), Red (Breach), Yellow (Warning)
+- **Asset Management**: Manually onboard new loans
+- **Map Visualization**: Interactive map with Leaflet/React-Leaflet
+- **Filtering**: Filter by status, location, or asset type
+
+**Code Reference**: `client/src/components/GroundTruthDashboard.tsx`
+
+### Enhanced Satellite Features
+
+- **OpenStreetMap Integration**: Street map data for context
+- **Air Quality Monitoring**: Air quality index (AQI) data
+- **Green Infrastructure**: Green infrastructure detection
+- **Pollution Monitoring**: Methane and pollution detection
+- **Sustainability Scoring**: Multi-dimensional sustainability scores
+
+**Code Reference**: `app/services/green_finance_service.py`, `app/agents/verifier.py`
+
+---
+
+## Workflow
+
+### 1. Verification Demo
+
+1. **Upload Document**: Upload credit agreement PDF
+2. **Extract SPTs**: System extracts Sustainability Performance Targets
+3. **Geocode Address**: Convert collateral address to coordinates
+4. **Fetch Imagery**: Retrieve Sentinel-2 satellite imagery
+5. **Analyze NDVI**: Calculate NDVI score
+6. **Classify Land Use**: TorchGeo ResNet-50 classification
+7. **Determine Status**: COMPLIANCE or BREACH based on SPTs
+
+### 2. Ground Truth Monitoring
+
+1. **View Portfolio**: Open Ground Truth Dashboard
+2. **Map View**: See all assets on global map
+3. **Filter Assets**: Filter by status or location
+4. **View Details**: Click asset for detailed information
+5. **Re-verify**: Re-run verification for assets
+
+### 3. Breach Detection
+
+1. **Automatic Detection**: System detects breaches automatically
+2. **FDC3 Broadcast**: Broadcasts breach alerts via FDC3
+3. **Risk War Room**: Risk War Room receives alerts
+4. **Investigation**: Risk officers investigate breaches
+
+---
+
+## API Endpoints
+
+### Create Loan Asset
+
+<Endpoint method="POST" path="/api/loan-assets" />
+
+Create a loan asset for verification.
+
+**Request Body**:
+```json
+{
+  "loan_id": "LOAN_001",
+  "collateral_address": "123 Main St, City, State",
+  "spt_threshold": 0.75,
+  "geo_lat": 38.2975,
+  "geo_lon": -122.2869
+}
+```
+
+**Response**: Created loan asset with initial verification
+
+**Code Reference**: `app/api/routes.py` (create_loan_asset endpoint)
+
+### Run Verification
+
+<Endpoint method="POST" path="/api/loan-assets/{asset_id}/verify" />
+
+Run or re-run verification for a loan asset.
+
+**Response**: Updated verification results with NDVI score and compliance status
+
+**Code Reference**: `app/api/routes.py` (verify_loan_asset endpoint)
+
+### Get Verification Status
+
+<Endpoint method="GET" path="/api/loan-assets/{asset_id}/verification" />
+
+Get current verification status.
+
+**Response**: Verification status, NDVI score, compliance status
+
+---
+
+## Satellite Data Sources
+
+### Sentinel-2
+
+- **Provider**: SentinelHub
+- **Resolution**: 10m spatial resolution
+- **Frequency**: 5-day revisit time
+- **Bands**: Multispectral bands for NDVI calculation
+
+**Code Reference**: `app/agents/verifier.py` (Sentinel-2 integration)
+
+### TorchGeo ResNet-50
+
+- **Model**: Pre-trained ResNet-50 for land use classification
+- **Classes**: Agricultural, urban, forest, water, etc.
+- **Accuracy**: High accuracy land use classification
+
+**Code Reference**: `app/agents/classifier.py`
+
+---
+
+## NDVI Analysis
+
+### NDVI Calculation
+
+Normalized Difference Vegetation Index:
+
+```
+NDVI = (NIR - Red) / (NIR + Red)
+```
+
+**Interpretation**:
+- **> 0.7**: Healthy vegetation (high compliance)
+- **0.4 - 0.7**: Moderate vegetation
+- **< 0.4**: Low vegetation (potential breach)
+
+**Code Reference**: `app/agents/verifier.py` (NDVI calculation)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="SENTINELHUB_KEY" type="string">
+  SentinelHub OAuth client ID
+</ParamField>
+
+<ParamField body="SENTINELHUB_SECRET" type="string">
+  SentinelHub OAuth client secret
+</ParamField>
+
+<ParamField body="ENHANCED_SATELLITE_ENABLED" type="boolean">
+  Enable enhanced satellite features. Default: `true`
+</ParamField>
+
+**Setup Guide**: See [SentinelHub Setup Guide](/guides/sentinelhub-setup)
+
+---
+
+## User Interface
+
+### Verification Dashboard
+
+**Location**: `client/src/components/VerificationDashboard.tsx`
+
+**Features**:
+- **Document Upload**: Upload credit agreements
+- **Agent Terminal**: Real-time verification logs
+- **Map View**: Visualize verification results
+- **Progress Tracking**: Track verification progress
+- **CDM Events**: View generated CDM events
+
+**Access**: Navigate to "Verification Demo" in sidebar
+
+### Ground Truth Dashboard
+
+**Location**: `client/src/components/GroundTruthDashboard.tsx`
+
+**Features**:
+- **Global Map**: Interactive map of all assets
+- **Status Filtering**: Filter by compliance status
+- **Asset Details**: Detailed asset information
+- **Re-verification**: Re-run verification for assets
+- **Export**: Export asset data
+
+**Access**: Navigate to "Ground Truth" in sidebar
+
+---
+
+## FDC3 Integration
+
+Verification broadcasts FDC3 contexts:
+
+- **Breach Alerts**: Broadcast breach detection
+- **Compliance Updates**: Broadcast compliance status changes
+- **Risk War Room**: Risk War Room receives alerts automatically
+
+**Code Reference**: `client/src/components/VerificationDashboard.tsx` (FDC3 broadcasting)
+
+---
+
+## Best Practices
+
+1. **SPT Accuracy**: Ensure SPTs are accurately extracted
+2. **Address Quality**: Use complete, accurate addresses
+3. **Regular Verification**: Re-verify assets periodically
+4. **Breach Response**: Respond promptly to breach alerts
+5. **Documentation**: Maintain verification records
+
+---
+
+## Additional Resources
+
+- [Verification Guide](/guides/verification)
+- [SentinelHub Setup Guide](/guides/sentinelhub-setup)
+- [Green Finance Feature](/features/green-finance)
+- [Configuration Guide](/getting-started/configuration#enhanced-satellite-verification--green-finance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/components/VerificationDashboard.tsx`, `app/agents/verifier.py`, `app/api/routes.py`

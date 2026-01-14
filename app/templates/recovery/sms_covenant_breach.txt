@@ -1,0 +1,1 @@
+Important Notice: {{borrower_name}}, a covenant breach has been detected on your loan {{loan_id}}. Please contact us immediately at +1-800-XXX-XXXX to discuss this matter.

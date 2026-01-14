@@ -17,7 +17,7 @@ import { LoginForm } from '@/components/LoginForm';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Breadcrumb, BreadcrumbContainer } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/button';
-import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower, Building2, Database, Share2 } from 'lucide-react';
+import { FileText, ArrowLeftRight, Leaf, Sparkles, Radio, LogIn, LogOut, User, Loader2, BookOpen, LayoutDashboard, ChevronLeft, ChevronRight, Shield, RadioTower, Building2, Database, Share2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useFDC3 } from '@/context/FDC3Context';
 import type { CreditAgreementData, IntentName, DocumentContext, AgreementContext, WorkflowLinkContext } from '@/context/FDC3Context';
@@ -32,7 +32,10 @@ import { VerificationFileConfigEditor } from '@/apps/verification-config/Verific
 import { WorkflowShareInterface } from '@/components/WorkflowShareInterface';
 import { WorkflowDelegationDashboard } from '@/components/WorkflowDelegationDashboard';
 import { WorkflowProcessingPage } from '@/components/WorkflowProcessingPage';
+import { LoanRecoverySidebar } from '@/components/LoanRecoverySidebar';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useThemeClasses } from '@/utils/themeUtils';
+import { Link } from 'react-router-dom';
 import {
   PERMISSION_DOCUMENT_VIEW,
   PERMISSION_DOCUMENT_CREATE,
@@ -47,7 +50,7 @@ import {
   PERMISSION_AUDIT_VIEW,
 } from '@/utils/permissions';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor' | 'securitization' | 'verification-config' | 'workflow-processor' | 'workflow-share';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor' | 'securitization' | 'verification-config' | 'workflow-processor' | 'workflow-share' | 'loan-recovery';
 
 interface AppConfig {
   id: AppView;
@@ -177,6 +180,13 @@ const sidebarApps: AppConfig[] = [
     description: 'Configure verification file whitelist',
     requiredPermission: PERMISSION_USER_VIEW,
   },
+  {
+    id: 'loan-recovery',
+    name: 'Loan Recovery',
+    icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
+    description: 'Loan recovery & default management',
+    requiredPermission: PERMISSION_DEAL_VIEW,
+  },
 ];
 
 interface PolicyDecision {
@@ -213,6 +223,7 @@ interface TradeBlotterState {
 export function DesktopAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const classes = useThemeClasses();
   
   // Track component instance to detect re-mounts
   const componentInstanceRef = useRef<string>(Math.random().toString(36).substring(7));
@@ -230,7 +241,8 @@ export function DesktopAppLayout() {
       'dashboard', 'applications', 'admin-signups', 'calendar', 'deals',
       'document-parser', 'document-generator', 'trade-blotter', 'green-lens',
       'ground-truth', 'verification-demo', 'demo-data', 'risk-war-room',
-      'policy-editor', 'library', 'auditor', 'securitization', 'verification-config'
+      'policy-editor', 'library', 'auditor', 'securitization', 'verification-config',
+      'workflow-processor', 'workflow-share', 'loan-recovery'
     ];
     
     // Try to restore from sessionStorage first
@@ -288,6 +300,13 @@ export function DesktopAppLayout() {
       // Persist to sessionStorage
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('creditnexus_activeApp', newValue);
+        // Also store tab state if applicable (for apps that support tabs)
+        // Tab state is typically stored in URL params, but we can also store in sessionStorage as backup
+        const currentUrl = new URL(window.location.href);
+        const tabParam = currentUrl.searchParams.get('tab');
+        if (tabParam) {
+          sessionStorage.setItem(`creditnexus_${newValue}_tab`, tabParam);
+        }
       }
       return newValue;
     });
@@ -438,6 +457,7 @@ export function DesktopAppLayout() {
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
+      '/app/loan-recovery': 'loan-recovery',
       '/library': 'library',
       '/auditor': 'auditor',
     };
@@ -537,6 +557,15 @@ export function DesktopAppLayout() {
 
   // Update route when activeApp changes
   const handleAppChange = (app: AppView) => {
+    // Save current tab state before switching apps
+    if (typeof window !== 'undefined' && activeApp) {
+      const currentUrl = new URL(window.location.href);
+      const tabParam = currentUrl.searchParams.get('tab');
+      if (tabParam) {
+        sessionStorage.setItem(`creditnexus_${activeApp}_tab`, tabParam);
+      }
+    }
+    
     // CRITICAL: Check permissions before navigating - redirect to dashboard if user doesn't have permission
     if (!hasPermissionForApp(app)) {
       if (location.pathname !== '/dashboard') {
@@ -555,6 +584,18 @@ export function DesktopAppLayout() {
     if (app === 'deals' && location.pathname.startsWith('/dashboard/deals/') && location.pathname !== '/dashboard/deals') {
       return; // Stay on the detail page
     }
+    
+    // Save current tab state before switching apps
+    if (typeof window !== 'undefined' && activeApp) {
+      const currentUrl = new URL(window.location.href);
+      const tabParam = currentUrl.searchParams.get('tab');
+      if (tabParam) {
+        sessionStorage.setItem(`creditnexus_${activeApp}_tab`, tabParam);
+      }
+    }
+    
+    // Restore tab state for the new app if available
+    const savedTab = typeof window !== 'undefined' ? sessionStorage.getItem(`creditnexus_${app}_tab`) : null;
     
     const appToPath: Record<AppView, string> = {
       'dashboard': '/dashboard',
@@ -577,28 +618,46 @@ export function DesktopAppLayout() {
       'auditor': '/auditor',
       'workflow-share': '/app/workflow/share',
       'workflow-processor': '/app/workflow/process',
+      'loan-recovery': '/app/loan-recovery',
     };
     const path = appToPath[app];
+    
+    // Build target path with tab parameter if saved tab exists
+    let targetPath = path || '';
+    if (savedTab && targetPath) {
+      const url = new URL(targetPath, window.location.origin);
+      url.searchParams.set('tab', savedTab);
+      targetPath = url.pathname + url.search;
+    }
     
     // CRITICAL: Don't navigate if we're already on the correct base path (even with query params)
     // This prevents redirects when navigating to routes with query parameters
     const currentBasePath = location.pathname.split('?')[0];
     if (path && path === currentBasePath) {
       // We're already on the correct route (possibly with query params) - just update activeApp
+      // But restore tab if we have a saved tab and it's not in the URL
+      if (savedTab && !location.search.includes('tab=')) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', savedTab);
+        navigate(url.pathname + url.search, { replace: true });
+      }
       if (app !== activeApp) {
         setActiveApp(app);
       }
       return; // Don't navigate
     }
     
-    if (path && path !== location.pathname) {
+    // Use targetPath if we have tab restoration, otherwise use path
+    const finalPath = targetPath || path;
+    
+    if (finalPath && finalPath.split('?')[0] !== location.pathname) {
       // CRITICAL FIX: Set activeApp BEFORE navigating to ensure UI updates immediately
       // This fixes the issue where the sync effect was skipping due to ref timing
       setActiveApp(app);
       
       isNavigatingRef.current = true;
-      lastNavigatedPathRef.current = path;
-      navigate(path, { replace: false });
+      lastNavigatedPathRef.current = finalPath;
+      navigate(finalPath, { replace: false });
       // Flags will be cleared by the useEffect when the route changes
     }
   };
@@ -956,6 +1015,11 @@ export function DesktopAppLayout() {
           {activeApp === 'workflow-share' && <WorkflowShareInterface />}
           {activeApp === 'workflow-processor' && <WorkflowProcessingPage />}
           {activeApp === 'auditor' && <AuditorRouter />}
+          {activeApp === 'loan-recovery' && (
+            <div className="h-full">
+              <LoanRecoverySidebar />
+            </div>
+          )}
           {activeApp === 'securitization' && (() => {
             // Check if we're on a tranche purchase page
             if (location.pathname.includes('/tranches/') && location.pathname.includes('/purchase')) {
@@ -975,9 +1039,9 @@ export function DesktopAppLayout() {
         </main>
       </div>
 
-      <footer className="border-t border-slate-700 mt-auto">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
-          <p>Powered by OpenAI GPT-4o and LangChain</p>
+      <footer className={`border-t ${classes.border.default} mt-auto`}>
+        <div className={`max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm ${classes.text.secondary}`}>
+          <p>Price & create structured financial products</p>
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -997,20 +1061,39 @@ export function DesktopAppLayout() {
                   shareUrl = `/app/workflow/share?view=create&documentId=${docMatch[1]}`
                 }
                 
-                navigate(shareUrl)
+                navigate(shareUrl, { 
+                  state: { from: currentPath } 
+                })
                 handleAppChange('workflow-share' as AppView)
               }}
-              className="text-slate-400 hover:text-slate-100 hover:bg-slate-800"
+              className={`${classes.text.secondary} ${classes.interactive.hover.text} ${classes.interactive.hover.background}`}
               title="Open Workflow Share Interface"
             >
               <Share2 className="h-4 w-4 mr-2" />
               Workflow Links
             </Button>
-            <span className="flex items-center gap-1">
-              <Radio className="h-3 w-3 text-emerald-500" />
-              FDC3 Desktop Interoperability
-            </span>
-            <span>FINOS CDM Compliant</span>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1">
+                <Radio className="h-3 w-3 text-emerald-500" />
+                FDC3 Desktop Interoperability
+              </span>
+              <span>FINOS CDM Compliant</span>
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-slate-600">
+                <Link 
+                  to="/licence" 
+                  className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
+                >
+                  License
+                </Link>
+                <span className={classes.text.muted}>•</span>
+                <Link 
+                  to="/rail" 
+                  className={`text-xs ${classes.text.muted} ${classes.interactive.hover.text} transition-colors`}
+                >
+                  RAIL
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </footer>

@@ -26,6 +26,11 @@ from app.api.websocket_routes import router as websocket_router
 from app.api.securitization_routes import router as securitization_router
 from app.api.config_routes import router as config_router
 from app.api.workflow_delegation_routes import router as workflow_delegation_router
+from app.api.recovery_routes import router as recovery_router
+from app.api.twilio_routes import router as twilio_router
+from app.api.remote_routes import remote_router
+from app.api.fdc3_routes import router as fdc3_router
+from app.api.fdc3_routes import router as fdc3_router
 from app.auth.routes import auth_router
 from app.auth.jwt_auth import jwt_router
 
@@ -544,12 +549,19 @@ app.include_router(websocket_router)
 app.include_router(securitization_router)
 app.include_router(config_router)
 app.include_router(workflow_delegation_router)
+app.include_router(recovery_router)
+app.include_router(twilio_router)
+app.include_router(remote_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(jwt_router, prefix="/api")
+app.include_router(fdc3_router, prefix="/api/fdc3")
 
 # GDPR compliance routes
 from app.api.gdpr_routes import gdpr_router
 app.include_router(gdpr_router, prefix="/api")
+
+# FDC3 App Directory API
+app.include_router(fdc3_router, prefix="/api/fdc3")
 
 # Serve OpenFin manifest files
 openfin_dir = Path(__file__).parent / "openfin"

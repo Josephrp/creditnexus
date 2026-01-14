@@ -60,7 +60,7 @@ export function ReviewInterface({
   const handleApprove = () => {
     if (extractedData && isDataValid) {
       broadcast({
-        type: 'fdc3.creditnexus.loan',
+        type: 'finos.creditnexus.loan',
         loan: {
           agreementDate: extractedData.agreement_date,
           parties: extractedData.parties,

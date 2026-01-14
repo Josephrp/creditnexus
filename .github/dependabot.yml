@@ -11,9 +11,7 @@ updates:
     reviewers:
       - "creditnexus-team"
     labels:
-      - "dependencies"
       - "python"
-      - "security"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -37,9 +35,7 @@ updates:
     reviewers:
       - "creditnexus-team"
     labels:
-      - "dependencies"
       - "javascript"
-      - "security"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -62,7 +58,3 @@ updates:
     open-pull-requests-limit: 5
     reviewers:
       - "creditnexus-team"
-    labels:
-      - "dependencies"
-      - "github-actions"
-      - "security"
