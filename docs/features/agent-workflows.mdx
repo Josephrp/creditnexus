@@ -1,0 +1,496 @@
+---
+title: Agent Workflows
+description: AI-powered agent workflows for quantitative analysis, deep research, and business intelligence
+---
+
+<CardGroup cols={2}>
+  <Card
+    title="LangAlpha"
+    icon="chart-line"
+    href="#langalpha-quantitative-analysis"
+  >
+    Multi-agent quantitative financial analysis
+  </Card>
+  <Card
+    title="DeepResearch"
+    icon="search"
+    href="#deepresearch"
+  >
+    Iterative web research and knowledge accumulation
+  </Card>
+  <Card
+    title="PeopleHub"
+    icon="users"
+    href="#peoplehub"
+  >
+    Business intelligence and psychometric analysis
+  </Card>
+  <Card
+    title="Agent Dashboard"
+    icon="layout-dashboard"
+    href="/apps/agent-dashboard"
+  >
+    Unified dashboard for all agent results
+  </Card>
+</CardGroup>
+
+## Overview
+
+CreditNexus includes three powerful AI agent workflows that automate financial analysis, research, and business intelligence tasks. These agents integrate seamlessly with the document digitizer chatbot and can be launched via natural language commands or direct API calls.
+
+**Key Features:**
+- **Multi-Agent Orchestration**: LangAlpha uses a team of specialized agents (coordinator, planner, supervisor, researcher, coder, reporter, market, browser, analyst)
+- **Iterative Research**: DeepResearch performs multi-stage research with knowledge accumulation
+- **Business Intelligence**: PeopleHub provides psychometric analysis and credit assessment
+- **CDM Compliance**: All agent actions generate FINOS CDM-compliant events
+- **Audit Logging**: Complete audit trails for all agent operations
+- **Report Generation**: Automated report generation in Markdown, PDF, and JSON formats
+- **Deal Integration**: Results automatically linked to deals and documents
+
+---
+
+## LangAlpha: Quantitative Analysis
+
+LangAlpha is a multi-agent system for quantitative financial analysis. It orchestrates a team of specialized AI agents to perform comprehensive company, market, and loan application analysis.
+
+### Architecture
+
+LangAlpha uses **LangGraph** to orchestrate multiple specialized agents:
+
+1. **Coordinator**: Initial query analysis and task distribution
+2. **Planner**: Creates detailed analysis plans
+3. **Supervisor**: Monitors progress and quality
+4. **Researcher**: Performs web research and information gathering
+5. **Market Agent**: Fetches market data and financial metrics
+6. **Coder**: Executes Python calculations and data analysis
+7. **Browser Agent**: Performs web browsing and content extraction
+8. **Reporter**: Generates comprehensive reports
+9. **Analyst**: Performs advanced financial analysis
+
+### Available Tools
+
+LangAlpha agents have access to:
+
+- **Market Data**: Polygon.io API for real-time and historical market data
+- **Fundamental Data**: Alpha Vantage API for company fundamentals
+- **Web Search**: Serper API for web research and news
+- **Python REPL**: Execute Python code for calculations and data analysis
+- **Trading Signals**: Generate trading signals and technical indicators
+- **Browser Automation**: Playwright-based web browsing
+
+### Use Cases
+
+#### Company Analysis
+
+Analyze a company's financial health, market position, and investment potential:
+
+```bash
+POST /api/quantitative-analysis/company
+{
+  "company_name": "Apple Inc.",
+  "ticker": "AAPL",
+  "analysis_type": "comprehensive"
+}
+```
+
+**Response includes:**
+- Financial metrics and ratios
+- Market analysis
+- Risk assessment
+- Investment recommendations
+- CDM-compliant events
+
+#### Market Analysis
+
+Analyze market trends, sectors, and economic indicators:
+
+```bash
+POST /api/quantitative-analysis/market
+{
+  "query": "Technology sector Q4 2024 performance",
+  "time_range": "3M"
+}
+```
+
+**Response includes:**
+- Market trends and patterns
+- Sector comparisons
+- Economic indicators
+- Trading opportunities
+- CDM-compliant events
+
+#### Loan Application Analysis
+
+Evaluate loan applications with quantitative metrics:
+
+```bash
+POST /api/quantitative-analysis/loan-application
+{
+  "borrower_name": "Acme Corp",
+  "loan_amount": 1000000,
+  "loan_type": "term_loan"
+}
+```
+
+**Response includes:**
+- Credit risk assessment
+- Financial ratio analysis
+- Cash flow projections
+- Default probability
+- CDM-compliant events
+
+### Streaming Progress Updates
+
+All LangAlpha endpoints support Server-Sent Events (SSE) for real-time progress updates:
+
+```bash
+GET /api/quantitative-analysis/company?stream=true
+```
+
+**Event Types:**
+- `started`: Analysis has begun
+- `progress`: Progress update with current step and percentage
+- `completed`: Analysis completed with results
+
+### Configuration
+
+**Required API Keys:**
+- `POLYGON_API_KEY`: Polygon.io API key for market data
+- `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key for fundamentals
+- `SERPER_API_KEY`: Serper API key for web search (optional, uses WebSearchService fallback)
+
+**LLM Configuration:**
+- `LANGALPHA_REASONING_MODEL`: Model for reasoning tasks (default: `gpt-4o`)
+- `LANGALPHA_BASIC_MODEL`: Model for basic tasks (default: `gpt-4o-mini`)
+- `LANGALPHA_ECONOMIC_MODEL`: Model for economic analysis (default: `gpt-4o-mini`)
+- `LANGALPHA_CODING_MODEL`: Model for coding tasks (default: `gpt-4o`)
+- `LANGALPHA_BUDGET_LEVEL`: Budget level (`low`, `medium`, `high`)
+
+**Code Reference**: `app/workflows/langalpha_graph.py`, `app/services/quantitative_analysis_service.py`
+
+---
+
+## DeepResearch: Iterative Web Research
+
+DeepResearch performs comprehensive web research using an iterative research pattern. It accumulates knowledge across multiple research stages to provide thorough answers to complex queries.
+
+### Research Pattern
+
+DeepResearch follows a multi-stage research workflow:
+
+1. **Search**: Initial web search for relevant information
+2. **Read**: Extract and analyze content from sources
+3. **Answer**: Generate initial answer based on findings
+4. **Reflect**: Evaluate answer quality and identify gaps
+5. **Iterate**: Perform additional research to fill gaps
+6. **Finalize**: Generate comprehensive final answer
+
+### Use Cases
+
+#### Research Query
+
+Perform deep research on any topic:
+
+```bash
+POST /api/deep-research/query
+{
+  "query": "What are the latest developments in sustainable finance regulations?",
+  "deal_id": 123,
+  "max_iterations": 5
+}
+```
+
+**Response includes:**
+- Comprehensive answer
+- Knowledge items (structured findings)
+- Source citations
+- Research statistics
+- CDM-compliant events
+
+#### Get Research Results
+
+Retrieve completed research results:
+
+```bash
+GET /api/deep-research/results/{research_id}
+```
+
+**Response includes:**
+- Full research answer
+- Knowledge items with citations
+- Source URLs and metadata
+- Research statistics (sources used, iterations, time taken)
+
+### Integration with WebSearchService
+
+DeepResearch uses the **WebSearchService** for web research:
+
+- **Serper API**: Google search and news search (if `SERPER_API_KEY` configured)
+- **Content Extraction**: Automatic content extraction with trafilatura
+- **Reranking**: Optional reranking for improved relevance
+- **Rate Limiting**: Configurable rate limits (default: 360/hour)
+
+**Code Reference**: `app/agents/deep_research_agent.py`, `app/services/deep_research_service.py`
+
+---
+
+## PeopleHub: Business Intelligence
+
+PeopleHub provides comprehensive business intelligence and psychometric analysis for individuals. It combines web research, LinkedIn integration, and psychometric profiling to assess creditworthiness and decision-making patterns.
+
+### Features
+
+#### Psychometric Analysis
+
+- **Big Five Personality Traits**: Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
+- **Risk Tolerance**: Assessment of financial risk tolerance
+- **Decision-Making Style**: Analysis of decision-making patterns
+- **Buying Behavior**: Financial behavior analysis
+- **Savings Behavior**: Savings patterns and financial discipline
+
+#### Research Capabilities
+
+- **LinkedIn Integration**: Automated LinkedIn profile fetching and analysis
+- **Web Research**: Comprehensive web research with content scraping
+- **News Analysis**: Recent news and media coverage analysis
+- **Credit Check**: Automated credit assessment
+
+### Use Cases
+
+#### Research Person
+
+Perform comprehensive research on an individual:
+
+```bash
+POST /api/digitizer-chatbot/launch-workflow
+{
+  "workflow_type": "peoplehub",
+  "workflow_params": {
+    "person_name": "John Doe"
+  },
+  "deal_id": 123
+}
+```
+
+**Response includes:**
+- Psychometric profile
+- Research summary
+- Credit assessment
+- Web research findings
+- CDM-compliant events
+
+### Integration
+
+PeopleHub integrates with:
+- **DeepResearch**: For comprehensive web research
+- **WebSearchService**: For web content extraction
+- **Deal Timeline**: Results automatically added to deal timeline
+- **Agent Notes**: Research findings stored as agent notes
+
+**Code Reference**: `app/workflows/peoplehub_research_graph.py`, `app/services/digitizer_chatbot_service.py`
+
+---
+
+## Agent Dashboard
+
+The Agent Dashboard provides a unified interface for viewing and managing all agent results.
+
+### Features
+
+- **Unified View**: View all agent results (LangAlpha, DeepResearch, PeopleHub) in one place
+- **Search & Filter**: Search by query, filter by agent type, status, or date
+- **Statistics**: Overview of agent usage and results
+- **Detailed Views**: Click to view detailed results for any analysis
+- **Export**: Download results in multiple formats (Markdown, PDF, JSON)
+
+**Access**: Navigate to "Agent Dashboard" in the sidebar
+
+**Code Reference**: `client/src/apps/agent-dashboard/AgentDashboard.tsx`
+
+---
+
+## Chatbot Integration
+
+All agent workflows can be launched via the document digitizer chatbot using natural language:
+
+### Example Commands
+
+- **LangAlpha**: "Analyze Apple Inc. financials" or "Market analysis for tech sector"
+- **DeepResearch**: "Deep research on sustainable finance regulations"
+- **PeopleHub**: "Research person John Doe" or "PeopleHub analysis for Jane Smith"
+
+### Workflow Launch
+
+The chatbot automatically detects workflow launch requests and triggers the appropriate agent:
+
+```typescript
+// Example: Launch LangAlpha from chatbot
+const response = await fetch('/api/digitizer-chatbot/chat', {
+  method: 'POST',
+  body: JSON.stringify({
+    message: "Analyze Apple Inc. financials",
+    session_id: "chatbot-session-123",
+    deal_id: 123
+  })
+});
+```
+
+**Code Reference**: `app/services/digitizer_chatbot_service.py`, `client/src/apps/docu-digitizer/DigitizerChatbot.tsx`
+
+---
+
+## Report Generation
+
+All agent workflows automatically generate comprehensive reports upon completion:
+
+### Report Formats
+
+- **Markdown**: Human-readable Markdown reports
+- **PDF**: Formatted PDF reports (via report generation service)
+- **JSON**: Structured JSON data for programmatic access
+
+### Report Contents
+
+**LangAlpha Reports:**
+- Executive summary
+- Financial metrics and ratios
+- Market analysis
+- Risk assessment
+- Recommendations
+
+**DeepResearch Reports:**
+- Research answer
+- Knowledge items with citations
+- Source references
+- Research methodology
+
+**PeopleHub Reports:**
+- Psychometric profile
+- Research summary
+- Credit assessment
+- Behavioral insights
+
+### Report Storage
+
+Reports are automatically:
+- Stored in the database (`agent_reports` table)
+- Attached to deals as documents
+- Linked to agent results
+- Available via API endpoints
+
+**Code Reference**: `app/services/agent_report_service.py`, `app/services/report_formatter.py`
+
+---
+
+## CDM Compliance
+
+All agent workflows generate FINOS CDM-compliant events:
+
+### Event Types
+
+- **Research Query Events**: `ResearchQuery` events for research operations
+- **Observation Events**: `Observation` events for findings and insights
+- **Policy Evaluation Events**: `PolicyEvaluation` events for compliance checks
+
+### Event Storage
+
+- Events stored in `cdm_events` JSONB column
+- Linked to deals via `deal_id`
+- Available via audit log API
+- Included in audit reports
+
+**Code Reference**: `app/models/cdm_events.py`
+
+---
+
+## Audit Logging
+
+All agent operations are logged for audit compliance:
+
+### Logged Actions
+
+- Agent workflow launches
+- Tool usage (market data, web search, Python REPL, etc.)
+- State transitions in multi-agent workflows
+- Error conditions and retries
+- Report generation
+
+### Audit Context
+
+Each agent operation includes:
+- User ID
+- Deal ID (if applicable)
+- Analysis/Research ID
+- Timestamp
+- Operation type
+- Metadata (query, parameters, results)
+
+**Code Reference**: `app/utils/audit.py`, `app/workflows/langalpha_graph.py`
+
+---
+
+## Performance & Optimization
+
+### Caching
+
+- Agent results are cached to avoid redundant API calls
+- Cache keys based on query, parameters, and time range
+- Configurable cache TTL
+
+### Rate Limiting
+
+- Web search: 360 requests/hour (configurable)
+- Market data: Respects API provider rate limits
+- LLM calls: Respects provider rate limits
+
+### Parallel Processing
+
+- LangAlpha agents can run in parallel where possible
+- DeepResearch performs parallel searches
+- PeopleHub combines multiple research sources
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Agent workflow fails to start:**
+- Check API keys are configured (Polygon, Alpha Vantage, Serper)
+- Verify LLM provider is accessible
+- Check database connection
+
+**Slow performance:**
+- Reduce `max_iterations` for DeepResearch
+- Use `LANGALPHA_BUDGET_LEVEL=low` for faster LangAlpha runs
+- Check API rate limits
+
+**Missing results:**
+- Check agent dashboard for error messages
+- Review audit logs for failed operations
+- Verify deal_id is correct if linking to deals
+
+### Debug Mode
+
+Enable debug logging:
+
+```env
+LOG_LEVEL=DEBUG
+```
+
+This will log all agent operations, tool calls, and state transitions.
+
+---
+
+## Next Steps
+
+- [API Reference](/api-reference/agents) - Complete API documentation
+- [Configuration Guide](/getting-started/configuration#agent-workflows) - Setup instructions
+- [Agent Tools](/features/agent-tools) - Available tools and capabilities
+- [Agent Dashboard](/apps/agent-dashboard) - Using the unified dashboard
+
+---
+
+**Last Updated**: 2025-01-14  
+**Status**: Production Ready  
+**Version**: 1.0

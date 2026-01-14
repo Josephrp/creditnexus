@@ -28,39 +28,50 @@ This document outlines the planned features and improvements for CreditNexus. Th
 
 ### Quantitative Intelligence & Business Intelligence
 
-**Status**: Planned  
-**Timeline**: Q2-Q3 2025  
+**Status**: ✅ **Implemented** (2025-01-14)  
+**Timeline**: Completed Q1 2025  
 **Reference**: [Quantitative Intelligence Implementation Plan](../../dev/QUANTITATIVE_INTELLIGENCE_IMPLEMENTATION_PLAN_IMPROVED.md)
 
-#### Accounting Document Extraction
+#### ✅ LangAlpha: Quantitative Analysis (Implemented)
 
-- **AI-Powered Extraction**: Extract structured data from balance sheets, income statements, cash flow statements, and tax returns
-- **Quantitative Validation**: Automatic validation of accounting equations (Assets = Liabilities + Equity, Revenue - Expenses = Net Income)
-- **Multi-Period Support**: Handle quarterly and annual statements with comparative periods
-- **CDM Event Integration**: All extractions generate CDM-compliant events
+- **Multi-Agent System**: Orchestrates 9 specialized agents (coordinator, planner, supervisor, researcher, market, coder, reporter, browser, analyst)
+- **Company Analysis**: Financial health, market position, investment potential
+- **Market Analysis**: Trends, sectors, economic indicators
+- **Loan Application Analysis**: Credit risk, financial ratios, cash flow projections
+- **Real-Time Progress**: Server-Sent Events (SSE) for streaming updates
+- **CDM Event Integration**: All analyses generate CDM-compliant events
+- **Report Generation**: Automated Markdown, PDF, and JSON reports
 
-**Code Reference**: `app/chains/accounting_extraction_chain.py` (planned)
+**Code Reference**: `app/workflows/langalpha_graph.py`, `app/services/quantitative_analysis_service.py`
 
-#### DeepResearch Orchestrator
+**Documentation**: [Agent Workflows - LangAlpha](/features/agent-workflows#langalpha-quantitative-analysis)
 
-- **Iterative Research Pattern**: Multi-stage research workflow with search, read, answer, reflect, and coding actions
-- **Knowledge Accumulation**: Build comprehensive knowledge bases from web research
+#### ✅ DeepResearch Orchestrator (Implemented)
+
+- **Iterative Research Pattern**: Multi-stage research workflow with search, read, answer, reflect, and iterate actions
+- **Knowledge Accumulation**: Builds comprehensive knowledge bases from web research
 - **CDM Event Tracking**: Research queries generate CDM events linked to deals
 - **Deal Flow Integration**: Research results automatically update deal timelines
+- **Source Citations**: Full citation tracking and source references
 
-**Code Reference**: `app/agents/deep_research_agent.py` (planned)
+**Code Reference**: `app/agents/deep_research_agent.py`, `app/services/deep_research_service.py`
 
-#### PeopleHub Business Intelligence
+**Documentation**: [Agent Workflows - DeepResearch](/features/agent-workflows#deepresearch)
+
+#### ✅ PeopleHub Business Intelligence (Implemented)
 
 - **LinkedIn Integration**: Automated LinkedIn profile fetching and analysis
 - **Web Research**: Comprehensive web research with content scraping and summarization
 - **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
 - **Buying & Savings Behavior**: Financial behavior analysis for credit assessment
+- **Credit Assessment**: Automated creditworthiness evaluation
 - **Audit Reports**: Automated business intelligence reports
 
-**Code Reference**: `app/workflows/peoplehub_research_graph.py` (planned)
+**Code Reference**: `app/workflows/peoplehub_research_graph.py`, `app/services/digitizer_chatbot_service.py`
 
-#### Web Search Service
+**Documentation**: [Agent Workflows - PeopleHub](/features/agent-workflows#peoplehub)
+
+#### ✅ Web Search Service (Implemented)
 
 - **Serper API Integration**: Google search and news search capabilities
 - **Content Extraction**: Automated web content extraction with trafilatura
@@ -68,7 +79,21 @@ This document outlines the planned features and improvements for CreditNexus. Th
 - **Analytics**: Request tracking and performance monitoring
 - **Rate Limiting**: Configurable rate limits (default: 360/hour)
 
-**Code Reference**: `app/services/web_search_service.py` (planned)
+**Code Reference**: `app/services/web_search_service.py`
+
+**Documentation**: [Agent Workflows - Configuration](/getting-started/configuration#agent-workflows-configuration)
+
+#### Accounting Document Extraction (Planned)
+
+**Status**: Planned  
+**Timeline**: Q2 2025
+
+- **AI-Powered Extraction**: Extract structured data from balance sheets, income statements, cash flow statements, and tax returns
+- **Quantitative Validation**: Automatic validation of accounting equations (Assets = Liabilities + Equity, Revenue - Expenses = Net Income)
+- **Multi-Period Support**: Handle quarterly and annual statements with comparative periods
+- **CDM Event Integration**: All extractions generate CDM-compliant events
+
+**Code Reference**: `app/chains/accounting_extraction_chain.py` (planned)
 
 ---
 

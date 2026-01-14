@@ -213,6 +213,57 @@ class Settings(BaseSettings):
     # Image OCR Configuration
     OCR_API_URL: Optional[str] = None  # Gradio Space URL (default: prithivMLmods/Multimodal-OCR3)
 
+    # Web Search Configuration (vendored from dev/app.py)
+    SERPER_API_KEY: Optional[SecretStr] = None  # Serper API key for web search
+    WEB_SEARCH_RATE_LIMIT: str = "360/hour"  # Rate limit for web search
+    WEB_SEARCH_ANALYTICS_DIR: Optional[Path] = None  # Analytics data directory
+
+    # Reranking Configuration
+    RERANKING_USE_LOCAL: bool = False  # Use local reranking model instead of API
+    RERANKING_MODEL: str = "BAAI/bge-reranker-base"  # Local reranking model
+    RERANKING_DEVICE: str = "cpu"  # Device for local reranking: "cpu", "cuda", "cuda:0"
+    RERANKING_API_URL: Optional[str] = None  # Remote reranking API URL (e.g., Cohere, Jina)
+    RERANKING_API_KEY: Optional[SecretStr] = None  # Remote reranking API key
+
+    # LangAlpha Quantitative Analysis Configuration
+    POLYGON_API_KEY: Optional[SecretStr] = Field(
+        default=None,
+        description="Polygon.io API key for market data (get from https://polygon.io/)"
+    )
+    ALPHA_VANTAGE_API_KEY: Optional[SecretStr] = Field(
+        default=None,
+        description="Alpha Vantage API key for fundamental data (get from https://www.alphavantage.co/support/#api-key)"
+    )
+    TAVILY_API_KEY: Optional[SecretStr] = Field(
+        default=None,
+        description="Tavily API key for news/search (get from https://tavily.com/)"
+    )
+    TICKERTICK_API_KEY: Optional[SecretStr] = Field(
+        default=None,
+        description="Tickertick API key for financial news (NOTE: This service may not be publicly available. Leave unset to use alternative news sources like web_search tool or Tavily.)"
+    )
+    # LangAlpha LLM Configuration (for different agent types)
+    LANGALPHA_REASONING_MODEL: str = Field(
+        default="gpt-4o",
+        description="LLM model for reasoning tasks (supervisor, planner, analyst)"
+    )
+    LANGALPHA_BASIC_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model for basic tasks (researcher, reporter, market)"
+    )
+    LANGALPHA_ECONOMIC_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model for economic analysis tasks"
+    )
+    LANGALPHA_CODING_MODEL: str = Field(
+        default="gpt-4o",
+        description="LLM model for coding/calculation tasks"
+    )
+    LANGALPHA_BUDGET_LEVEL: str = Field(
+        default="medium",
+        description="Budget level for LangAlpha agents: 'low', 'medium', 'high'"
+    )
+
     # ChromaDB Configuration
     CHROMADB_PERSIST_DIR: str = "./chroma_db"  # Directory to persist ChromaDB data
     CHROMADB_SEED_DOCUMENTS_DIR: Optional[str] = (
@@ -382,6 +433,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_encryption_key(cls, v):
         """Validate encryption key format."""
+        logger = logging.getLogger(__name__)
         if v is None or v == "":
             return None
         # Fernet keys are 44 bytes when base64-encoded

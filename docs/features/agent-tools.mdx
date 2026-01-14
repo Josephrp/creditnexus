@@ -1,0 +1,453 @@
+---
+title: Agent Tools
+description: Available tools and capabilities for LangAlpha, DeepResearch, and PeopleHub agent workflows
+---
+
+## Overview
+
+CreditNexus agent workflows have access to a comprehensive set of tools for data fetching, analysis, and research. These tools enable agents to perform complex quantitative analysis, web research, and business intelligence tasks.
+
+**Code Reference**: `app/agents/langalpha_tools.py`, `app/services/web_search_service.py`
+
+---
+
+## LangAlpha Tools
+
+### Market Data Tools
+
+#### Get Market Data
+
+Fetch real-time and historical market data from Polygon.io.
+
+**Tool**: `get_market_data`
+
+**Parameters:**
+- `ticker`: Stock ticker symbol (e.g., "AAPL")
+- `start_date`: Start date for historical data
+- `end_date`: End date for historical data
+- `timespan`: Time span (minute, hour, day, week, month, quarter, year)
+
+**Returns:**
+- Market data (OHLCV)
+- Volume data
+- Price movements
+- Technical indicators
+
+**Configuration Required:**
+- `POLYGON_API_KEY`: Polygon.io API key
+
+**Code Reference**: `app/agents/langalpha_tools.py` (get_market_data function)
+
+#### Get Ticker Snapshot
+
+Get current snapshot of ticker data.
+
+**Tool**: `get_ticker_snapshot`
+
+**Parameters:**
+- `ticker`: Stock ticker symbol
+
+**Returns:**
+- Current price
+- Volume
+- Market cap
+- Recent price movements
+
+**Code Reference**: `app/agents/langalpha_tools.py` (get_ticker_snapshot function)
+
+### Fundamental Data Tools
+
+#### Get Fundamental Data
+
+Fetch company fundamental data from Alpha Vantage.
+
+**Tool**: `get_fundamental_data`
+
+**Parameters:**
+- `ticker`: Stock ticker symbol
+- `data_type`: Type of data (income_statement, balance_sheet, cash_flow, earnings)
+
+**Returns:**
+- Financial statements
+- Earnings data
+- Company fundamentals
+- Financial ratios
+
+**Configuration Required:**
+- `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key
+
+**Code Reference**: `app/agents/langalpha_tools.py` (get_fundamental_data function)
+
+### Trading Signals Tools
+
+#### Get Trading Signals
+
+Generate trading signals and technical indicators.
+
+**Tool**: `get_trading_signals`
+
+**Parameters:**
+- `ticker`: Stock ticker symbol
+- `timeframe`: Timeframe for analysis
+- `indicators`: List of indicators to calculate
+
+**Returns:**
+- Trading signals (buy, sell, hold)
+- Technical indicators (RSI, MACD, moving averages)
+- Signal strength
+- Confidence scores
+
+**Code Reference**: `app/agents/langalpha_tools.py` (get_trading_signals function)
+
+### Web Research Tools
+
+#### Web Search
+
+Perform web search using Serper API or WebSearchService.
+
+**Tool**: `web_search`
+
+**Parameters:**
+- `query`: Search query
+- `num_results`: Number of results to return
+- `search_type`: Type of search (web, news, images)
+
+**Returns:**
+- Search results with titles, snippets, URLs
+- Relevance scores
+- Source metadata
+
+**Configuration:**
+- `SERPER_API_KEY`: Serper API key (optional, uses WebSearchService fallback)
+
+**Code Reference**: `app/agents/langalpha_tools.py` (web_search function), `app/services/web_search_service.py`
+
+#### Get Tickertick News
+
+Fetch financial news from Tickertick.
+
+**Tool**: `get_tickertick_news`
+
+**Parameters:**
+- `ticker`: Stock ticker symbol
+- `limit`: Number of news items to return
+
+**Returns:**
+- Financial news articles
+- News headlines
+- Publication dates
+- Source information
+
+**Configuration:**
+- `TICKERTICK_API_KEY`: Tickertick API key (optional, service may not be publicly available)
+
+**Code Reference**: `app/agents/langalpha_tools.py` (get_tickertick_news function)
+
+### Browser Automation Tools
+
+#### Browser Tool
+
+Perform web browsing and content extraction using Playwright.
+
+**Tool**: `browser_tool`
+
+**Parameters:**
+- `url`: URL to browse
+- `action`: Action to perform (navigate, click, extract, screenshot)
+- `selector`: CSS selector for element interaction
+
+**Returns:**
+- Page content
+- Extracted data
+- Screenshots (if requested)
+- Page metadata
+
+**Code Reference**: `app/agents/langalpha_tools.py` (browser_tool function)
+
+### Python REPL Tool
+
+#### Execute Python Code
+
+Execute Python code for calculations and data analysis.
+
+**Tool**: `python_repl_tool`
+
+**Parameters:**
+- `code`: Python code to execute
+- `variables`: Input variables (optional)
+
+**Returns:**
+- Execution result
+- Output values
+- Error messages (if any)
+
+**Capabilities:**
+- Financial calculations
+- Data analysis with pandas/numpy
+- Statistical analysis
+- Custom algorithms
+
+**Security**: Code execution is sandboxed for safety.
+
+**Code Reference**: `app/agents/langalpha_tools.py` (python_repl_tool function)
+
+---
+
+## DeepResearch Tools
+
+### Web Search Service
+
+DeepResearch uses the **WebSearchService** for comprehensive web research:
+
+#### Search
+
+**Tool**: `WebSearchService.search`
+
+**Parameters:**
+- `query`: Search query
+- `num_results`: Number of results (default: 10)
+- `search_type`: Type of search (web, news)
+
+**Returns:**
+- Search results with titles, snippets, URLs
+- Relevance scores
+- Source metadata
+
+**Configuration:**
+- `SERPER_API_KEY`: Serper API key (optional, uses fallback search)
+
+**Code Reference**: `app/services/web_search_service.py`
+
+#### Extract Content
+
+**Tool**: `WebSearchService.extract_content`
+
+**Parameters:**
+- `url`: URL to extract content from
+
+**Returns:**
+- Extracted text content
+- Metadata (title, author, date)
+- Structured data
+
+**Uses**: trafilatura for content extraction
+
+**Code Reference**: `app/services/web_search_service.py`
+
+#### Rerank Results
+
+**Tool**: `WebSearchService.rerank`
+
+**Parameters:**
+- `query`: Original search query
+- `results`: Search results to rerank
+
+**Returns:**
+- Reranked results with improved relevance
+- Relevance scores
+
+**Configuration:**
+- `RERANKING_USE_LOCAL`: Use local reranking model (default: false)
+- `RERANKING_MODEL`: Reranking model (default: "BAAI/bge-reranker-base")
+- `RERANKING_API_URL`: Remote reranking API URL (optional)
+
+**Code Reference**: `app/services/web_search_service.py`
+
+---
+
+## PeopleHub Tools
+
+### LinkedIn Integration
+
+**Tool**: LinkedIn profile fetching and analysis
+
+**Capabilities:**
+- Profile data extraction
+- Professional history analysis
+- Skills and endorsements
+- Education and certifications
+
+**Code Reference**: `app/workflows/peoplehub_research_graph.py`
+
+### Web Research
+
+PeopleHub uses the same **WebSearchService** as DeepResearch for:
+- Web search
+- Content extraction
+- News analysis
+- Reputation research
+
+**Code Reference**: `app/services/web_search_service.py`
+
+### Psychometric Analysis
+
+**Tool**: Psychometric profiling
+
+**Capabilities:**
+- Big Five personality traits
+- Risk tolerance assessment
+- Decision-making style analysis
+- Buying and savings behavior
+
+**Code Reference**: `app/workflows/peoplehub_research_graph.py`
+
+---
+
+## Tool Configuration
+
+### Required API Keys
+
+**LangAlpha:**
+- `POLYGON_API_KEY`: Polygon.io API key (required for market data)
+- `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key (required for fundamentals)
+- `SERPER_API_KEY`: Serper API key (optional, for web search)
+- `TICKERTICK_API_KEY`: Tickertick API key (optional, for financial news)
+
+**DeepResearch:**
+- `SERPER_API_KEY`: Serper API key (optional, uses WebSearchService fallback)
+
+**PeopleHub:**
+- No additional API keys required (uses existing WebSearchService and LLM)
+
+### Rate Limiting
+
+**Web Search:**
+- Default: 360 requests/hour
+- Configurable via `WEB_SEARCH_RATE_LIMIT`
+
+**Market Data:**
+- Respects Polygon.io rate limits
+- Configurable via API provider settings
+
+**Fundamental Data:**
+- Respects Alpha Vantage rate limits
+- Free tier: 5 requests/minute, 500 requests/day
+
+### Caching
+
+**Web Search:**
+- Caching enabled by default
+- TTL: 24 hours (configurable via `WEB_SEARCH_CACHE_TTL_HOURS`)
+
+**Market Data:**
+- Caching handled by API provider
+- Historical data cached locally
+
+**Fundamental Data:**
+- Caching handled by API provider
+- Financial statements cached locally
+
+---
+
+## Audit Logging
+
+All tool usage is logged for audit compliance:
+
+### Logged Information
+
+- **Tool Name**: Name of tool used
+- **Parameters**: Input parameters (sanitized for security)
+- **Results**: Tool results (summary, not full data)
+- **User ID**: User who triggered the tool
+- **Deal ID**: Deal context (if applicable)
+- **Analysis ID**: Analysis context (if applicable)
+- **Timestamp**: When tool was used
+- **Duration**: Time taken to execute
+
+### Audit Context
+
+Tool usage is linked to:
+- Agent workflows (LangAlpha, DeepResearch, PeopleHub)
+- Deals (if `deal_id` provided)
+- Documents (if `document_id` provided)
+- Users (via `user_id`)
+
+**Code Reference**: `app/utils/audit.py`, `app/agents/langalpha_tools.py` (_log_tool_usage function)
+
+---
+
+## Error Handling
+
+### Retry Logic
+
+Tools implement retry logic for transient failures:
+
+- **Market Data**: 3 retries with exponential backoff
+- **Web Search**: 3 retries with exponential backoff
+- **Fundamental Data**: 3 retries with exponential backoff
+
+### Error Responses
+
+Tools return structured error responses:
+
+```json
+{
+  "status": "error",
+  "tool": "get_market_data",
+  "error": "API rate limit exceeded",
+  "retry_after": 60
+}
+```
+
+### Fallback Mechanisms
+
+- **Web Search**: Falls back to WebSearchService if Serper API unavailable
+- **News**: Falls back to web_search tool if Tickertick unavailable
+- **Market Data**: Returns cached data if API unavailable
+
+---
+
+## Performance Optimization
+
+### Parallel Execution
+
+- **Market Data**: Parallel requests for multiple tickers
+- **Web Search**: Parallel searches for multiple queries
+- **Content Extraction**: Parallel extraction for multiple URLs
+
+### Caching Strategy
+
+- **Web Search**: Cache results for 24 hours
+- **Market Data**: Cache historical data locally
+- **Fundamental Data**: Cache financial statements locally
+
+### Rate Limit Management
+
+- **Automatic Throttling**: Respects API rate limits
+- **Queue Management**: Queues requests when rate limits exceeded
+- **Priority Handling**: Prioritizes critical requests
+
+---
+
+## Security Considerations
+
+### API Key Security
+
+- All API keys stored as `SecretStr` in Pydantic settings
+- Never logged or exposed in error messages
+- Rotated regularly
+
+### Code Execution Safety
+
+- **Python REPL**: Sandboxed execution environment
+- **Input Validation**: All inputs validated before execution
+- **Output Sanitization**: Outputs sanitized before returning
+
+### Data Privacy
+
+- **PII Handling**: Personal information handled according to GDPR
+- **Data Retention**: Tool results retained per data retention policy
+- **Access Control**: Tool access controlled via user permissions
+
+---
+
+## Next Steps
+
+- [Agent Workflows Feature](/features/agent-workflows) - Complete agent workflow documentation
+- [Configuration Guide](/getting-started/configuration#agent-workflows-configuration) - Tool configuration
+- [API Reference](/api-reference/agents) - Agent API endpoints
+
+---
+
+**Last Updated**: 2025-01-14  
+**Code Reference**: `app/agents/langalpha_tools.py`, `app/services/web_search_service.py`

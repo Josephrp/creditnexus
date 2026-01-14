@@ -1365,4 +1365,337 @@ class PolicyService:
             "aligned_goals": [goal for goal, score in sdg_scores.items() if score >= 0.7],
             "needs_improvement": [goal for goal, score in sdg_scores.items() if score < 0.5]
         }
+    
+    def evaluate_accounting_document(
+        self,
+        accounting_document: Dict[str, Any],
+        document_id: Optional[int] = None
+    ) -> PolicyDecision:
+        """
+        Evaluate an accounting document for compliance.
+        
+        This method evaluates accounting documents (balance sheets, income statements,
+        cash flow statements, tax returns) for basic compliance rules such as:
+        - Data completeness
+        - Quantitative validation (equations balance)
+        - Currency consistency
+        - Date validity
+        
+        Args:
+            accounting_document: Dictionary containing accounting document data
+                (from AccountingExtractionResult.agreement.model_dump())
+            document_id: Optional document ID for audit trail
+            
+        Returns:
+            PolicyDecision with ALLOW/BLOCK/FLAG
+        """
+        from app.models.accounting_document import (
+            BalanceSheet,
+            IncomeStatement,
+            CashFlowStatement,
+            TaxReturn
+        )
+        
+        # Convert dict to Pydantic model for validation
+        document_type = accounting_document.get("document_type")
+        
+        try:
+            if document_type == "balance_sheet":
+                doc = BalanceSheet(**accounting_document)
+            elif document_type == "income_statement":
+                doc = IncomeStatement(**accounting_document)
+            elif document_type == "cash_flow_statement":
+                doc = CashFlowStatement(**accounting_document)
+            elif document_type == "tax_return":
+                doc = TaxReturn(**accounting_document)
+            else:
+                # Unknown document type - allow but flag
+                return PolicyDecision(
+                    decision="FLAG",
+                    rule_applied="unknown_accounting_document_type",
+                    trace_id=f"accounting_{document_id}_{datetime.utcnow().isoformat()}" if document_id else f"accounting_{datetime.utcnow().isoformat()}",
+                    trace=[],
+                    matched_rules=["unknown_accounting_document_type"],
+                    metadata={"document_id": document_id, "document_type": document_type}
+                )
+        except Exception as e:
+            # Validation failed - block
+            logger.warning(f"Accounting document validation failed: {e}")
+            return PolicyDecision(
+                decision="BLOCK",
+                rule_applied="accounting_document_validation_failed",
+                trace_id=f"accounting_{document_id}_{datetime.utcnow().isoformat()}" if document_id else f"accounting_{datetime.utcnow().isoformat()}",
+                trace=[{"error": str(e)}],
+                matched_rules=["accounting_document_validation_failed"],
+                metadata={"document_id": document_id, "validation_error": str(e)}
+            )
+        
+        # Convert accounting document to policy transaction format
+        tx = self._accounting_document_to_policy_transaction(accounting_document, document_type)
+        
+        # Evaluate using policy engine
+        result = self.engine.evaluate(tx)
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=f"accounting_{document_id}_{datetime.utcnow().isoformat()}" if document_id else f"accounting_{datetime.utcnow().isoformat()}",
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={"document_id": document_id, "document_type": document_type}
+        )
+    
+    def _accounting_document_to_policy_transaction(
+        self,
+        accounting_document: Dict[str, Any],
+        document_type: str
+    ) -> Dict[str, Any]:
+        """
+        Convert accounting document to policy transaction format.
+        
+        Args:
+            accounting_document: Accounting document dictionary
+            document_type: Type of accounting document
+            
+        Returns:
+            Policy transaction dictionary
+        """
+        # Extract key financial metrics for policy evaluation
+        transaction_data = {
+            "transaction_id": f"accounting_doc_{accounting_document.get('reporting_period', {}).get('end_date', 'unknown')}",
+            "transaction_type": "accounting_document_extraction",
+            "timestamp": datetime.utcnow().isoformat(),
+            "document_type": document_type,
+            "context": "AccountingDocument_Extraction"
+        }
+        
+        # Extract currency
+        currency = accounting_document.get("currency")
+        if currency:
+            currency_str = currency.value if hasattr(currency, 'value') else str(currency)
+            transaction_data["currency"] = currency_str
+        
+        # Extract reporting period
+        reporting_period = accounting_document.get("reporting_period", {})
+        if reporting_period:
+            transaction_data["reporting_period_start"] = reporting_period.get("start_date")
+            transaction_data["reporting_period_end"] = reporting_period.get("end_date")
+            transaction_data["fiscal_year"] = reporting_period.get("fiscal_year")
+        
+        # Extract key financial metrics based on document type
+        if document_type == "balance_sheet":
+            if accounting_document.get("total_assets"):
+                transaction_data["total_assets"] = float(accounting_document["total_assets"].get("amount", 0))
+            if accounting_document.get("total_liabilities"):
+                transaction_data["total_liabilities"] = float(accounting_document["total_liabilities"].get("amount", 0))
+            if accounting_document.get("total_equity"):
+                transaction_data["total_equity"] = float(accounting_document["total_equity"].get("amount", 0))
+        
+        elif document_type == "income_statement":
+            if accounting_document.get("total_revenue"):
+                transaction_data["total_revenue"] = float(accounting_document["total_revenue"].get("amount", 0))
+            if accounting_document.get("net_income_after_tax"):
+                transaction_data["net_income"] = float(accounting_document["net_income_after_tax"].get("amount", 0))
+        
+        elif document_type == "cash_flow_statement":
+            if accounting_document.get("net_change_in_cash"):
+                transaction_data["net_change_in_cash"] = float(accounting_document["net_change_in_cash"].get("amount", 0))
+        
+        elif document_type == "tax_return":
+            if accounting_document.get("total_income"):
+                transaction_data["total_income"] = float(accounting_document["total_income"].get("amount", 0))
+            if accounting_document.get("total_tax_liability"):
+                transaction_data["tax_liability"] = float(accounting_document["total_tax_liability"].get("amount", 0))
+        
+        return transaction_data
 
+    def evaluate_kyc_compliance(
+        self,
+        profile: Dict[str, Any],
+        profile_type: str,  # "individual" or "business"
+        deal_id: Optional[int] = None,
+        individual_profile_id: Optional[int] = None,
+        business_profile_id: Optional[int] = None
+    ) -> PolicyDecision:
+        """
+        Evaluate KYC (Know Your Customer) compliance for individual or business profiles.
+        
+        This method evaluates profiles generated by PeopleHub/Business Intelligence workflows
+        against KYC requirements, including:
+        - Identity verification (LinkedIn, web research presence)
+        - Risk assessment (psychometric profiles, credit indicators)
+        - Sanctions screening (LEI, business name matching)
+        - Data completeness (required profile fields)
+        - Behavioral risk indicators (buying/savings behavior, risk tolerance)
+        
+        Args:
+            profile: Dictionary containing IndividualProfile or BusinessProfile data
+                (from model.model_dump())
+            profile_type: Type of profile ("individual" or "business")
+            deal_id: Optional deal ID for context
+            individual_profile_id: Optional individual profile ID for audit trail
+            business_profile_id: Optional business profile ID for audit trail
+            
+        Returns:
+            PolicyDecision with ALLOW/BLOCK/FLAG
+            
+        Raises:
+            ValueError: If profile_type is invalid
+        """
+        if profile_type not in ["individual", "business"]:
+            raise ValueError(f"Invalid profile_type: {profile_type}. Must be 'individual' or 'business'")
+        
+        # Convert profile to policy transaction format
+        tx = self._profile_to_policy_transaction(profile, profile_type)
+        
+        # Evaluate using policy engine
+        result = self.engine.evaluate(tx)
+        
+        # Generate trace ID
+        profile_id = individual_profile_id or business_profile_id
+        trace_id = f"kyc_{profile_type}_{profile_id}_{datetime.utcnow().isoformat()}" if profile_id else f"kyc_{profile_type}_{datetime.utcnow().isoformat()}"
+        
+        return PolicyDecision(
+            decision=result["decision"],
+            rule_applied=result.get("rule"),
+            trace_id=trace_id,
+            trace=result.get("trace", []),
+            matched_rules=result.get("matched_rules", []),
+            metadata={
+                "profile_type": profile_type,
+                "deal_id": deal_id,
+                "individual_profile_id": individual_profile_id,
+                "business_profile_id": business_profile_id,
+                "profile_name": profile.get("person_name") or profile.get("business_name", "unknown")
+            }
+        )
+    
+    def _profile_to_policy_transaction(
+        self,
+        profile: Dict[str, Any],
+        profile_type: str
+    ) -> Dict[str, Any]:
+        """
+        Convert IndividualProfile or BusinessProfile to policy transaction format.
+        
+        Args:
+            profile: Profile dictionary (from model.model_dump())
+            profile_type: "individual" or "business"
+            
+        Returns:
+            Policy transaction dictionary
+        """
+        transaction_data = {
+            "transaction_id": f"kyc_{profile_type}_{profile.get('person_name') or profile.get('business_name', 'unknown')}",
+            "transaction_type": "kyc_compliance_check",
+            "timestamp": datetime.utcnow().isoformat(),
+            "profile_type": profile_type,
+            "context": "KYC_Compliance_Check"
+        }
+        
+        if profile_type == "individual":
+            # Extract individual profile data
+            transaction_data["person_name"] = profile.get("person_name", "")
+            transaction_data["linkedin_url"] = profile.get("linkedin_url")
+            
+            # Extract profile data (LinkedIn, web research)
+            profile_data = profile.get("profile_data", {})
+            if profile_data:
+                transaction_data["has_linkedin_data"] = bool(profile_data.get("linkedin_data"))
+                transaction_data["has_web_research"] = bool(profile_data.get("web_summaries"))
+                transaction_data["research_report_available"] = bool(profile_data.get("final_report"))
+            
+            # Extract psychometric profile data
+            psychometric = profile.get("psychometric_profile")
+            if psychometric:
+                if isinstance(psychometric, dict):
+                    # Extract Big Five traits
+                    big_five = psychometric.get("big_five_traits", {})
+                    if big_five:
+                        transaction_data["conscientiousness"] = big_five.get("conscientiousness", 0.5)
+                        transaction_data["openness"] = big_five.get("openness", 0.5)
+                        transaction_data["extraversion"] = big_five.get("extraversion", 0.5)
+                        transaction_data["agreeableness"] = big_five.get("agreeableness", 0.5)
+                        transaction_data["neuroticism"] = big_five.get("neuroticism", 0.5)
+                    
+                    # Extract risk tolerance
+                    risk_tolerance = psychometric.get("risk_tolerance")
+                    if risk_tolerance:
+                        risk_value = risk_tolerance.value if hasattr(risk_tolerance, 'value') else str(risk_tolerance)
+                        transaction_data["risk_tolerance"] = risk_value
+                    
+                    # Extract decision making style
+                    decision_style = psychometric.get("decision_making_style")
+                    if decision_style:
+                        style_value = decision_style.value if hasattr(decision_style, 'value') else str(decision_style)
+                        transaction_data["decision_making_style"] = style_value
+                    
+                    # Extract buying behavior
+                    buying_behavior = psychometric.get("buying_behavior", {})
+                    if buying_behavior:
+                        transaction_data["impulse_buying_tendency"] = buying_behavior.get("impulse_buying_tendency")
+                        transaction_data["buying_confidence"] = buying_behavior.get("confidence_score", 0.0)
+                    
+                    # Extract savings behavior
+                    savings_behavior = psychometric.get("savings_behavior", {})
+                    if savings_behavior:
+                        transaction_data["savings_rate"] = savings_behavior.get("savings_rate")
+                        transaction_data["savings_confidence"] = savings_behavior.get("confidence_score", 0.0)
+                    
+                    # Overall confidence
+                    transaction_data["psychometric_confidence"] = psychometric.get("overall_confidence", 0.0)
+            
+            # Extract credit check data
+            credit_check = profile.get("credit_check_data")
+            if credit_check:
+                if isinstance(credit_check, dict):
+                    transaction_data["credit_risk_score"] = credit_check.get("risk_score")
+                    transaction_data["payment_history_indicators"] = credit_check.get("payment_history_indicators")
+                    transaction_data["financial_stability"] = credit_check.get("financial_stability")
+            
+            # KYC completeness indicators
+            transaction_data["has_linkedin"] = bool(profile.get("linkedin_url"))
+            transaction_data["has_profile_data"] = bool(profile.get("profile_data"))
+            transaction_data["has_psychometric_profile"] = bool(psychometric)
+            
+        elif profile_type == "business":
+            # Extract business profile data
+            transaction_data["business_name"] = profile.get("business_name", "")
+            transaction_data["business_lei"] = profile.get("business_lei")
+            transaction_data["business_type"] = profile.get("business_type")
+            transaction_data["industry"] = profile.get("industry")
+            
+            # Extract profile data (business research)
+            profile_data = profile.get("profile_data", {})
+            if profile_data:
+                transaction_data["has_business_research"] = bool(profile_data)
+                transaction_data["has_financial_summary"] = bool(profile_data.get("financial_summary"))
+                transaction_data["has_market_analysis"] = bool(profile_data.get("market_analysis"))
+            
+            # Extract key executives
+            key_executives = profile.get("key_executives", [])
+            if key_executives:
+                transaction_data["num_key_executives"] = len(key_executives)
+                transaction_data["has_executive_profiles"] = True
+            else:
+                transaction_data["num_key_executives"] = 0
+                transaction_data["has_executive_profiles"] = False
+            
+            # Extract financial summary
+            financial_summary = profile.get("financial_summary")
+            if financial_summary and isinstance(financial_summary, dict):
+                transaction_data["has_financial_data"] = True
+                # Extract key financial metrics if available
+                if "revenue" in financial_summary:
+                    transaction_data["business_revenue"] = float(financial_summary.get("revenue", 0))
+                if "assets" in financial_summary:
+                    transaction_data["business_assets"] = float(financial_summary.get("assets", 0))
+            else:
+                transaction_data["has_financial_data"] = False
+            
+            # KYC completeness indicators
+            transaction_data["has_lei"] = bool(profile.get("business_lei"))
+            transaction_data["has_profile_data"] = bool(profile.get("profile_data"))
+            transaction_data["has_key_executives"] = bool(key_executives)
+        
+        return transaction_data

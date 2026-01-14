@@ -593,6 +593,117 @@ function App() {
         </div>
       </section>
 
+      {/* Platform Statistics Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold mb-4">Platform Scale & Capabilities</h2>
+            <p className="text-xl text-slate-400 max-w-2xl mx-auto">
+              CreditNexus is built with enterprise-scale architecture and comprehensive feature coverage
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-emerald-400 mb-2">215+</div>
+              <div className="text-sm text-slate-400 mb-2">Prompt Templates</div>
+              <div className="text-xs text-slate-500">
+                AI prompts across 16 files covering LMA-compliant clause generation, industry-specific templates, and multi-scenario support
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-blue-400 mb-2">11</div>
+              <div className="text-sm text-slate-400 mb-2">Specialized Agents</div>
+              <div className="text-xs text-slate-500">
+                AI agents for document analysis, satellite verification, classification, research, and workflow automation
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-green-400 mb-2">121</div>
+              <div className="text-sm text-slate-400 mb-2">Policy Rules</div>
+              <div className="text-xs text-slate-500">
+                Regulatory compliance rules across 21 files covering MiCA, Basel III, FATF, ESG, and green finance
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-purple-400 mb-2">94</div>
+              <div className="text-sm text-slate-400 mb-2">Tool Modules</div>
+              <div className="text-xs text-slate-500">
+                Service modules, utilities, and LangChain integration chains for comprehensive functionality
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-yellow-400 mb-2">76</div>
+              <div className="text-sm text-slate-400 mb-2">Data Models</div>
+              <div className="text-xs text-slate-500">
+                Pydantic models ensuring type safety and FINOS CDM compliance across all data structures
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-cyan-400 mb-2">54</div>
+              <div className="text-sm text-slate-400 mb-2">Database Tables</div>
+              <div className="text-xs text-slate-500">
+                SQLAlchemy 2.0 models covering users, documents, workflows, deals, payments, and analytics
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-pink-400 mb-2">147</div>
+              <div className="text-sm text-slate-400 mb-2">API Endpoints</div>
+              <div className="text-xs text-slate-500">
+                RESTful endpoints providing comprehensive programmatic access to all platform features
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg text-center">
+              <div className="text-4xl font-bold text-indigo-400 mb-2">100%</div>
+              <div className="text-sm text-slate-400 mb-2">CDM Compliant</div>
+              <div className="text-xs text-slate-500">
+                Full FINOS Common Domain Model compliance ensuring interoperability with financial systems
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8">
+            <h3 className="text-2xl font-semibold mb-6 text-center">Platform Architecture Highlights</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <h4 className="font-semibold text-emerald-400 mb-3">AI & Automation</h4>
+                <ul className="text-sm text-slate-400 space-y-2">
+                  <li>• 215+ prompt templates for consistent AI behavior</li>
+                  <li>• 11 specialized agents for complex workflows</li>
+                  <li>• Multi-provider LLM support (OpenAI, vLLM, HuggingFace)</li>
+                  <li>• 20 LangChain integration chains</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-blue-400 mb-3">Compliance & Policy</h4>
+                <ul className="text-sm text-slate-400 space-y-2">
+                  <li>• 121 policy rules across 8 categories</li>
+                  <li>• Real-time policy enforcement engine</li>
+                  <li>• CDM-compliant event generation</li>
+                  <li>• Three-tier decision system (ALLOW/BLOCK/FLAG)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-purple-400 mb-3">Data & Integration</h4>
+                <ul className="text-sm text-slate-400 space-y-2">
+                  <li>• 76 Pydantic models for type safety</li>
+                  <li>• 54 database tables with SQLAlchemy 2.0</li>
+                  <li>• 147 API endpoints for programmatic access</li>
+                  <li>• Full CDM standardization</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* GitHub Integration Section */}
       <section className="py-20 px-4">
         <div className="max-w-7xl mx-auto">

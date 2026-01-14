@@ -4,7 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
-import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen, Sparkles, Mic, Image as ImageIcon, Search, Type } from 'lucide-react';
+import { Upload, FileText, Send, Check, X, Loader2, Edit2, Save, BookOpen, Sparkles, Mic, Image as ImageIcon, Search, Type, Calculator, Receipt } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFDC3 } from '@/context/FDC3Context';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
@@ -12,6 +13,8 @@ import { MultimodalInputTabs } from './MultimodalInputTabs';
 import type { TranscriptionResult, ExtractionResult, DocumentResult } from './MultimodalInputTabs';
 import { ClauseEditor } from '@/components/ClauseEditor';
 import { CdmAccordionEditor } from '@/components/CdmAccordionEditor';
+import { DigitizerChatbot } from './DigitizerChatbot';
+import { AccountingDocumentDisplay } from './AccountingDocumentDisplay';
 
 interface DocumentParserProps {
   onBroadcast?: () => void;
@@ -62,6 +65,14 @@ export function DocumentParser({
     document?: { cdm?: Record<string, unknown>; documentId?: number };
     text?: { text: string; cdm?: Record<string, unknown> };
   }>({});
+
+  // Chatbot state
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [documentId, setDocumentId] = useState<number | null>(null);
+
+  // Document type state (credit agreement vs accounting document)
+  const [documentType, setDocumentType] = useState<'credit_agreement' | 'accounting'>('credit_agreement');
+  const [accountingDocumentType, setAccountingDocumentType] = useState<string>('balance_sheet'); // balance_sheet, income_statement, cash_flow_statement, tax_return
 
   const isPdfFile = (file: File) => {
     return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -161,11 +172,33 @@ export function DocumentParser({
           body: formData,
         });
       } else {
-        response = await fetchWithAuth('/api/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: documentText }),
-        });
+        // Use accounting endpoint if accounting document type is selected
+        if (documentType === 'accounting') {
+          if (uploadedFile) {
+            const formData = new FormData();
+            formData.append('file', uploadedFile);
+            formData.append('document_type', accountingDocumentType);
+            response = await fetchWithAuth('/api/extract/accounting', {
+              method: 'POST',
+              body: formData,
+            });
+          } else {
+            response = await fetchWithAuth('/api/extract/accounting', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                text: documentText,
+                document_type: accountingDocumentType
+              }),
+            });
+          }
+        } else {
+          response = await fetchWithAuth('/api/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: documentText }),
+          });
+        }
       }
 
       if (!response.ok) {
@@ -183,6 +216,50 @@ export function DocumentParser({
 
       const result = await response.json();
 
+      // Handle accounting document response format
+      if (documentType === 'accounting') {
+        if (result.status === 'error' || result.extraction_status === 'irrelevant_document') {
+          setError(result.message || result.detail?.message || 'This document does not appear to be an accounting document.');
+          return;
+        }
+
+        if (result.agreement) {
+          if (result.extracted_text && uploadedFile) {
+            setDocumentText(result.extracted_text);
+            setUploadedFile(null);
+          }
+          const data = {
+            ...result.agreement,
+            extraction_status: result.extraction_status || result.status || 'success',
+            document_type: accountingDocumentType,
+            is_accounting_document: true,
+          };
+          setExtractedData(data as any);
+          setEditableData(data as any);
+          
+          // Extract document ID if available
+          if (result.document_id) {
+            setDocumentId(result.document_id);
+          }
+          
+          // Clear multimodal sources after successful extraction
+          const hadMultimodalSources = Object.keys(multimodalSources).length > 0;
+          setMultimodalSources({});
+          
+          if (result.extraction_status === 'partial_data_missing' && result.message) {
+            setWarningMessage(result.message);
+            addToast('Accounting document extracted with some missing data', 'warning');
+          } else {
+            addToast('Accounting document extracted successfully', 'success');
+          }
+        } else {
+          setError('No accounting data could be extracted from this document.');
+          addToast('No accounting data could be extracted', 'error');
+        }
+        return;
+      }
+
+      // Handle credit agreement response format (existing logic)
       if (result.status === 'irrelevant_document' || result.status === 'error') {
         setError(result.message || 'This document does not appear to be a credit agreement.');
         return;
@@ -196,9 +273,15 @@ export function DocumentParser({
         const data = {
           ...result.agreement,
           extraction_status: result.status || 'success',
+          is_accounting_document: false,
         };
         setExtractedData(data);
         setEditableData(data);
+        
+        // Extract document ID if available
+        if (result.document_id) {
+          setDocumentId(result.document_id);
+        }
         
         // Clear multimodal sources after successful extraction
         const hadMultimodalSources = Object.keys(multimodalSources).length > 0;
@@ -295,6 +378,7 @@ export function DocumentParser({
       const data = await response.json();
       if (data.document?.id) {
         setClauseEditorDocumentId(data.document.id);
+        setDocumentId(data.document.id);
         setShowClauseEditor(true);
       }
 
@@ -515,6 +599,51 @@ export function DocumentParser({
 
                 <TabsContent value="file" className="mt-4">
                   <div className="space-y-6">
+                    {/* Document Type Selector */}
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium text-slate-300">Document Type:</label>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={documentType === 'credit_agreement' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDocumentType('credit_agreement')}
+                          className={documentType === 'credit_agreement' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Credit Agreement
+                        </Button>
+                        <Button
+                          variant={documentType === 'accounting' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDocumentType('accounting')}
+                          className={documentType === 'accounting' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                        >
+                          <Calculator className="h-4 w-4 mr-2" />
+                          Accounting Document
+                        </Button>
+                      </div>
+                      {documentType === 'accounting' && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-slate-400">Type:</label>
+                          <Select
+                            value={accountingDocumentType}
+                            onValueChange={setAccountingDocumentType}
+                            className="w-48 bg-slate-900 border-slate-600 text-slate-100"
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select accounting document type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="balance_sheet">Balance Sheet</SelectItem>
+                              <SelectItem value="income_statement">Income Statement</SelectItem>
+                              <SelectItem value="cash_flow_statement">Cash Flow Statement</SelectItem>
+                              <SelectItem value="tax_return">Tax Return</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid md:grid-cols-2 gap-6">
                       <label className="group cursor-pointer">
                         <input
@@ -534,7 +663,9 @@ export function DocumentParser({
 
                       <div className="space-y-3">
                         <textarea
-                          placeholder="Or paste your credit agreement text here..."
+                          placeholder={documentType === 'accounting' 
+                            ? `Or paste your ${accountingDocumentType.replace('_', ' ')} text here...`
+                            : "Or paste your credit agreement text here..."}
                           value={uploadedFile ? '' : documentText}
                           onChange={(e) => {
                             setDocumentText(e.target.value);
@@ -716,6 +847,13 @@ export function DocumentParser({
               </Button>
             )}
             <Button
+              onClick={() => setIsChatbotOpen(true)}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Assistant
+            </Button>
+            <Button
               onClick={handleBroadcast}
               disabled={broadcastSuccess}
               className="bg-blue-600 hover:bg-blue-700"
@@ -766,22 +904,28 @@ export function DocumentParser({
             </TabsList>
 
             <TabsContent value="summary">
-              <Card className="border-slate-700 bg-slate-800/50">
-                <CardContent className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs text-muted-foreground">Agreement Date</label>
-                      {isEditing ? (
-                        <input
-                          type="date"
-                          value={editableData?.agreement_date || ''}
-                          onChange={(e) => handleFieldChange('agreement_date', e.target.value)}
-                          className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
-                        />
-                      ) : (
-                        <p className="font-medium">{editableData?.agreement_date || 'N/A'}</p>
-                      )}
-                    </div>
+              {editableData?.is_accounting_document ? (
+                <AccountingDocumentDisplay 
+                  data={editableData} 
+                  extractionStatus={editableData?.extraction_status}
+                />
+              ) : (
+                <Card className="border-slate-700 bg-slate-800/50">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Agreement Date</label>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editableData?.agreement_date || ''}
+                            onChange={(e) => handleFieldChange('agreement_date', e.target.value)}
+                            className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                          />
+                        ) : (
+                          <p className="font-medium">{editableData?.agreement_date || 'N/A'}</p>
+                        )}
+                      </div>
                     <div>
                       <label className="text-xs text-muted-foreground">Governing Law</label>
                       {isEditing ? (
@@ -848,6 +992,7 @@ export function DocumentParser({
                   </div>
                 </CardContent>
               </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="parties">
@@ -1121,6 +1266,19 @@ export function DocumentParser({
           </Tabs>
         </div>
       )}
+
+      {/* Digitizer Chatbot Modal */}
+      <DigitizerChatbot
+        isOpen={isChatbotOpen}
+        onClose={() => setIsChatbotOpen(false)}
+        dealId={extractedData?.deal_id ? parseInt(extractedData.deal_id) : null}
+        documentId={documentId}
+        documentContext={extractedData ? (extractedData as unknown as Record<string, unknown>) : undefined}
+        onWorkflowLaunched={(workflowType, result) => {
+          console.log('Workflow launched:', workflowType, result);
+          addToast(`${workflowType} workflow launched successfully`, 'success');
+        }}
+      />
     </div>
   );
 }

@@ -192,6 +192,116 @@ SentinelHub provides satellite imagery for verification workflows.
 
 ---
 
+## Agent Workflows Configuration
+
+CreditNexus includes three AI agent workflows: **LangAlpha** (quantitative analysis), **DeepResearch** (iterative web research), and **PeopleHub** (business intelligence). Configure API keys and settings for each workflow.
+
+### LangAlpha Configuration
+
+LangAlpha performs quantitative financial analysis using multiple specialized agents.
+
+<ParamField body="POLYGON_API_KEY" type="string">
+  Polygon.io API key for market data. Get from https://polygon.io/
+  
+  **Required for**: Market data fetching, ticker snapshots, historical data
+</ParamField>
+
+<ParamField body="ALPHA_VANTAGE_API_KEY" type="string">
+  Alpha Vantage API key for fundamental data. Get from https://www.alphavantage.co/support/#api-key
+  
+  **Required for**: Company fundamentals, financial statements, earnings data
+</ParamField>
+
+<ParamField body="TAVILY_API_KEY" type="string">
+  Tavily API key for news/search. Get from https://tavily.com/
+  
+  **Optional**: Falls back to WebSearchService if not configured
+</ParamField>
+
+<ParamField body="TICKERTICK_API_KEY" type="string">
+  Tickertick API key for financial news.
+  
+  **Optional**: Service may not be publicly available. Falls back to web_search tool or Tavily.
+</ParamField>
+
+**LLM Model Configuration:**
+
+<ParamField body="LANGALPHA_REASONING_MODEL" type="string">
+  LLM model for reasoning tasks (supervisor, planner, analyst). Default: `"gpt-4o"`
+</ParamField>
+
+<ParamField body="LANGALPHA_BASIC_MODEL" type="string">
+  LLM model for basic tasks (researcher, reporter, market). Default: `"gpt-4o-mini"`
+</ParamField>
+
+<ParamField body="LANGALPHA_ECONOMIC_MODEL" type="string">
+  LLM model for economic analysis tasks. Default: `"gpt-4o-mini"`
+</ParamField>
+
+<ParamField body="LANGALPHA_CODING_MODEL" type="string">
+  LLM model for coding/calculation tasks. Default: `"gpt-4o"`
+</ParamField>
+
+<ParamField body="LANGALPHA_BUDGET_LEVEL" type="string">
+  Budget level for LangAlpha agents: `"low"`, `"medium"`, or `"high"`. Default: `"medium"`
+  
+  - `low`: Uses cheaper models, fewer iterations
+  - `medium`: Balanced cost and quality
+  - `high`: Uses premium models, more thorough analysis
+</ParamField>
+
+**Code Reference**: `app/workflows/langalpha_graph.py`, `app/services/quantitative_analysis_service.py`
+
+**Feature Documentation**: [Agent Workflows](/features/agent-workflows#langalpha-quantitative-analysis)
+
+### DeepResearch Configuration
+
+DeepResearch performs iterative web research with knowledge accumulation.
+
+<ParamField body="SERPER_API_KEY" type="string">
+  Serper API key for Google search. Get from https://serper.dev/
+  
+  **Optional**: Falls back to WebSearchService if not configured
+</ParamField>
+
+**WebSearchService Configuration:**
+
+<ParamField body="WEB_SEARCH_RATE_LIMIT" type="integer">
+  Web search rate limit (requests per hour). Default: `360`
+</ParamField>
+
+<ParamField body="WEB_SEARCH_CACHE_ENABLED" type="boolean">
+  Enable caching for web search results. Default: `true`
+</ParamField>
+
+<ParamField body="WEB_SEARCH_CACHE_TTL_HOURS" type="integer">
+  Web search cache TTL in hours. Default: `24`
+</ParamField>
+
+**Code Reference**: `app/agents/deep_research_agent.py`, `app/services/deep_research_service.py`
+
+**Feature Documentation**: [Agent Workflows](/features/agent-workflows#deepresearch)
+
+### PeopleHub Configuration
+
+PeopleHub provides business intelligence and psychometric analysis.
+
+**No additional API keys required** - Uses existing WebSearchService and LLM configuration.
+
+**Code Reference**: `app/workflows/peoplehub_research_graph.py`, `app/services/digitizer_chatbot_service.py`
+
+**Feature Documentation**: [Agent Workflows](/features/agent-workflows#peoplehub)
+
+### Agent Dashboard Configuration
+
+The Agent Dashboard requires no additional configuration - it automatically displays results from all agent workflows.
+
+**Code Reference**: `client/src/apps/agent-dashboard/AgentDashboard.tsx`
+
+**Feature Documentation**: [Agent Workflows](/features/agent-workflows#agent-dashboard)
+
+---
+
 ## Database Configuration
 
 <ParamField body="DATABASE_URL" type="string" required>

@@ -296,6 +296,81 @@ def generate_cdm_credit_risk_assessment(
     }
 
 
+def generate_cdm_kyc_evaluation(
+    profile_id: str,
+    profile_type: str,  # "individual" or "business"
+    profile_name: str,
+    decision: str,  # "ALLOW", "BLOCK", "FLAG"
+    rule_applied: Optional[str] = None,
+    matched_rules: Optional[List[str]] = None,
+    related_event_identifiers: Optional[List[Dict[str, Any]]] = None,
+    kyc_metrics: Optional[Dict[str, Any]] = None,
+    deal_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generates CDM-compliant KYC (Know Your Customer) evaluation event.
+    
+    This event represents a KYC compliance check following CDM event model:
+    - eventType: "PolicyEvaluation" (reusing existing type)
+    - eventDate: Timestamp
+    - policyEvaluation: KYC decision, rules applied, metrics
+    - relatedEventIdentifier: Links to profile creation, deal events
+    
+    Args:
+        profile_id: Profile identifier (individual or business)
+        profile_type: Type of profile ("individual" or "business")
+        profile_name: Name of the individual or business
+        decision: Policy decision ("ALLOW", "BLOCK", "FLAG")
+        rule_applied: Name of rule that triggered the decision
+        matched_rules: List of all matching rules
+        related_event_identifiers: List of related event identifiers
+        kyc_metrics: Optional KYC-specific metrics (risk scores, confidence, etc.)
+        deal_id: Optional deal ID for context
+        
+    Returns:
+        CDM-compliant PolicyEvaluation event dictionary for KYC
+    """
+    if related_event_identifiers is None:
+        related_event_identifiers = []
+    if matched_rules is None:
+        matched_rules = []
+    if kyc_metrics is None:
+        kyc_metrics = {}
+    
+    return {
+        "eventType": "PolicyEvaluation",
+        "eventDate": datetime.datetime.now().isoformat(),
+        "policyEvaluation": {
+            "transactionIdentifier": {
+                "issuer": "CreditNexus_KYCService",
+                "assignedIdentifier": [{"identifier": {"value": f"kyc_{profile_type}_{profile_id}"}}]
+            },
+            "evaluationDate": {"date": datetime.date.today().isoformat()},
+            "policyDecision": {
+                "value": decision,
+                "decisionType": "KYC_COMPLIANCE_CHECK"
+            },
+            "ruleApplied": rule_applied,
+            "matchedRules": matched_rules,
+            "evaluationContext": {
+                "profileType": profile_type,
+                "profileName": profile_name,
+                "profileId": profile_id,
+                "dealId": deal_id,
+                **kyc_metrics
+            },
+            "evaluationTrace": kyc_metrics.get("trace", []),
+            "evaluationRationale": kyc_metrics.get("rationale", f"KYC compliance check for {profile_type} profile: {profile_name}")
+        },
+        "relatedEventIdentifier": related_event_identifiers,
+        "meta": {
+            "globalKey": str(uuid.uuid4()),
+            "sourceSystem": "CreditNexus_KYCService_v1",
+            "version": 1
+        }
+    }
+
+
 def generate_cdm_policy_evaluation(
     transaction_id: str,
     transaction_type: str,
@@ -856,6 +931,65 @@ def generate_cdm_recovery_action(
         "meta": {
             "globalKey": str(uuid.uuid4()),
             "sourceSystem": "CreditNexus_RecoveryService_v1",
+            "version": 1
+        }
+    }
+
+
+def generate_cdm_research_query(
+    query_id: str,
+    query_text: str,
+    query_type: str = "research",
+    metadata: Optional[Dict[str, Any]] = None,
+    related_event_identifiers: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Generate CDM-compliant Observation event for research query.
+    
+    Args:
+        query_id: Unique identifier for the research query
+        query_text: The research query text
+        query_type: Type of research (e.g., "company_analysis", "market_analysis", "loan_application_analysis")
+        metadata: Optional metadata about the query
+        related_event_identifiers: List of related event identifiers
+        
+    Returns:
+        CDM-compliant Observation event dictionary
+    """
+    if metadata is None:
+        metadata = {}
+    if related_event_identifiers is None:
+        related_event_identifiers = []
+    
+    return {
+        "eventType": "Observation",
+        "eventDate": datetime.datetime.now().isoformat(),
+        "observation": {
+            "observationType": "ResearchQuery",
+            "observationDate": {
+                "date": datetime.date.today().isoformat()
+            },
+            "observedValue": {
+                "value": query_text,
+                "unit": "RESEARCH_QUERY",
+                "context": {
+                    "queryType": query_type,
+                    "queryId": query_id,
+                    **metadata
+                }
+            },
+            "informationSource": {
+                "sourceProvider": "CreditNexus_LangAlpha",
+                "sourceType": "QuantitativeAnalysis",
+                "reference": {
+                    "queryId": query_id
+                }
+            }
+        },
+        "relatedEventIdentifier": related_event_identifiers,
+        "meta": {
+            "globalKey": str(uuid.uuid4()),
+            "sourceSystem": "CreditNexus_LangAlpha_v1",
             "version": 1
         }
     }

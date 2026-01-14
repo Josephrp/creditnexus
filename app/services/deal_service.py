@@ -667,6 +667,56 @@ class DealService:
         
         return timeline
     
+    def add_timeline_event(
+        self,
+        deal_id: int,
+        event_type: str,
+        event_data: Dict[str, Any],
+        user_id: int
+    ) -> None:
+        """
+        Add an event to the deal timeline.
+        
+        This method stores the event as a CDM event in file storage,
+        which will be automatically included in get_deal_timeline().
+        
+        Args:
+            deal_id: ID of the deal
+            event_type: Type of event (e.g., "research_query", "person_research")
+            event_data: Event data dictionary
+            user_id: ID of user triggering the event
+        """
+        from app.models.cdm_events import generate_cdm_observation
+        from datetime import datetime
+        
+        deal = self.db.query(Deal).filter(Deal.id == deal_id).first()
+        if not deal:
+            raise ValueError(f"Deal {deal_id} not found")
+        
+        # Create CDM event for timeline
+        timeline_event = generate_cdm_observation(
+            trade_id=deal.deal_id,
+            satellite_hash="",  # Not applicable for timeline events
+            ndvi_score=0.0,  # Not applicable
+            status="COMPLETED"
+        )
+        timeline_event["eventType"] = "TimelineEvent"
+        timeline_event["timelineEvent"] = {
+            "eventType": event_type,
+            "eventData": event_data,
+            "userId": user_id
+        }
+        
+        # Store in file storage (will be picked up by get_deal_timeline())
+        self.file_storage.store_cdm_event(
+            user_id=deal.applicant_id,
+            deal_id=deal.deal_id,
+            event_id=f"TIMELINE_{event_type}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            event_data=timeline_event
+        )
+        
+        logger.info(f"Added timeline event {event_type} to deal {deal.deal_id}")
+    
     def get_deal(self, deal_id: int) -> Optional[Deal]:
         """Get deal by ID."""
         return self.db.query(Deal).filter(Deal.id == deal_id).first()

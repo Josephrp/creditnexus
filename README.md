@@ -547,6 +547,55 @@ Complete securitization workflow from pool creation to token minting.
 
 > 📖 **Learn More**: See [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for complete workflow.
 
+### 13. AI Agent Workflows
+
+> **Access via: "Agent Dashboard" in Sidebar or Document Digitizer Chatbot**
+Three powerful AI agent workflows for quantitative analysis, research, and business intelligence.
+
+#### LangAlpha: Quantitative Analysis
+
+Multi-agent system for quantitative financial analysis:
+- **Company Analysis**: Financial health, market position, investment potential
+- **Market Analysis**: Trends, sectors, economic indicators
+- **Loan Application Analysis**: Credit risk, financial ratios, cash flow projections
+- **Multi-Agent Orchestration**: Coordinator, planner, supervisor, researcher, market, coder, reporter, analyst
+- **Real-Time Progress**: Server-Sent Events (SSE) for streaming updates
+
+**Configuration Required:**
+- `POLYGON_API_KEY`: Polygon.io API key for market data
+- `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key for fundamentals
+- `SERPER_API_KEY`: Serper API key for web search (optional)
+
+#### DeepResearch: Iterative Web Research
+
+Comprehensive web research with knowledge accumulation:
+- **Multi-Stage Research**: Search → Read → Answer → Reflect → Iterate
+- **Knowledge Accumulation**: Builds comprehensive knowledge bases
+- **Source Citations**: Full citation tracking and source references
+- **CDM Event Integration**: Research queries generate CDM-compliant events
+
+**Configuration Required:**
+- `SERPER_API_KEY`: Serper API key for Google search (optional, uses WebSearchService fallback)
+
+#### PeopleHub: Business Intelligence
+
+Business intelligence and psychometric analysis:
+- **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
+- **LinkedIn Integration**: Automated profile fetching and analysis
+- **Web Research**: Comprehensive web research with content scraping
+- **Credit Assessment**: Automated creditworthiness evaluation
+
+**Configuration Required:**
+- No additional API keys (uses existing WebSearchService and LLM configuration)
+
+**Agent Dashboard Features:**
+- Unified view of all agent results
+- Search and filter by agent type, status, or date
+- Detailed result views with export (Markdown, PDF, JSON)
+- Statistics and usage analytics
+
+> 📖 **Learn More**: See [Agent Workflows Documentation](https://tonic-ai.mintlify.app/features/agent-workflows) for complete details and [Configuration Guide](https://tonic-ai.mintlify.app/getting-started/configuration#agent-workflows-configuration) for setup.
+
 ---
 
 ## 🔗 System Interoperability (FDC3)
@@ -858,6 +907,45 @@ Then configure `openfin/app.json` to point to the production build location.
 - **Code Quality**: ruff, black, mypy (configured in `pyproject.toml`)
 
 > 📖 **Learn More**: See [Documentation - Technical](https://tonic-ai.mintlify.app/architecture) for technology details and [Documentation - Configuration](https://tonic-ai.mintlify.app/getting-started/configuration) for environment setup.
+
+---
+
+## 📊 Platform Scale & Capabilities
+
+CreditNexus is built with enterprise-scale architecture and comprehensive feature coverage:
+
+### Component Statistics
+
+- **215+ Prompt Templates** - AI prompts across 16 files covering LMA-compliant clause generation, industry-specific templates, and multi-scenario support
+- **11 Specialized Agents** - AI agents for document analysis, satellite verification, classification, research, and workflow automation
+- **121 Policy Rules** - Regulatory compliance rules across 21 files covering MiCA, Basel III, FATF, ESG, and green finance
+- **94 Tool Modules** - Service modules, utilities, and LangChain integration chains for comprehensive functionality
+- **76 Data Models** - Pydantic models ensuring type safety and FINOS CDM compliance across all data structures
+- **54 Database Tables** - SQLAlchemy 2.0 models covering users, documents, workflows, deals, payments, and analytics
+- **147 API Endpoints** - RESTful endpoints providing comprehensive programmatic access to all platform features
+- **100% CDM Compliant** - Full FINOS Common Domain Model compliance ensuring interoperability with financial systems
+
+### Platform Architecture Highlights
+
+**AI & Automation:**
+- 215+ prompt templates for consistent AI behavior
+- 11 specialized agents for complex workflows
+- Multi-provider LLM support (OpenAI, vLLM, HuggingFace)
+- 20 LangChain integration chains
+
+**Compliance & Policy:**
+- 121 policy rules across 8 categories
+- Real-time policy enforcement engine
+- CDM-compliant event generation
+- Three-tier decision system (ALLOW/BLOCK/FLAG)
+
+**Data & Integration:**
+- 76 Pydantic models for type safety
+- 54 database tables with SQLAlchemy 2.0
+- 147 API endpoints for programmatic access
+- Full CDM standardization
+
+> 📖 **Learn More**: See [Platform Statistics Documentation](https://tonic-ai.mintlify.app/architecture/platform-statistics) for detailed component breakdown and capabilities assessment.
 
 ---
 

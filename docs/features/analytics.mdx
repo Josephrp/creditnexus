@@ -65,6 +65,19 @@ The Analytics feature provides comprehensive portfolio analytics, dashboard insi
 - **Policy Decisions**: Policy decision statistics
 - **User Activity**: User activity and engagement
 
+### Agent Workflow Metrics
+
+- **LangAlpha Analyses**: Number of quantitative analyses performed
+- **DeepResearch Queries**: Number of research queries executed
+- **PeopleHub Profiles**: Number of business intelligence profiles generated
+- **Workflow Success Rate**: Percentage of successful workflow completions
+- **Average Processing Time**: Average time to complete workflows
+- **Tool Usage Statistics**: Usage statistics for agent tools (market data, web search, Python REPL, etc.)
+
+**Integration**: Agent workflow metrics are automatically tracked and included in analytics dashboards.
+
+**Code Reference**: `app/services/quantitative_analysis_service.py`, `app/services/deep_research_service.py`, `app/services/digitizer_chatbot_service.py`
+
 ---
 
 ## API Endpoints
@@ -118,12 +131,50 @@ Get dashboard statistics and key metrics.
 
 ---
 
-## Additional Resources
+## Agent Workflow Integration
 
-- [Audit Reports Feature](/features/audit-reports)
-- [Configuration Guide](/getting-started/configuration)
+### Agent Dashboard Analytics
+
+The **Agent Dashboard** provides comprehensive analytics for all agent workflows:
+
+- **Unified Statistics**: Overview of all agent results (LangAlpha, DeepResearch, PeopleHub)
+- **Usage Analytics**: Track agent usage by type, user, and time period
+- **Performance Metrics**: Average processing time, success rates, error rates
+- **Result Statistics**: Number of analyses, research queries, and profiles generated
+
+**Access**: Navigate to "Agent Dashboard" in sidebar
+
+**Code Reference**: `client/src/apps/agent-dashboard/AgentDashboard.tsx`
+
+### Agent Results in Analytics
+
+Agent workflow results are automatically integrated into analytics:
+
+- **Deal Analytics**: Agent results linked to deals appear in deal analytics
+- **Portfolio Analytics**: Quantitative analyses contribute to portfolio risk metrics
+- **Research Analytics**: DeepResearch queries tracked in research analytics
+- **Business Intelligence**: PeopleHub profiles included in credit risk assessments
+
+### Report Generation
+
+Agent workflows automatically generate reports that are:
+
+- **Included in Analytics**: Report statistics tracked in analytics dashboards
+- **Exportable**: Reports can be exported and included in analytics exports
+- **Auditable**: All agent operations logged for audit compliance
+
+**Code Reference**: `app/services/agent_report_service.py`, `app/services/report_formatter.py`
 
 ---
 
-**Last Updated**: 2026-01-14  
-**Code Reference**: `app/api/routes.py`, `client/src/components/Dashboard.tsx`
+## Additional Resources
+
+- [Agent Workflows Feature](/features/agent-workflows) - Complete agent workflow documentation
+- [Agent Dashboard](/apps/agent-dashboard) - Unified dashboard for agent results
+- [Audit Reports Feature](/features/audit-reports) - Audit report generation
+- [Configuration Guide](/getting-started/configuration) - Analytics configuration
+
+---
+
+**Last Updated**: 2025-01-14  
+**Code Reference**: `app/api/routes.py`, `client/src/components/Dashboard.tsx`, `client/src/apps/agent-dashboard/AgentDashboard.tsx`
