@@ -30,27 +30,6 @@ from app.models.cdm import CreditAgreement
 from app.models.loan_asset import LoanAsset
 from app.core.config import settings
 
-# #region agent log
-log_data = {
-    "sessionId": "debug-session",
-    "runId": "post-fix",
-    "hypothesisId": "A",
-    "location": "demo_data_service.py:33",
-    "message": "Post-fix: Settings import verification",
-    "data": {
-        "settings_in_globals": "settings" in globals(),
-        "settings_type": type(settings).__name__ if "settings" in globals() else "NOT_FOUND",
-        "has_enhanced_satellite_attr": hasattr(settings, "ENHANCED_SATELLITE_ENABLED") if "settings" in globals() else False,
-        "enhanced_satellite_value": getattr(settings, "ENHANCED_SATELLITE_ENABLED", None) if "settings" in globals() else None
-    },
-    "timestamp": int(datetime.now().timestamp() * 1000)
-}
-try:
-    with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-        f.write(json.dumps(log_data) + "\n")
-except:
-    pass
-# #endregion
 
 logger = logging.getLogger(__name__)
 
@@ -525,64 +504,7 @@ class DemoDataService:
         # Step 6: Generate LoanAssets for sustainability-linked deals
         loan_assets = self._generate_loan_assets_for_deals(deals)
         
-        # #region agent log
-        log_data = {
-            "sessionId": "debug-session",
-            "runId": "post-fix",
-            "hypothesisId": "A",
-            "location": "demo_data_service.py:505",
-            "message": "Post-fix: Before settings access - verification",
-            "data": {
-                "loan_assets_count": len(loan_assets) if loan_assets else 0,
-                "settings_in_globals": "settings" in globals(),
-                "settings_accessible": "settings" in globals() and hasattr(settings, "ENHANCED_SATELLITE_ENABLED"),
-                "enhanced_satellite_value": getattr(settings, "ENHANCED_SATELLITE_ENABLED", None) if "settings" in globals() else None
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000)
-        }
-        with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-            f.write(json.dumps(log_data) + "\n")
-        # #endregion
         
-        # #region agent log
-        try:
-            test_value = settings.ENHANCED_SATELLITE_ENABLED
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - SUCCESS",
-                "data": {
-                    "settings_type": type(settings).__name__,
-                    "enhanced_satellite_value": test_value,
-                    "access_successful": True
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        except NameError as e:
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - NameError (FIX FAILED)",
-                "data": {"error": str(e), "error_type": type(e).__name__, "access_successful": False},
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        except Exception as e:
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - Other Error",
-                "data": {"error": str(e), "error_type": type(e).__name__, "access_successful": False},
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-            f.write(json.dumps(log_data) + "\n")
-        # #endregion
         
         # Step 6b: Create green finance assessments for loan assets
         if loan_assets and settings.ENHANCED_SATELLITE_ENABLED:
@@ -798,15 +720,15 @@ class DemoDataService:
                 
                 # Map application status to deal status
                 status_mapping = {
-                    ApplicationStatus.SUBMITTED.value: DealStatus.SUBMITTED.value,
-                    ApplicationStatus.UNDER_REVIEW.value: DealStatus.UNDER_REVIEW.value,
-                    ApplicationStatus.APPROVED.value: DealStatus.APPROVED.value,
-                    ApplicationStatus.REJECTED.value: DealStatus.REJECTED.value
+                    ApplicationStatus.SUBMITTED.value: DealStatus.PENDING.value,
+                    ApplicationStatus.UNDER_REVIEW.value: DealStatus.PENDING.value,
+                    ApplicationStatus.APPROVED.value: DealStatus.ACTIVE.value,
+                    ApplicationStatus.REJECTED.value: DealStatus.CANCELLED.value
                 }
-                deal_status = status_mapping.get(application.status, DealStatus.SUBMITTED.value)
+                deal_status = status_mapping.get(application.status, DealStatus.PENDING.value)
                 
                 # Add some active/closed deals (10% each)
-                if random.random() < 0.10 and deal_status == DealStatus.APPROVED.value:
+                if random.random() < 0.10 and deal_status == DealStatus.PENDING.value:
                     deal_status = DealStatus.ACTIVE.value
                 elif random.random() < 0.10 and deal_status == DealStatus.ACTIVE.value:
                     deal_status = DealStatus.CLOSED.value
