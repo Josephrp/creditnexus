@@ -18,6 +18,7 @@ import { VerificationPage } from '@/apps/verification/VerificationPage';
 import { VerificationFileConfigEditor } from '@/apps/verification-config/VerificationFileConfigEditor';
 import { WorkflowProcessingPage } from '@/components/WorkflowProcessingPage';
 import { WorkflowShareInterface } from '@/components/WorkflowShareInterface';
+import { LicenseViewer } from '@/components/LicenseViewer';
 
 // Placeholder components for microsites (to be implemented)
 // Note: /project and /docs are deployed separately (GitHub Pages and Mintlify)
@@ -270,6 +271,38 @@ export const router = createBrowserRouter(
       </ProtectedRoute>
     ),
   },
+  {
+    path: '/auditor/logs',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/policy',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/auditor/cdm-events',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/app/loan-recovery',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
   
   // Application routes
   {
@@ -402,6 +435,16 @@ export const router = createBrowserRouter(
         <VerificationFileConfigEditor />
       </AdminRoute>
     ),
+  },
+  
+  // License routes (public)
+  {
+    path: '/licence',
+    element: <LicenseViewer licenseType="licence" />,
+  },
+  {
+    path: '/rail',
+    element: <LicenseViewer licenseType="rail" />,
   },
   
   // 404 route

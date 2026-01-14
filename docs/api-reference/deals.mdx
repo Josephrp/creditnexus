@@ -1,0 +1,76 @@
+---
+title: Deals API
+description: API endpoints for deal management and tracking
+---
+
+## Deals API
+
+API endpoints for deal management, deal notes, timeline tracking, and deal collaboration.
+
+**Base Path**: `/api` (deal endpoints in main routes)  
+**Code Reference**: `app/api/routes.py` (deal endpoints), `app/services/deal_service.py`
+
+---
+
+## Deal Management
+
+### List Deals
+
+<Endpoint method="GET" path="/api/deals" />
+
+List all deals with filtering and pagination.
+
+**Query Parameters**:
+- `status`: Filter by deal status
+- `deal_type`: Filter by deal type
+- `search`: Search query
+- `limit`: Items per page (default: 50)
+- `offset`: Pagination offset
+
+**Response**: Paginated list of deals
+
+**Code Reference**: `app/api/routes.py` (deal endpoints)
+
+### Get Deal Details
+
+<Endpoint method="GET" path="/api/deals/{deal_id}" />
+
+Get detailed information about a specific deal.
+
+**Response**: Complete deal information including notes, documents, and timeline
+
+### Create Deal Note
+
+<Endpoint method="POST" path="/api/deals/{deal_id}/notes" />
+
+Add a note to a deal.
+
+**Request Body**:
+```json
+{
+  "note": "Deal approved by credit committee",
+  "note_type": "status_update"
+}
+```
+
+**Response**: Created note with timestamp and user attribution
+
+### Get Deal Timeline
+
+<Endpoint method="GET" path="/api/deals/{deal_id}/timeline" />
+
+Get timeline of events for a deal.
+
+**Response**: Chronological list of deal events
+
+---
+
+## Additional Resources
+
+- [Dealflow Management Feature](/features/dealflow-management)
+- [Applications Feature](/features/applications)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/routes.py`, `app/services/deal_service.py`

@@ -148,6 +148,49 @@ class FileStorageService:
         
         return documents
     
+    def get_document_path(
+        self,
+        user_id: int,
+        deal_id: Optional[str] = None,
+        document_id: int = None
+    ) -> Optional[str]:
+        """
+        Get the file path for a specific document.
+        
+        Documents are stored as: storage/deals/{user_id}/{deal_id}/documents/{document_id}_{filename}
+        
+        Args:
+            user_id: ID of the user/applicant
+            deal_id: Unique deal identifier (optional, if None, searches in user's root)
+            document_id: ID of the document
+            
+        Returns:
+            Absolute path to the document file, or None if not found
+        """
+        if deal_id:
+            # Search in deal-specific folder
+            deal_folder = self.base_storage_path / str(user_id) / deal_id
+            documents_dir = deal_folder / "documents"
+        else:
+            # Search in user's root documents folder (if it exists)
+            user_folder = self.base_storage_path / str(user_id)
+            documents_dir = user_folder / "documents"
+        
+        if not documents_dir.exists():
+            return None
+        
+        # Search for files starting with {document_id}_
+        pattern = f"{document_id}_*"
+        matching_files = list(documents_dir.glob(pattern))
+        
+        if matching_files:
+            # Return the first match (or most recent if multiple)
+            # Sort by modification time, most recent first
+            matching_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return str(matching_files[0].absolute())
+        
+        return None
+    
     def archive_deal(self, user_id: int, deal_id: str) -> str:
         """
         Archive a deal by moving it to an archive folder.

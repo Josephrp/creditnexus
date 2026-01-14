@@ -1,0 +1,651 @@
+---
+title: Loan Recovery System
+description: Automated loan recovery with Twilio SMS and voice communication
+---
+
+## Overview
+
+The Loan Recovery System automates the detection and management of loan defaults with integrated Twilio SMS and voice communication capabilities. It provides a comprehensive workflow for managing borrower contacts, recovery actions, and CDM event tracking.
+
+**Code Reference**: `app/services/loan_recovery_service.py`, `app/services/twilio_service.py`, `app/api/recovery_routes.py`, `client/src/components/LoanRecoverySidebar.tsx`
+
+---
+
+## Key Features
+
+### Automatic Default Detection
+
+The system automatically detects two types of defaults:
+
+#### Payment Defaults
+
+- **Detection Method**: Monitors `PaymentEvent` records with `payment_status == "pending"`
+- **Calculation**: Compares payment due date (created_at + 30 days) with current date
+- **Severity Levels**:
+  - **Low**: 1-7 days past due
+  - **Medium**: 8-30 days past due
+  - **High**: 31-60 days past due
+  - **Critical**: 60+ days past due
+
+**Code Reference**: `app/services/loan_recovery_service.py` (detect_payment_defaults method)
+
+#### Covenant Breaches
+
+- **Detection Method**: Monitors `LoanAsset` records with `risk_status == "BREACH"`
+- **Trigger**: Satellite verification detects compliance breach (e.g., NDVI below threshold)
+- **Severity**: Typically "high" for all breaches
+
+**Code Reference**: `app/services/loan_recovery_service.py` (detect_covenant_breaches method)
+
+### Twilio Integration
+
+#### SMS Notifications
+
+- **E.164 Format Validation**: Phone numbers validated before sending
+- **Status Callbacks**: Real-time delivery status updates via webhooks
+- **Message Tracking**: Twilio message SID stored for status tracking
+- **Error Handling**: Comprehensive error handling with detailed error messages
+
+**Code Reference**: `app/services/twilio_service.py` (send_sms method)
+
+#### Voice Calls
+
+- **TwiML Generation**: Automatic TwiML response generation
+- **Interactive Calls**: Support for digit gathering and interactive responses
+- **Status Tracking**: Call SID tracking and status monitoring
+- **Multi-Language**: Support for different language codes
+
+**Code Reference**: `app/services/twilio_service.py` (make_voice_call, generate_twiml_response methods)
+
+#### Webhook Support
+
+- **Signature Verification**: Secure webhook signature validation
+- **Status Updates**: Automatic status updates for SMS and voice calls
+- **Delivery Tracking**: Real-time delivery and read receipts
+
+**Code Reference**: `app/api/twilio_routes.py` (webhook handlers)
+
+### Recovery Actions
+
+The system supports multiple recovery action types with automatic escalation:
+
+#### Action Types
+
+- **`sms_reminder`**: SMS notification (days 1-3)
+- **`voice_call`**: Voice call notification (days 4-7)
+- **`email`**: Email notification (days 8-30)
+- **`escalation`**: Escalated communication (30+ days)
+
+**Code Reference**: `app/services/loan_recovery_service.py` (trigger_recovery_actions method)
+
+#### Action Status
+
+- **`pending`**: Action created but not executed
+- **`sent`**: Action executed successfully
+- **`delivered`**: Message delivered (SMS only)
+- **`failed`**: Action failed with error
+- **`responded`**: Borrower responded to communication
+
+**Code Reference**: `app/db/models.py` (RecoveryAction model)
+
+### Message Templates
+
+- **Jinja2 Templating**: Dynamic message generation with template variables
+- **Severity-Based Templates**: Different templates for low/medium/high/critical
+- **Default Type Templates**: Separate templates for payment defaults vs covenant breaches
+- **Fallback Templates**: Default templates if custom templates not found
+
+**Code Reference**: `app/services/recovery_template_service.py`
+
+### Borrower Contact Management
+
+- **Contact Information**: Phone numbers, email addresses, preferred contact methods
+- **Primary Contacts**: Designate primary contact for each deal
+- **Contact Preferences**: Timezone, preferred hours, communication preferences
+- **Active/Inactive**: Manage contact status
+
+**Code Reference**: `app/db/models.py` (BorrowerContact model)
+
+### CDM Event Integration
+
+All recovery operations generate CDM-compliant events:
+
+#### Loan Default Events
+
+```json
+{
+  "eventType": "Observation",
+  "eventDate": "2026-01-15T10:00:00Z",
+  "observation": {
+    "observationType": "LoanDefault",
+    "observationDate": {"date": "2026-01-15"},
+    "observedValue": {
+      "value": "PAYMENT_DEFAULT",
+      "unit": "LOAN_DEFAULT_TYPE",
+      "numericValue": 15,
+      "context": {
+        "severity": "medium",
+        "daysPastDue": 15,
+        "amountOverdue": 100000.00,
+        "reason": "Payment overdue: principal"
+      }
+    },
+    "informationSource": {
+      "sourceProvider": "CreditNexus_RecoveryService",
+      "sourceType": "LoanMonitoring",
+      "reference": {
+        "defaultId": "123",
+        "detectionMethod": "automated"
+      }
+    }
+  },
+  "relatedEventIdentifier": [
+    {
+      "eventIdentifier": {
+        "issuer": "CreditNexus_LoanService",
+        "assignedIdentifier": [{"identifier": {"value": "LOAN_001"}}]
+      }
+    }
+  ],
+  "meta": {
+    "globalKey": "uuid-here",
+    "sourceSystem": "CreditNexus_RecoveryService_v1",
+    "version": 1
+  }
+}
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_loan_default function)
+
+#### Recovery Action Events
+
+```json
+{
+  "eventType": "Observation",
+  "eventDate": "2026-01-15T11:00:00Z",
+  "observation": {
+    "observationType": "RecoveryAction",
+    "observationDate": {"date": "2026-01-15"},
+    "observedValue": {
+      "value": "SMS_REMINDER",
+      "unit": "RECOVERY_ACTION_TYPE",
+      "context": {
+        "communicationMethod": "sms",
+        "status": "sent",
+        "messageLength": 150,
+        "twilioMessageSid": "SM1234567890"
+      }
+    },
+    "informationSource": {
+      "sourceProvider": "CreditNexus_RecoveryService",
+      "sourceType": "RecoveryCommunication",
+      "reference": {
+        "actionId": "456",
+        "twilioMessageSid": "SM1234567890"
+      }
+    }
+  },
+  "relatedEventIdentifier": [
+    {
+      "eventIdentifier": {
+        "issuer": "CreditNexus_RecoveryService",
+        "assignedIdentifier": [{"identifier": {"value": "LOAN_DEFAULT_123"}}]
+      }
+    }
+  ],
+  "meta": {
+    "globalKey": "uuid-here",
+    "sourceSystem": "CreditNexus_RecoveryService_v1",
+    "version": 1
+  }
+}
+```
+
+**Code Reference**: `app/models/cdm_events.py` (generate_cdm_recovery_action function)
+
+---
+
+## Workflow
+
+### 1. Default Detection
+
+**Automatic Detection**:
+1. System periodically checks for overdue payments
+2. System monitors loan assets for breach status
+3. Defaults are created automatically when detected
+4. CDM events are generated for each default
+
+**Manual Detection**:
+1. Navigate to Loan Recovery sidebar
+2. Click "Detect Defaults" button
+3. System scans for new defaults
+4. Results displayed in default list
+
+**Code Reference**: `app/services/loan_recovery_service.py` (detect_payment_defaults, detect_covenant_breaches methods)
+
+### 2. Recovery Action Creation
+
+**Automatic Triggering**:
+1. System automatically determines action types based on days past due
+2. Actions are created and executed immediately
+3. Messages are sent via Twilio
+4. Status is tracked in real-time
+
+**Manual Triggering**:
+1. Select a default from the list
+2. Click "Trigger Actions" button
+3. Choose action types (or let system auto-determine)
+4. Actions are created and executed
+5. Status updates displayed in real-time
+
+**Code Reference**: `app/services/loan_recovery_service.py` (trigger_recovery_actions method)
+
+### 3. Action Execution
+
+**SMS Execution**:
+1. Validate phone number (E.164 format)
+2. Generate message content from template
+3. Send SMS via Twilio API
+4. Store Twilio message SID
+5. Update action status to "sent"
+6. Generate CDM event
+
+**Voice Call Execution**:
+1. Validate phone number (E.164 format)
+2. Generate TwiML response
+3. Initiate call via Twilio API
+4. Store Twilio call SID
+5. Update action status to "sent"
+6. Generate CDM event
+
+**Code Reference**: `app/services/loan_recovery_service.py` (execute_recovery_action method)
+
+### 4. Status Updates
+
+**Webhook Processing**:
+1. Twilio sends webhook to `/api/twilio/webhook/sms` or `/api/twilio/webhook/voice`
+2. Signature is verified for security
+3. RecoveryAction record is updated with new status
+4. CDM event is updated if needed
+5. Frontend is notified of status change
+
+**Code Reference**: `app/api/twilio_routes.py` (webhook handlers)
+
+---
+
+## User Interface
+
+### Loan Recovery Sidebar
+
+**Location**: `client/src/components/LoanRecoverySidebar.tsx`
+
+**Features**:
+- **Default List**: View all active defaults with filtering by status, severity, deal
+- **Default Detail View**: Comprehensive default information including:
+  - Default type and reason
+  - Amount overdue (if payment default)
+  - Days past due
+  - Severity level
+  - Status
+  - Related recovery actions
+- **Recovery Actions**: 
+  - View all actions for a default
+  - Trigger new actions
+  - Execute pending actions
+  - View action status and delivery information
+- **Borrower Contacts**: 
+  - View borrower contact information
+  - Add new contacts
+  - Update contact details
+- **Filtering**: Filter defaults by status, severity, deal ID
+- **Real-time Updates**: Status updates via webhooks
+
+**Access**: Navigate to "Loan Recovery" in the sidebar
+
+---
+
+## API Endpoints
+
+### Default Management
+
+<Endpoint method="GET" path="/api/recovery/defaults" />
+
+List all loan defaults with optional filtering.
+
+**Query Parameters**:
+- `deal_id`: Filter by deal ID
+- `status`: Filter by status (open, in_recovery, resolved, written_off)
+- `severity`: Filter by severity (low, medium, high, critical)
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 50, max: 100)
+
+**Response**: Paginated list of defaults with recovery actions
+
+<Endpoint method="POST" path="/api/recovery/defaults/detect" />
+
+Detect new payment defaults and covenant breaches.
+
+**Request Body**:
+```json
+{
+  "deal_id": 123
+}
+```
+
+**Response**: List of newly detected defaults
+
+<Endpoint method="GET" path="/api/recovery/defaults/{default_id}" />
+
+Get detailed information about a specific default.
+
+**Response**: Complete default information with recovery actions
+
+**Code Reference**: `app/api/recovery_routes.py` (default endpoints)
+
+### Recovery Actions
+
+<Endpoint method="POST" path="/api/recovery/defaults/{default_id}/actions" />
+
+Trigger recovery actions for a loan default.
+
+**Request Body**:
+```json
+{
+  "action_types": ["sms_reminder", "voice_call"]
+}
+```
+
+**Response**: List of created recovery actions
+
+<Endpoint method="GET" path="/api/recovery/actions" />
+
+List all recovery actions with optional filtering.
+
+**Query Parameters**:
+- `default_id`: Filter by default ID
+- `status`: Filter by status
+- `deal_id`: Filter by deal ID
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of recovery actions
+
+<Endpoint method="POST" path="/api/recovery/actions/{action_id}/execute" />
+
+Manually execute a pending recovery action.
+
+**Response**: Updated recovery action with execution status
+
+<Endpoint method="POST" path="/api/recovery/actions/scheduled/process" />
+
+Process all scheduled recovery actions (background task).
+
+**Response**: Summary with processed/failed counts
+
+**Code Reference**: `app/api/recovery_routes.py` (action endpoints)
+
+### Borrower Contacts
+
+<Endpoint method="GET" path="/api/recovery/contacts" />
+
+List all borrower contacts.
+
+**Query Parameters**:
+- `deal_id`: Filter by deal ID
+
+**Response**: List of borrower contacts
+
+<Endpoint method="POST" path="/api/recovery/contacts" />
+
+Create a new borrower contact.
+
+**Request Body**:
+```json
+{
+  "deal_id": 123,
+  "contact_name": "John Doe",
+  "phone_number": "+1234567890",
+  "email": "borrower@example.com",
+  "preferred_contact_method": "sms",
+  "is_primary": true,
+  "is_active": true
+}
+```
+
+**Response**: Created borrower contact
+
+<Endpoint method="PUT" path="/api/recovery/contacts/{contact_id}" />
+
+Update a borrower contact.
+
+**Request Body**: Partial contact information
+
+**Response**: Updated borrower contact
+
+**Code Reference**: `app/api/recovery_routes.py` (contact endpoints)
+
+### Twilio Webhooks
+
+<Endpoint method="POST" path="/api/twilio/webhook/sms" />
+
+SMS status callback endpoint (called by Twilio).
+
+**Request**: Form data from Twilio with signature verification
+
+**Response**: 200 OK
+
+<Endpoint method="POST" path="/api/twilio/webhook/voice" />
+
+Voice call status callback endpoint (called by Twilio).
+
+**Request**: Form data from Twilio with signature verification
+
+**Response**: TwiML response or 200 OK
+
+<Endpoint method="POST" path="/api/twilio/webhook/status" />
+
+Generic status callback endpoint.
+
+**Code Reference**: `app/api/twilio_routes.py` (webhook endpoints)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="TWILIO_ENABLED" type="boolean">
+  Enable Twilio integration. Default: `false`
+</ParamField>
+
+<ParamField body="TWILIO_ACCOUNT_SID" type="string">
+  Twilio Account SID (required if TWILIO_ENABLED=true)
+</ParamField>
+
+<ParamField body="TWILIO_AUTH_TOKEN" type="string">
+  Twilio Auth Token (required if TWILIO_ENABLED=true)
+</ParamField>
+
+<ParamField body="TWILIO_PHONE_NUMBER" type="string">
+  Twilio phone number in E.164 format (e.g., +1234567890)
+</ParamField>
+
+<ParamField body="TWILIO_SMS_ENABLED" type="boolean">
+  Enable SMS functionality. Default: `true`
+</ParamField>
+
+<ParamField body="TWILIO_VOICE_ENABLED" type="boolean">
+  Enable voice call functionality. Default: `true`
+</ParamField>
+
+<ParamField body="TWILIO_WEBHOOK_URL" type="string">
+  Base URL for Twilio webhook callbacks (e.g., https://yourdomain.com/api/twilio)
+</ParamField>
+
+**Setup Guide**: See [Twilio Setup Guide](/guides/twilio-setup)
+
+---
+
+## Database Models
+
+### LoanDefault
+
+**Table**: `loan_defaults`
+
+**Key Fields**:
+- `loan_id`: Loan identifier (string)
+- `deal_id`: Deal identifier (foreign key)
+- `default_type`: Type (payment_default, covenant_breach, infraction)
+- `default_date`: Date when default occurred
+- `default_reason`: Reason for default
+- `amount_overdue`: Amount overdue (for payment defaults)
+- `days_past_due`: Number of days past due
+- `severity`: Severity level (low, medium, high, critical)
+- `status`: Status (open, in_recovery, resolved, written_off)
+- `cdm_events`: JSONB array of CDM events
+
+**Code Reference**: `app/db/models.py` (LoanDefault class, lines 2366-2409)
+
+### RecoveryAction
+
+**Table**: `recovery_actions`
+
+**Key Fields**:
+- `loan_default_id`: Foreign key to LoanDefault
+- `action_type`: Type (sms_reminder, voice_call, email, escalation, legal_notice)
+- `communication_method`: Method (sms, voice, email)
+- `recipient_phone`: Recipient phone number (E.164 format)
+- `recipient_email`: Recipient email address
+- `message_template`: Template name used
+- `message_content`: Actual message sent
+- `twilio_message_sid`: Twilio message SID (for SMS)
+- `twilio_call_sid`: Twilio call SID (for voice)
+- `status`: Status (pending, sent, delivered, failed, responded)
+- `scheduled_at`: Scheduled execution time
+- `sent_at`: Actual send time
+- `delivered_at`: Delivery time (SMS)
+- `error_message`: Error message if failed
+
+**Code Reference**: `app/db/models.py` (RecoveryAction class, lines 2412-2465)
+
+### BorrowerContact
+
+**Table**: `borrower_contacts`
+
+**Key Fields**:
+- `deal_id`: Foreign key to Deal
+- `user_id`: Foreign key to User (if borrower is a user)
+- `contact_name`: Contact name
+- `phone_number`: Phone number (E.164 format)
+- `email`: Email address
+- `preferred_contact_method`: Preferred method (sms, voice, email)
+- `contact_preferences`: JSONB preferences (timezone, hours, etc.)
+- `is_primary`: Primary contact flag
+- `is_active`: Active status flag
+
+**Code Reference**: `app/db/models.py` (BorrowerContact class, lines 2468-2507)
+
+---
+
+## Message Templates
+
+### Template Location
+
+Templates are stored in `app/templates/recovery/` directory.
+
+### Template Naming Convention
+
+- `{communication_method}_{default_type}.txt`: Base template
+- `{communication_method}_{default_type}_{severity}.txt`: Severity-specific template
+- `{communication_method}_escalation.txt`: Escalation template
+
+**Examples**:
+- `sms_payment_default.txt`: Base SMS template for payment defaults
+- `sms_payment_default_high.txt`: High severity SMS template
+- `voice_covenant_breach.txt`: Voice template for covenant breaches
+- `sms_escalation.txt`: Escalation SMS template
+
+### Template Variables
+
+Available template variables:
+- `borrower_name`: Borrower contact name
+- `default_type`: Type of default
+- `default_reason`: Reason for default
+- `amount_overdue`: Amount overdue (if payment default)
+- `days_past_due`: Days past due
+- `severity`: Severity level
+- `loan_id`: Loan identifier
+- `deal_id`: Deal identifier
+
+**Code Reference**: `app/services/recovery_template_service.py` (render_template method)
+
+---
+
+## Best Practices
+
+1. **Timely Detection**: Configure default detection to run regularly (e.g., daily)
+2. **Multi-Channel Approach**: Use SMS, voice, and email for better reach
+3. **Compliance**: Ensure all communications comply with regulations (TCPA, GDPR)
+4. **Documentation**: Maintain complete audit trail via CDM events
+5. **Follow-up**: Track borrower responses and adjust recovery strategy
+6. **Phone Number Validation**: Always validate phone numbers in E.164 format
+7. **Error Handling**: Monitor failed actions and retry if appropriate
+8. **Template Customization**: Customize message templates for your organization
+
+---
+
+## Troubleshooting
+
+### SMS Not Delivered
+
+**Possible Causes**:
+- Invalid phone number format (must be E.164)
+- Twilio account balance insufficient
+- Phone number not SMS-capable
+- Twilio account restrictions
+
+**Solutions**:
+- Verify phone number format: `+[country code][number]` (e.g., `+1234567890`)
+- Check Twilio Console for delivery status
+- Verify Twilio account balance
+- Review Twilio error codes in action metadata
+
+### Voice Calls Not Working
+
+**Possible Causes**:
+- Phone number not voice-capable
+- TwiML response format incorrect
+- Webhook URL not accessible
+- Twilio account restrictions
+
+**Solutions**:
+- Verify phone number has Voice capabilities in Twilio
+- Check TwiML response format
+- Ensure webhook URL is publicly accessible
+- Review call logs in Twilio Console
+
+### Defaults Not Detected
+
+**Possible Causes**:
+- PaymentEvent records not in "pending" status
+- LoanAsset records not in "BREACH" status
+- Date calculations incorrect
+
+**Solutions**:
+- Verify PaymentEvent payment_status
+- Check LoanAsset risk_status
+- Review default detection logic in service
+
+---
+
+## Additional Resources
+
+- [Twilio Setup Guide](/guides/twilio-setup)
+- [Recovery API Reference](/api-reference/recovery)
+- [Configuration Guide](/getting-started/configuration#twilio-configuration-loan-recovery)
+- [CDM Compliance](/compliance/cdm-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/loan_recovery_service.py`, `app/services/twilio_service.py`, `app/api/recovery_routes.py`, `client/src/components/LoanRecoverySidebar.tsx`

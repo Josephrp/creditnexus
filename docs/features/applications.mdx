@@ -1,0 +1,194 @@
+---
+title: Applications
+description: Loan application management for individuals and businesses
+---
+
+## Overview
+
+The Applications feature provides comprehensive loan application management for both individual and business applicants. It includes application forms, status tracking, review workflows, and deal creation from approved applications.
+
+**Code Reference**: `client/src/apps/application/`, `client/src/components/ApplicationDashboard.tsx`, `app/api/routes.py` (application endpoints)
+
+---
+
+## Key Features
+
+### Application Types
+
+- **Individual Applications**: Personal loan applications
+- **Business Applications**: Business loan applications
+- **Form Validation**: Comprehensive form validation
+- **Data Storage**: Secure application data storage
+
+**Code Reference**: `client/src/apps/application/IndividualApplicationForm.tsx`, `client/src/apps/application/BusinessApplicationForm.tsx`
+
+### Application Dashboard
+
+- **Portfolio View**: View all applications with filtering
+- **Status Tracking**: Track application status (draft, submitted, approved, etc.)
+- **Search Functionality**: Search applications by applicant or keywords
+- **Quick Actions**: Submit, approve, reject applications
+
+**Code Reference**: `client/src/components/ApplicationDashboard.tsx`
+
+### Review Workflow
+
+- **Status Management**: Update application status
+- **Review Interface**: Review application details
+- **Approval Process**: Approve applications and create deals
+- **Rejection Handling**: Reject applications with reasons
+
+**Code Reference**: `app/api/routes.py` (application endpoints)
+
+---
+
+## Application Statuses
+
+### Status Values
+
+- **`draft`**: Application is in draft state
+- **`submitted`**: Application has been submitted
+- **`under_review`**: Application is under review
+- **`approved`**: Application has been approved
+- **`rejected`**: Application has been rejected
+- **`withdrawn`**: Application has been withdrawn
+
+**Code Reference**: `app/db/models.py` (Application model)
+
+---
+
+## Workflow
+
+### 1. Create Application
+
+1. **Choose Type**: Select individual or business application
+2. **Fill Form**: Complete application form
+3. **Review Data**: Review entered information
+4. **Save Draft**: Save as draft or submit immediately
+5. **Submit**: Submit application for review
+
+### 2. Review Application
+
+1. **View Application**: Open application for review
+2. **Review Details**: Review all application information
+3. **Check Compliance**: Verify compliance requirements
+4. **Make Decision**: Approve or reject application
+5. **Add Notes**: Add review notes if needed
+
+### 3. Create Deal
+
+1. **Approved Application**: Application is approved
+2. **Create Deal**: System creates deal from application
+3. **Link Documents**: Link application documents to deal
+4. **Continue Workflow**: Proceed with deal workflow
+
+---
+
+## API Endpoints
+
+### Create Application
+
+<Endpoint method="POST" path="/api/applications" />
+
+Create a new application.
+
+**Request Body**:
+```json
+{
+  "application_type": "business",
+  "application_data": {
+    "company_name": "ACME Corp",
+    "requested_amount": 1000000.00,
+    "purpose": "Working capital"
+  }
+}
+```
+
+**Response**: Created application with ID
+
+**Code Reference**: `app/api/routes.py` (create_application endpoint)
+
+### List Applications
+
+<Endpoint method="GET" path="/api/applications" />
+
+List all applications with filtering.
+
+**Query Parameters**:
+- `status`: Filter by status
+- `application_type`: Filter by type (individual, business)
+- `page`: Page number
+- `limit`: Items per page
+
+**Response**: Paginated list of applications
+
+### Update Application Status
+
+<Endpoint method="PUT" path="/api/applications/{application_id}/status" />
+
+Update application status (approve, reject, etc.).
+
+**Request Body**:
+```json
+{
+  "status": "approved",
+  "notes": "Application approved by credit committee"
+}
+```
+
+**Response**: Updated application
+
+---
+
+## User Interface
+
+### Application Forms
+
+**Location**: `client/src/apps/application/`
+
+**Individual Form**: `IndividualApplicationForm.tsx`
+- Personal information
+- Income details
+- Loan purpose
+- Amount requested
+
+**Business Form**: `BusinessApplicationForm.tsx`
+- Company information
+- Business details
+- Financial information
+- Loan purpose and amount
+
+### Application Dashboard
+
+**Location**: `client/src/components/ApplicationDashboard.tsx`
+
+**Features**:
+- **Application List**: Table view of all applications
+- **Status Filtering**: Filter by status
+- **Type Filtering**: Filter by application type
+- **Search**: Search applications
+- **Quick Actions**: Submit, approve, reject actions
+
+**Access**: Navigate to "Applications" in sidebar
+
+---
+
+## Best Practices
+
+1. **Complete Information**: Ensure all required fields are filled
+2. **Data Accuracy**: Verify all entered information
+3. **Documentation**: Attach supporting documents
+4. **Status Updates**: Keep application status updated
+5. **Review Process**: Follow review workflow consistently
+
+---
+
+## Additional Resources
+
+- [Configuration Guide](/getting-started/configuration)
+- [Dealflow Management Feature](/features/dealflow-management)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/apps/application/`, `client/src/components/ApplicationDashboard.tsx`, `app/api/routes.py`

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ProfileEnrichment } from '@/components/ProfileEnrichment';
+import { MultimodalInputTabs } from '@/apps/docu-digitizer/MultimodalInputTabs';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -41,6 +42,7 @@ interface SignupFlowProps {
 }
 
 const STEPS = [
+  { id: 0, title: 'AI Profile Extraction', description: 'Extract profile data using AI' },
   { id: 1, title: 'Basic Information', description: 'Email, password, and role selection' },
   { id: 2, title: 'Profile Enrichment', description: 'Complete your profile information' },
   { id: 3, title: 'Document Upload', description: 'Upload supporting documents (optional)' },
@@ -48,7 +50,7 @@ const STEPS = [
 ];
 
 export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<SignupFormData>({
     email: '',
     password: '',
@@ -68,51 +70,51 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
   const validateStep1 = (): boolean => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    // Only validate format, not presence - make validation optional
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
     
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 12) {
-      newErrors.password = 'Password must be at least 12 characters';
-    } else if (!/(?=.*[A-Z])/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one uppercase letter';
-    } else if (!/(?=.*[a-z])/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one lowercase letter';
-    } else if (!/(?=.*\d)/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one number';
-    } else if (!/(?=.*[!@#$%^&*(),.?":{}|<>])/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one special character';
+    if (formData.password) {
+      if (formData.password.length < 12) {
+        newErrors.password = 'Password must be at least 12 characters';
+      } else if (!/(?=.*[A-Z])/.test(formData.password)) {
+        newErrors.password = 'Password must contain at least one uppercase letter';
+      } else if (!/(?=.*[a-z])/.test(formData.password)) {
+        newErrors.password = 'Password must contain at least one lowercase letter';
+      } else if (!/(?=.*\d)/.test(formData.password)) {
+        newErrors.password = 'Password must contain at least one number';
+      } else if (!/(?=.*[!@#$%^&*(),.?":{}|<>])/.test(formData.password)) {
+        newErrors.password = 'Password must contain at least one special character';
+      }
     }
     
-    if (formData.password !== formData.confirmPassword) {
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     
-    if (!formData.displayName) {
-      newErrors.displayName = 'Display name is required';
-    }
-    
-    if (!formData.role) {
-      newErrors.role = 'Please select a role';
-    }
-    
+    // No required field validation - all fields are optional
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleNext = () => {
+    // Remove validation requirement for navigation - allow navigation regardless
+    // Only validate format if fields are filled
     if (currentStep === 1) {
-      if (!validateStep1()) {
-        return;
-      }
+      validateStep1(); // Validate format but don't block navigation
     }
     
     if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
+      clearError();
+    }
+  };
+
+  const handleStepClick = (stepId: number) => {
+    // Allow clicking on any step to navigate
+    if (stepId >= 0 && stepId < STEPS.length) {
+      setCurrentStep(stepId);
       clearError();
     }
   };
@@ -161,6 +163,113 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
 
   const renderStepContent = () => {
     switch (currentStep) {
+      case 0:
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-semibold text-slate-100 mb-2">
+                Extract Your Profile Using AI
+              </h3>
+              <p className="text-slate-400">
+                Use audio, images, documents, or text to automatically extract your profile information
+              </p>
+            </div>
+            <MultimodalInputTabs
+              onAudioComplete={async (result) => {
+                if (result.transcription) {
+                  try {
+                    const response = await fetchWithAuth('/api/profile/extract', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: result.transcription,
+                        role: formData.role || null,
+                        source_type: 'audio',
+                      }),
+                    });
+                    if (response.ok) {
+                      const profileData = await response.json();
+                      updateFormData({ profileData: profileData.profile || {} });
+                    }
+                  } catch (err) {
+                    console.error('Profile extraction error:', err);
+                  }
+                }
+              }}
+              onImageComplete={async (result) => {
+                if (result.ocr_text) {
+                  try {
+                    const response = await fetchWithAuth('/api/profile/extract', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: result.ocr_text,
+                        role: formData.role || null,
+                        source_type: 'image',
+                      }),
+                    });
+                    if (response.ok) {
+                      const profileData = await response.json();
+                      updateFormData({ profileData: profileData.profile || {} });
+                    }
+                  } catch (err) {
+                    console.error('Profile extraction error:', err);
+                  }
+                }
+              }}
+              onDocumentSelect={async (doc) => {
+                if (doc.cdm_data) {
+                  try {
+                    const response = await fetchWithAuth('/api/profile/extract', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: JSON.stringify(doc.cdm_data),
+                        role: formData.role || null,
+                        source_type: 'document',
+                      }),
+                    });
+                    if (response.ok) {
+                      const profileData = await response.json();
+                      updateFormData({ profileData: profileData.profile || {} });
+                    }
+                  } catch (err) {
+                    console.error('Profile extraction error:', err);
+                  }
+                }
+              }}
+              onTextInput={async (text) => {
+                if (text) {
+                  try {
+                    const response = await fetchWithAuth('/api/profile/extract', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: text,
+                        role: formData.role || null,
+                        source_type: 'text',
+                      }),
+                    });
+                    if (response.ok) {
+                      const profileData = await response.json();
+                      updateFormData({ profileData: profileData.profile || {} });
+                    }
+                  } catch (err) {
+                    console.error('Profile extraction error:', err);
+                  }
+                }
+              }}
+              onError={(error) => {
+                setErrors({ aiExtraction: error });
+              }}
+            />
+            {errors.aiExtraction && (
+              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+                <p className="text-sm text-red-400">{errors.aiExtraction}</p>
+              </div>
+            )}
+          </div>
+        );
       case 1:
         return (
           <div className="space-y-6">
@@ -358,7 +467,7 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
     }
   };
 
-  const progress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
+  const progress = (currentStep / (STEPS.length - 1)) * 100;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center py-12 px-4">
@@ -382,8 +491,9 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
               {STEPS.map((step, index) => (
                 <div
                   key={step.id}
-                  className={`flex items-center gap-2 ${
-                    currentStep >= step.id ? 'text-emerald-400' : 'text-slate-500'
+                  onClick={() => handleStepClick(step.id)}
+                  className={`flex items-center gap-2 cursor-pointer transition-colors ${
+                    currentStep >= step.id ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-500 hover:text-slate-400'
                   }`}
                 >
                   {currentStep > step.id ? (
@@ -410,7 +520,7 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
           </div>
           
           <CardDescription className="mt-2">
-            {STEPS[currentStep - 1].description}
+            {STEPS[currentStep].description}
           </CardDescription>
         </CardHeader>
         
@@ -422,14 +532,14 @@ export function SignupFlow({ onComplete, onCancel }: SignupFlowProps) {
               type="button"
               variant="outline"
               onClick={handleBack}
-              disabled={currentStep === 1}
+              disabled={currentStep === 0}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             
-            {currentStep < STEPS.length ? (
+            {currentStep < STEPS.length - 1 ? (
               <Button
                 type="button"
                 onClick={handleNext}

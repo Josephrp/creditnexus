@@ -27,13 +27,18 @@ import {
   GitCompare,
   X,
   Edit2,
-  Share2
+  Share2,
+  Shield
 } from 'lucide-react';
 import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import { WorkflowActions } from './WorkflowActions';
 import { SkeletonDocumentList, EmptyState } from '@/components/ui/skeleton';
 import { PermissionGate } from '@/components/PermissionGate';
 import { PERMISSION_DOCUMENT_DELETE, PERMISSION_DOCUMENT_EDIT, PERMISSION_DOCUMENT_EXPORT } from '@/utils/permissions';
+import { NotarizationButton } from './NotarizationButton';
+import { SignatureButton } from './SignatureButton';
+import { NotarizationStatus } from './NotarizationStatus';
+import { SignatureStatus } from './SignatureStatus';
 
 interface DocumentSummary {
   id: number;
@@ -419,16 +424,41 @@ export function DocumentHistory({ onViewData, onGenerateFromTemplate }: Document
                 </Button>
               )}
               {selectedDocument && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border-blue-600/30"
-                  onClick={() => navigate(`/app/workflow/share?view=create&documentId=${selectedDocument.id}`)}
-                  title="Share workflow link for this document"
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share Workflow
-                </Button>
+                <>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border-blue-600/30"
+                    onClick={() => navigate(`/app/workflow/share?view=create&documentId=${selectedDocument.id}`)}
+                    title="Share workflow link for this document"
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Workflow
+                  </Button>
+                  <SignatureButton
+                    documentId={selectedDocument.id}
+                    variant="outline"
+                    size="sm"
+                    onSignatureRequested={(signatureId) => {
+                      console.log('Signature requested:', signatureId);
+                    }}
+                    onError={(error) => {
+                      console.error('Signature error:', error);
+                    }}
+                  />
+                  <NotarizationButton
+                    documentId={selectedDocument.id}
+                    variant="outline"
+                    size="sm"
+                    onNotarizationComplete={(notarizationId) => {
+                      // Optionally refresh document data or show success message
+                      console.log('Notarization completed:', notarizationId);
+                    }}
+                    onError={(error) => {
+                      console.error('Notarization error:', error);
+                    }}
+                  />
+                </>
               )}
               {selectedVersion && (
                 <Button 
@@ -649,6 +679,16 @@ export function DocumentHistory({ onViewData, onGenerateFromTemplate }: Document
                 onWorkflowUpdate={handleWorkflowUpdate}
               />
             )}
+
+            {/* Signature Status */}
+            <SignatureStatus
+              documentId={selectedDocument.id}
+            />
+
+            {/* Notarization Status */}
+            <NotarizationStatus
+              documentId={selectedDocument.id}
+            />
           </div>
         </div>
       </div>
@@ -798,6 +838,18 @@ export function DocumentHistory({ onViewData, onGenerateFromTemplate }: Document
                     >
                       <Share2 className="h-4 w-4" />
                     </Button>
+                    <SignatureButton
+                      documentId={doc.id}
+                      variant="ghost"
+                      size="sm"
+                      className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                    />
+                    <NotarizationButton
+                      documentId={doc.id}
+                      variant="ghost"
+                      size="sm"
+                      className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                    />
                     <Button
                       variant="ghost"
                       size="sm"

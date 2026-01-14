@@ -2291,6 +2291,189 @@ async def fuse_multimodal_cdm(
         )
 
 
+class AddCdmRequest(BaseModel):
+    """Request model for adding CDM data."""
+    existing_cdm: Dict[str, Any] = Field(..., description="Existing CreditAgreement CDM data")
+    audio_cdm: Optional[Dict[str, Any]] = None
+    image_cdm: Optional[Dict[str, Any]] = None
+    document_cdm: Optional[Dict[str, Any]] = None
+    text_cdm: Optional[Dict[str, Any]] = None
+    audio_text: Optional[str] = None
+    image_text: Optional[str] = None
+    document_text: Optional[str] = None
+    text_input: Optional[str] = None
+    use_llm_fusion: bool = Field(True, description="Whether to use LLM fusion")
+
+
+class RemoveCdmRequest(BaseModel):
+    """Request model for removing CDM field."""
+    document_id: Optional[int] = None
+    field_path: str = Field(..., description="Field path to remove (e.g., 'parties[0].lei')")
+    cdm_data: Dict[str, Any] = Field(..., description="Current CDM data")
+    multimodal_context: Dict[str, str] = Field(default_factory=dict, description="Multimodal context")
+
+
+class EditCdmRequest(BaseModel):
+    """Request model for editing CDM field."""
+    document_id: Optional[int] = None
+    field_path: str = Field(..., description="Field path to edit")
+    new_value: Any = Field(..., description="New value for the field")
+    cdm_data: Dict[str, Any] = Field(..., description="Current CDM data")
+    multimodal_context: Dict[str, str] = Field(default_factory=dict, description="Multimodal context")
+    use_ai: bool = Field(True, description="Whether to use AI for editing")
+
+
+@router.post("/cdm/add")
+async def add_cdm_from_multimodal(
+    request: AddCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Add CDM data using multimodal fusion and add chain."""
+    from app.chains.cdm_add_chain import create_cdm_add_chain, create_cdm_add_prompt
+    from app.chains.multimodal_fusion_chain import fuse_multimodal_inputs
+    
+    try:
+        # First, extract new CDM from multimodal sources
+        fusion_result = fuse_multimodal_inputs(
+            audio_cdm=request.audio_cdm,
+            image_cdm=request.image_cdm,
+            document_cdm=request.document_cdm,
+            text_cdm=request.text_cdm,
+            audio_text=request.audio_text,
+            image_text=request.image_text,
+            document_text=request.document_text,
+            text_input=request.text_input,
+            use_llm_fusion=request.use_llm_fusion,
+        )
+        
+        # Use add chain to merge with existing CDM
+        chain = create_cdm_add_chain()
+        prompt = create_cdm_add_prompt()
+        
+        result = chain.invoke(prompt.format_messages(
+            existing_cdm=json.dumps(request.existing_cdm, default=str),
+            new_cdm_data=json.dumps(fusion_result.agreement.model_dump(), default=str),
+            audio_text=request.audio_text or "",
+            image_text=request.image_text or "",
+            document_text=request.document_text or "",
+            text_input=request.text_input or "",
+        ))
+        
+        return {
+            "status": "success",
+            "agreement": result.agreement.model_dump(),
+            "source_tracking": {
+                field: src.to_dict()
+                for field, src in fusion_result.source_tracking.items()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error adding CDM data: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to add CDM data: {str(e)}"}
+        )
+
+
+@router.post("/cdm/remove")
+async def remove_cdm_field(
+    request: RemoveCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Remove CDM field using AI to determine if removal is safe."""
+    from app.chains.cdm_remove_chain import create_cdm_remove_chain, create_cdm_remove_prompt
+    from app.utils.cdm_utils import remove_nested_field
+    
+    try:
+        # Evaluate removal safety using AI chain
+        chain = create_cdm_remove_chain()
+        prompt = create_cdm_remove_prompt()
+        
+        decision = chain.invoke(prompt.format_messages(
+            cdm_data=json.dumps(request.cdm_data, default=str),
+            field_path=request.field_path,
+            audio_text=request.multimodal_context.get("audio_text", ""),
+            image_text=request.multimodal_context.get("image_text", ""),
+            document_text=request.multimodal_context.get("document_text", ""),
+            text_input=request.multimodal_context.get("text_input", ""),
+        ))
+        
+        if not decision.safe:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": decision.reason,
+                    "alternative_action": decision.alternative_action
+                }
+            )
+        
+        # Safe to remove
+        updated = remove_nested_field(request.cdm_data, request.field_path)
+        return {
+            "status": "success",
+            "cdm_data": updated
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing CDM field: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to remove CDM field: {str(e)}"}
+        )
+
+
+@router.post("/cdm/edit")
+async def edit_cdm_field(
+    request: EditCdmRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Edit CDM field using AI and multimodal context."""
+    from app.chains.cdm_edit_chain import create_cdm_edit_chain, create_cdm_edit_prompt
+    from app.utils.cdm_utils import get_nested_value, set_nested_value
+    
+    try:
+        if request.use_ai:
+            # Use AI chain to edit field
+            chain = create_cdm_edit_chain()
+            prompt = create_cdm_edit_prompt()
+            
+            current_value = get_nested_value(request.cdm_data, request.field_path)
+            
+            result = chain.invoke(prompt.format_messages(
+                cdm_data=json.dumps(request.cdm_data, default=str),
+                field_path=request.field_path,
+                current_value=json.dumps(current_value, default=str) if current_value is not None else "None",
+                new_value=json.dumps(request.new_value, default=str) if request.new_value is not None else "None",
+                audio_text=request.multimodal_context.get("audio_text", ""),
+                image_text=request.multimodal_context.get("image_text", ""),
+                document_text=request.multimodal_context.get("document_text", ""),
+                text_input=request.multimodal_context.get("text_input", ""),
+            ))
+            
+            return {
+                "status": "success",
+                "cdm_data": result.model_dump()
+            }
+        else:
+            # Direct edit without AI
+            updated = set_nested_value(request.cdm_data, request.field_path, request.new_value)
+            return {
+                "status": "success",
+                "cdm_data": updated
+            }
+    except Exception as e:
+        logger.error(f"Error editing CDM field: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to edit CDM field: {str(e)}"}
+        )
+
+
 class ChatbotChatRequest(BaseModel):
     """Request model for chatbot chat."""
     message: str = Field(..., description="User message")
@@ -2532,6 +2715,90 @@ async def chatbot_suggest_templates(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to suggest templates: {str(e)}"}
+        )
+
+
+class ProfileExtractionRequest(BaseModel):
+    """Request model for profile extraction."""
+    text: str = Field(..., description="Text content to extract profile from")
+    role: Optional[str] = Field(None, description="User role to guide extraction")
+    source_type: str = Field(..., description="Source type: 'audio', 'image', 'document', 'text'")
+    existing_profile: Optional[Dict[str, Any]] = Field(None, description="Existing profile data to merge with")
+
+
+@router.post("/profile/extract")
+async def extract_profile(
+    request: ProfileExtractionRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Extract user profile data from multimodal input using profile_extraction_chain.
+    
+    Uses the existing profile_extraction_chain.py which:
+    - Uses create_profile_extraction_chain() to get structured LLM
+    - Uses create_profile_extraction_prompt() with role-specific guidance
+    - Returns UserProfileData Pydantic model
+    
+    Args:
+        request: Profile extraction request with text, role, source_type, and optional existing_profile
+        db: Database session
+        current_user: Optional authenticated user (for audit logging)
+        
+    Returns:
+        Extracted profile data in UserProfileData format
+    """
+    from app.chains.profile_extraction_chain import extract_profile_data
+    
+    try:
+        # Extract profile data using the chain
+        result = extract_profile_data(
+            text=request.text,
+            role=request.role,
+            existing_profile=request.existing_profile,
+            max_retries=3
+        )
+        
+        # Audit log (if user is authenticated)
+        if current_user:
+            try:
+                log_audit_action(
+                    db=db,
+                    action=AuditAction.CREATE,
+                    target_type="profile_extraction",
+                    user_id=current_user.id,
+                    metadata={
+                        "source_type": request.source_type,
+                        "role": request.role,
+                        "has_existing_profile": request.existing_profile is not None
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log profile extraction audit: {e}")
+        
+        return {
+            "status": "success",
+            "profile": result.model_dump(),
+            "source_type": request.source_type,
+            "role": request.role
+        }
+        
+    except ValueError as e:
+        logger.error(f"Profile extraction validation error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "status": "error",
+                "message": f"Profile extraction failed: {str(e)}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Profile extraction error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"Profile extraction failed: {str(e)}"
+            }
         )
 
 
@@ -3178,11 +3445,12 @@ async def get_template_metrics(
         - Most used templates
     """
     from sqlalchemy import func
-    from app.db.models import GeneratedDocument, GeneratedDocumentStatus
+    from app.db.models import GeneratedDocument, GeneratedDocumentStatus, LMATemplate
     
     try:
         # Total generations
-        total_generations = db.query(GeneratedDocument).count()
+        # Use explicit column selection to avoid issues with missing columns
+        total_generations = db.query(func.count(GeneratedDocument.id)).scalar() or 0
         
         # Success rate (approved or executed / total)
         successful_generations = db.query(GeneratedDocument).filter(
@@ -3212,15 +3480,25 @@ async def get_template_metrics(
         ).limit(5).all()
         
         most_used = []
-        for template_id, usage_count in template_usage:
-            template = db.query(LMATemplate).filter(LMATemplate.id == template_id).first()
-            if template:
-                most_used.append({
-                    "template_id": template.id,
-                    "template_name": template.name,
-                    "template_category": template.category,
-                    "usage_count": usage_count
-                })
+        for row in template_usage:
+            # Handle both tuple and RowProxy formats
+            if hasattr(row, 'template_id'):
+                template_id = row.template_id
+                usage_count = row.usage_count
+            else:
+                # Tuple format: (template_id, usage_count)
+                template_id = row[0]
+                usage_count = row[1]
+            
+            if template_id:
+                template = db.query(LMATemplate).filter(LMATemplate.id == template_id).first()
+                if template:
+                    most_used.append({
+                        "template_id": template.id,
+                        "template_name": template.name,
+                        "template_category": template.category,
+                        "usage_count": int(usage_count) if usage_count else 0
+                    })
         
         return {
             "status": "success",
@@ -6552,7 +6830,17 @@ async def execute_trade(
                 logger.error(f"Policy evaluation failed for trade {trade_request.trade_id}: {e}", exc_info=True)
                 # Continue with trade execution even if policy evaluation fails
         
-        # Step 4: Return trade execution result
+        # Step 4: Store trade event in vector store for later retrieval
+        try:
+            GLOBAL_VECTOR_STORE.add_trade_event(trade_event)
+            if policy_evaluation_event:
+                GLOBAL_VECTOR_STORE.add_trade_event(policy_evaluation_event)
+            logger.debug(f"Stored trade event {trade_request.trade_id} in vector store")
+        except Exception as e:
+            logger.warning(f"Failed to store trade event in vector store: {e}")
+            # Don't fail the request if vector store storage fails
+        
+        # Step 5: Return trade execution result
         return {
             "status": "executed",
             "trade_id": trade_request.trade_id,
@@ -8457,6 +8745,56 @@ async def wallet_signup(
 
 
 # ============================================================================
+# License API
+# ============================================================================
+
+@router.get("/licenses/{license_type}")
+async def get_license(license_type: str):
+    """Get license file content (LICENCE.md or RAIL.md).
+    
+    Args:
+        license_type: Type of license file ('licence' or 'rail').
+        
+    Returns:
+        JSON object with license content and type.
+        
+    Raises:
+        HTTPException: If license type is invalid or file not found.
+    """
+    if license_type not in ['licence', 'rail']:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "error", "message": "Invalid license type. Must be 'licence' or 'rail'"}
+        )
+    
+    # Determine filename
+    filename = 'LICENCE.md' if license_type == 'licence' else 'RAIL.md'
+    
+    # Get path to root directory (3 levels up from app/api/routes.py)
+    root_path = Path(__file__).parent.parent.parent / filename
+    
+    if not root_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "message": f"License file {filename} not found"}
+        )
+    
+    try:
+        content = root_path.read_text(encoding='utf-8')
+        return {
+            "status": "success",
+            "type": license_type,
+            "content": content
+        }
+    except Exception as e:
+        logger.error(f"Error reading license file {filename}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to read license file: {str(e)}"}
+        )
+
+
+# ============================================================================
 # Deals API
 # ============================================================================
 
@@ -9617,6 +9955,45 @@ async def search_users(
         )
 
 
+@router.get("/users")
+async def list_users(
+    role: Optional[str] = Query(None, description="Filter by user role"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of users to return"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Get a list of users for selection (e.g., originator, trustee).
+    
+    Returns a simple list of users with id, display_name, email, and role.
+    """
+    try:
+        query = db.query(User).filter(User.signup_status == "approved")
+        
+        if role:
+            query = query.filter(User.role == role)
+        
+        users = query.order_by(User.display_name).limit(limit).all()
+        
+        return {
+            "status": "success",
+            "users": [
+                {
+                    "id": user.id,
+                    "display_name": user.display_name or user.email,
+                    "email": user.email,
+                    "role": user.role
+                }
+                for user in users
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error listing users: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to list users: {str(e)}"}
+        )
+
+
 # ============================================================================
 # Demo Data Seeding Endpoints
 # ============================================================================
@@ -9627,9 +10004,11 @@ class DemoSeedRequest(BaseModel):
     seed_templates: bool = True
     seed_policies: bool = True
     seed_policy_templates: bool = True
+    seed_securitization: bool = False
     generate_deals: bool = False
     deal_count: int = 12
     dry_run: bool = False
+    complete_partial_data: bool = False  # Whether to complete partially filled data after seeding
 
 
 class DemoSeedResponse(BaseModel):
@@ -9711,7 +10090,7 @@ async def seed_demo_data(
                         results["users"]["updated"] += user_result.get("updated", 0)
                 
                 logger.info(f"Generating {request.deal_count} demo deals... (found {applicant_count} applicant users)")
-                deals = service.create_demo_deals(count=request.deal_count)
+                deals = service.create_demo_deals(count=request.deal_count, seed_securitization=request.seed_securitization)
                 results["deals"] = {
                     "created": len(deals),
                     "updated": 0,
@@ -9723,6 +10102,34 @@ async def seed_demo_data(
                 results["deals"] = {
                     "created": 0,
                     "updated": 0,
+                    "errors": [str(e)]
+                }
+        
+        # Complete partially filled data if requested
+        if request.complete_partial_data and not request.dry_run:
+            try:
+                logger.info("Completing partially filled data...")
+                completion_stats = service.complete_partially_filled_data(
+                    complete_deals=True,
+                    complete_loan_assets=True,
+                    complete_applications=True,
+                    complete_documents=True
+                )
+                results["data_completion"] = {
+                    "deals_completed": completion_stats["deals_completed"],
+                    "loan_assets_completed": completion_stats["loan_assets_completed"],
+                    "applications_completed": completion_stats["applications_completed"],
+                    "documents_completed": completion_stats["documents_completed"],
+                    "errors": completion_stats["errors"]
+                }
+                logger.info(f"Completed {completion_stats['deals_completed']} deals, {completion_stats['loan_assets_completed']} loan assets, {completion_stats['applications_completed']} applications, {completion_stats['documents_completed']} documents")
+            except Exception as e:
+                logger.error(f"Error completing partial data: {e}", exc_info=True)
+                results["data_completion"] = {
+                    "deals_completed": 0,
+                    "loan_assets_completed": 0,
+                    "applications_completed": 0,
+                    "documents_completed": 0,
                     "errors": [str(e)]
                 }
         
@@ -9894,13 +10301,70 @@ async def seed_policies(
         raise HTTPException(status_code=500, detail=f"Failed to seed policies: {str(e)}")
 
 
-@router.delete("/demo/seed/reset")
-async def reset_demo_data(
+@router.post("/demo/seed/complete", response_model=DemoSeedResponse)
+async def complete_partial_data(
+    complete_deals: bool = Query(True, description="Complete partially filled deals"),
+    complete_loan_assets: bool = Query(True, description="Complete partially filled loan assets"),
+    complete_applications: bool = Query(True, description="Complete partially filled applications"),
+    complete_documents: bool = Query(True, description="Complete partially filled documents"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user)
 ):
     """
-    Reset demo data (delete all demo deals, documents, etc.).
+    Complete missing fields in partially filled synthetic data points.
+    
+    This endpoint identifies demo records that have some fields filled but others are missing,
+    and completes them using the same generation logic as new records.
+    """
+    if not current_user or current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from app.services.demo_data_service import DemoDataService
+        
+        service = DemoDataService(db)
+        completion_stats = service.complete_partially_filled_data(
+            complete_deals=complete_deals,
+            complete_loan_assets=complete_loan_assets,
+            complete_applications=complete_applications,
+            complete_documents=complete_documents
+        )
+        
+        # Format response similar to DemoSeedResponse
+        return DemoSeedResponse(
+            status="success" if not completion_stats["errors"] else "partial",
+            created={
+                "deals": completion_stats["deals_completed"],
+                "loan_assets": completion_stats["loan_assets_completed"],
+                "applications": completion_stats["applications_completed"],
+                "documents": completion_stats["documents_completed"]
+            },
+            updated={},
+            errors={"completion": completion_stats["errors"]}
+        )
+    except Exception as e:
+        logger.error(f"Error completing partial data: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to complete partial data: {str(e)}"}
+        )
+
+
+@router.delete("/demo/seed/reset")
+async def reset_demo_data(
+    include_users: bool = Query(False, description="Also delete demo users (default: False - keeps demo users)"),
+    include_templates: bool = Query(False, description="Also delete templates (default: False - keeps templates)"),
+    include_policies: bool = Query(False, description="Also delete policies (default: False - keeps policies)"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Reset demo data (delete all demo deals, documents, loan assets, securitization pools, etc.).
+    
+    Args:
+        include_users: If True, also delete demo users (default: False - keeps demo users)
+        include_templates: If True, also delete templates (default: False - keeps templates)
+        include_policies: If True, also delete policies (default: False - keeps policies)
     
     WARNING: This will delete all demo data. Use with caution.
     """
@@ -9908,43 +10372,211 @@ async def reset_demo_data(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        # Delete demo deals and related data
-        demo_deals = db.query(Deal).filter(Deal.is_demo == True).all()
+        from app.db.models import (
+            Deal, Document, DocumentVersion, Workflow, PolicyDecision,
+            DealNote, GreenFinanceAssessment, Application, LoanAsset,
+            SecuritizationPool, SecuritizationTranche, SecuritizationPoolAsset,
+            RegulatoryFiling, NotarizationRecord, GeneratedDocument, LMATemplate, Policy,
+            DocumentSignature, DocumentFiling
+        )
+        from sqlalchemy import or_
         
-        deleted_count = 0
-        for deal in demo_deals:
-            # Delete related data in correct order (respecting foreign key constraints)
-            # 1. Get all documents for this deal
-            doc_ids = [d.id for d in db.query(Document).filter(Document.deal_id == deal.id).all()]
+        deleted_counts = {
+            "securitization_pools": 0,
+            "regulatory_filings": 0,
+            "notarization_records": 0,
+            "securitization_tranches": 0,
+            "securitization_pool_assets": 0,
+            "loan_assets": 0,
+            "generated_documents": 0,
+            "deals": 0,
+            "applications": 0,
+            "documents": 0,
+            "document_versions": 0,
+            "document_signatures": 0,
+            "document_filings": 0,
+            "workflows": 0,
+            "policy_decisions": 0,
+            "green_finance_assessments": 0,
+            "deal_notes": 0,
+            "users": 0,
+            "templates": 0,
+            "policies": 0
+        }
+        
+        # Get all demo deal IDs and deal_ids for reference
+        demo_deals = db.query(Deal).filter(Deal.is_demo == True).all()
+        demo_deal_ids = [d.id for d in demo_deals]
+        demo_deal_identifiers = [d.deal_id for d in demo_deals]
+        demo_application_ids = [d.application_id for d in demo_deals if d.application_id]
+        
+        # 1. Delete securitization-related data first (they reference deals)
+        # Get demo pool IDs (pools that reference demo deals via pool assets)
+        demo_pool_ids = []
+        if demo_deal_ids:
+            # Find pools that have assets referencing demo deals
+            pool_assets_with_demo_deals = db.query(SecuritizationPoolAsset.pool_id).filter(
+                SecuritizationPoolAsset.deal_id.in_(demo_deal_ids)
+            ).distinct().all()
+            demo_pool_ids = [row[0] for row in pool_assets_with_demo_deals]
             
-            # 2. Delete policy decisions that reference documents (must be before document deletion)
+            # Also find pools by pool_id pattern (POOL-YYYY-MM-XXX)
+            pools_by_pattern = db.query(SecuritizationPool.id).filter(
+                SecuritizationPool.pool_id.like("POOL-%")
+            ).all()
+            demo_pool_ids.extend([row[0] for row in pools_by_pattern])
+            demo_pool_ids = list(set(demo_pool_ids))  # Remove duplicates
+        
+        if demo_pool_ids:
+            # Delete regulatory filings
+            filings_deleted = db.query(RegulatoryFiling).filter(
+                RegulatoryFiling.pool_id.in_(demo_pool_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["regulatory_filings"] = filings_deleted
+            
+            # Delete notarization records for pools
+            notarizations_deleted = db.query(NotarizationRecord).filter(
+                NotarizationRecord.securitization_pool_id.in_(demo_pool_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["notarization_records"] += notarizations_deleted
+            
+            # Delete pool assets
+            pool_assets_deleted = db.query(SecuritizationPoolAsset).filter(
+                SecuritizationPoolAsset.pool_id.in_(demo_pool_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["securitization_pool_assets"] = pool_assets_deleted
+            
+            # Delete tranches
+            tranches_deleted = db.query(SecuritizationTranche).filter(
+                SecuritizationTranche.pool_id.in_(demo_pool_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["securitization_tranches"] = tranches_deleted
+            
+            # Delete pools
+            pools_deleted = db.query(SecuritizationPool).filter(
+                SecuritizationPool.id.in_(demo_pool_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["securitization_pools"] = pools_deleted
+        
+        # 2. Delete notarization records for demo deals (if not already deleted)
+        if demo_deal_ids:
+            notarizations_deleted = db.query(NotarizationRecord).filter(
+                NotarizationRecord.deal_id.in_(demo_deal_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["notarization_records"] += notarizations_deleted
+        
+        # 3. Delete loan assets (loan_id matches deal.deal_id for demo deals)
+        if demo_deal_identifiers:
+            loan_assets_deleted = db.query(LoanAsset).filter(
+                LoanAsset.loan_id.in_(demo_deal_identifiers)
+            ).delete(synchronize_session=False)
+            deleted_counts["loan_assets"] = loan_assets_deleted
+        
+        # 4. Delete deals and related data
+        if demo_deal_ids:
+            # Get all document IDs for demo deals
+            doc_ids = [d[0] for d in db.query(Document.id).filter(
+                Document.deal_id.in_(demo_deal_ids)
+            ).all()]
+            
             if doc_ids:
-                db.query(PolicyDecision).filter(PolicyDecision.document_id.in_(doc_ids)).delete(synchronize_session=False)
+                # Delete generated documents (use source_document_id, not document_id)
+                gen_docs_deleted = db.query(GeneratedDocument).filter(
+                    GeneratedDocument.source_document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["generated_documents"] = gen_docs_deleted
+                
+                # Delete document signatures
+                signatures_deleted = db.query(DocumentSignature).filter(
+                    DocumentSignature.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["document_signatures"] = signatures_deleted
+                
+                # Delete document filings
+                filings_deleted = db.query(DocumentFiling).filter(
+                    DocumentFiling.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["document_filings"] = filings_deleted
+                
+                # Delete policy decisions that reference documents
+                policy_decisions_deleted = db.query(PolicyDecision).filter(
+                    PolicyDecision.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["policy_decisions"] += policy_decisions_deleted
+                
+                # Delete document versions
+                doc_versions_deleted = db.query(DocumentVersion).filter(
+                    DocumentVersion.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["document_versions"] = doc_versions_deleted
+                
+                # Delete workflows
+                workflows_deleted = db.query(Workflow).filter(
+                    Workflow.document_id.in_(doc_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["workflows"] = workflows_deleted
+                
+                # Delete documents
+                documents_deleted = len(doc_ids)
+                deleted_counts["documents"] = documents_deleted
+                db.query(Document).filter(
+                    Document.id.in_(doc_ids)
+                ).delete(synchronize_session=False)
             
-            # 3. Delete document versions first (they reference documents)
-            if doc_ids:
-                db.query(DocumentVersion).filter(DocumentVersion.document_id.in_(doc_ids)).delete(synchronize_session=False)
+            # Delete green finance assessments
+            gfa_deleted = db.query(GreenFinanceAssessment).filter(
+                GreenFinanceAssessment.deal_id.in_(demo_deal_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["green_finance_assessments"] = gfa_deleted
             
-            # 4. Delete workflows (they reference documents)
-            if doc_ids:
-                db.query(Workflow).filter(Workflow.document_id.in_(doc_ids)).delete(synchronize_session=False)
+            # Delete policy decisions by deal_id (for any remaining)
+            policy_decisions_deleted = db.query(PolicyDecision).filter(
+                PolicyDecision.deal_id.in_(demo_deal_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["policy_decisions"] += policy_decisions_deleted
             
-            # 5. Delete documents (now safe since policy_decisions referencing them are deleted)
-            if doc_ids:
-                db.query(Document).filter(Document.id.in_(doc_ids)).delete(synchronize_session=False)
+            # Delete deal notes
+            deal_notes_deleted = db.query(DealNote).filter(
+                DealNote.deal_id.in_(demo_deal_ids)
+            ).delete(synchronize_session=False)
+            deleted_counts["deal_notes"] = deal_notes_deleted
             
-            # 6. Delete green finance assessments (no CASCADE, must delete explicitly)
-            db.query(GreenFinanceAssessment).filter(GreenFinanceAssessment.deal_id == deal.id).delete(synchronize_session=False)
+            # Delete applications for demo deals
+            if demo_application_ids:
+                applications_deleted = db.query(Application).filter(
+                    Application.id.in_(demo_application_ids)
+                ).delete(synchronize_session=False)
+                deleted_counts["applications"] = applications_deleted
             
-            # 7. Delete policy decisions by deal_id (for any remaining that reference deal but not documents)
-            db.query(PolicyDecision).filter(PolicyDecision.deal_id == deal.id).delete(synchronize_session=False)
-            
-            # 8. DealNote has CASCADE, but delete explicitly to be safe
-            db.query(DealNote).filter(DealNote.deal_id == deal.id).delete(synchronize_session=False)
-            
-            # 9. Finally delete the deal
-            db.delete(deal)
-            deleted_count += 1
+            # Delete deals
+            deals_deleted = len(demo_deal_ids)
+            deleted_counts["deals"] = deals_deleted
+            db.query(Deal).filter(Deal.id.in_(demo_deal_ids)).delete(synchronize_session=False)
+        
+        # 5. Optionally delete demo users
+        if include_users:
+            demo_user_emails = [
+                "auditor@creditnexus.app",
+                "banker@creditnexus.app",
+                "lawofficer@creditnexus.app",
+                "accountant@creditnexus.app",
+                "applicant@creditnexus.app"
+            ]
+            users_deleted = db.query(User).filter(
+                User.email.in_(demo_user_emails)
+            ).delete(synchronize_session=False)
+            deleted_counts["users"] = users_deleted
+        
+        # 6. Optionally delete templates
+        if include_templates:
+            # Delete all templates (or filter by some criteria if needed)
+            templates_deleted = db.query(LMATemplate).delete(synchronize_session=False)
+            deleted_counts["templates"] = templates_deleted
+        
+        # 7. Optionally delete policies
+        if include_policies:
+            policies_deleted = db.query(Policy).delete(synchronize_session=False)
+            deleted_counts["policies"] = policies_deleted
         
         db.commit()
         
@@ -9955,14 +10587,23 @@ async def reset_demo_data(
                 action=AuditAction.DELETE,
                 target_type="demo_data",
                 user_id=current_user.id,
-                metadata={"deleted_deals": deleted_count}
+                metadata=deleted_counts
             )
         except Exception as e:
             logger.warning(f"Failed to log demo data reset audit: {e}")
         
+        # Create summary message
+        summary_parts = []
+        for entity, count in deleted_counts.items():
+            if count > 0:
+                summary_parts.append(f"{count} {entity.replace('_', ' ')}")
+        
+        summary_message = f"Reset demo data: {', '.join(summary_parts)}" if summary_parts else "No demo data found to reset"
+        
         return {
             "status": "success",
-            "message": f"Reset {deleted_count} demo deal(s) and related data"
+            "message": summary_message,
+            "deleted": deleted_counts
         }
         
     except Exception as e:
@@ -10063,6 +10704,75 @@ async def request_document_signature(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to request signature: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/signatures")
+async def get_document_signatures(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all signature requests for a document and check if it needs signatures."""
+    from app.db.models import DocumentSignature
+    
+    try:
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Query signature requests
+        signatures = db.query(DocumentSignature).filter(
+            DocumentSignature.document_id == document_id
+        ).order_by(DocumentSignature.created_at.desc()).all()
+        
+        # Check signature status
+        signature_dicts = []
+        has_pending = False
+        has_completed = False
+        needs_signature = len(signatures) == 0
+        
+        for sig in signatures:
+            try:
+                sig_dict = sig.to_dict() if hasattr(sig, 'to_dict') else {}
+                # Get status from model attribute or dict
+                status = getattr(sig, 'signature_status', None) or sig_dict.get('signature_status', 'unknown')
+                
+                if status == "pending":
+                    has_pending = True
+                    needs_signature = True
+                elif status == "completed":
+                    has_completed = True
+                
+                # Ensure status is included in dict
+                if 'signature_status' not in sig_dict:
+                    sig_dict['signature_status'] = status
+                
+                signature_dicts.append(sig_dict)
+            except Exception as e:
+                logger.error(f"Error processing signature {sig.id if hasattr(sig, 'id') else 'unknown'}: {e}", exc_info=True)
+                # Continue with other signatures even if one fails
+                continue
+        
+        # Refine needs_signature: if all existing signatures are completed, it doesn't need signing
+        if len(signatures) > 0 and not has_pending:
+            needs_signature = False
+        
+        return {
+            "status": "success",
+            "signatures": signature_dicts,
+            "total": len(signatures),
+            "has_pending": has_pending,
+            "has_completed": has_completed,
+            "needs_signature": needs_signature
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document signatures: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get document signatures: {str(e)}"}
         )
 
 
@@ -10188,7 +10898,7 @@ async def digisigner_webhook(
                         break
                 
                 signature.signers = signers
-                signature.status = "sent"  # Still waiting for other signers
+                signature.signature_status = "pending"  # Still waiting for other signers
                 db.commit()
                 
                 logger.info(f"Updated signer {signer_email} status for signature {signature.id}")
@@ -10226,7 +10936,7 @@ async def digisigner_webhook(
                 
                 signature_service.update_signature_status(
                     signature_id=signature.id,
-                    status="signed",
+                    status="completed",
                     signed_document_url=signed_document_url
                 )
                 
@@ -10624,12 +11334,14 @@ async def process_payment_link(
             payer_party = Party(
                 id=link_data.get("payer_info", {}).get("wallet_address", "unknown"),
                 name=link_data.get("payer_info", {}).get("name", "Unknown"),
+                role="Payer",
                 lei=None
             )
             
             receiver_party = Party(
                 id=link_data.get("receiver_info", {}).get("wallet_address", "system"),
                 name=link_data.get("receiver_info", {}).get("name", "CreditNexus System"),
+                role="Service Provider",
                 lei=None
             )
             
@@ -10808,3 +11520,385 @@ async def get_deadline_alerts(
             status_code=500,
             detail={"status": "error", "message": f"Failed to get deadline alerts: {str(e)}"}
         )
+
+
+# ============================================================================
+# Document Notarization Endpoints
+# ============================================================================
+
+class DocumentNotarizationRequest(BaseModel):
+    """Request model for document notarization."""
+    required_signers: List[str] = Field(..., description="List of wallet addresses required to sign")
+    message_prefix: Optional[str] = Field("CreditNexus Notarization", description="Message prefix for signing")
+    payment_payload: Optional[Dict[str, Any]] = Field(None, description="x402 payment payload (optional, required for non-admin)")
+    auto_hydrate_deal: bool = Field(True, description="Automatically create or link to deal if document has no deal_id")
+    skip_payment: Optional[bool] = Field(False, description="Skip payment (admin only)")
+
+
+@router.post("/documents/{document_id}/notarize")
+async def notarize_document(
+    document_id: int,
+    request: DocumentNotarizationRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Create notarization request for a document.
+    
+    This endpoint:
+    1. Checks if document has a deal_id
+    2. If not, optionally creates/links to a deal (hydration)
+    3. Creates notarization request for the deal
+    4. Handles payment if required
+    
+    Returns 402 Payment Required if payment_payload not provided (unless admin).
+    """
+    from app.services.notarization_service import NotarizationService
+    from app.services.notarization_payment_service import NotarizationPaymentService
+    from app.services.deal_service import DealService
+    from app.models.cdm import Party
+    from app.models.cdm_payment import PaymentEvent, PaymentType, PaymentMethod, Money
+    from app.db.models import PaymentEvent as PaymentEventModel
+    from app.core.config import settings
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # Get document
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check if document has deal_id
+        deal_id = document.deal_id
+        
+        # Hydrate deal if needed
+        if not deal_id and request.auto_hydrate_deal:
+            deal_service = DealService(db)
+            
+            # Extract deal_id from document CDM data
+            deal_id_str = None
+            if document.source_cdm_data:
+                deal_id_str = document.source_cdm_data.get("deal_id")
+            elif document.current_version_id:
+                version = db.query(DocumentVersion).filter(
+                    DocumentVersion.id == document.current_version_id
+                ).first()
+                if version and version.extracted_data:
+                    deal_id_str = version.extracted_data.get("deal_id")
+            
+            # Try to find existing deal by deal_id string
+            if deal_id_str:
+                existing_deal = deal_service.get_deal_by_deal_id(deal_id_str)
+                if existing_deal:
+                    deal_id = existing_deal.id
+                else:
+                    # Create new deal
+                    deal = deal_service.create_deal(
+                        deal_id=deal_id_str,
+                        applicant_id=current_user.id,
+                        deal_type="loan_application",
+                        deal_data=document.source_cdm_data or {}
+                    )
+                    deal_id = deal.id
+            
+            # If still no deal_id, create a minimal deal
+            if not deal_id:
+                deal_id_str = f"DOC_{document_id}_{datetime.utcnow().strftime('%Y%m%d')}"
+                deal = deal_service.create_deal(
+                    deal_id=deal_id_str,
+                    applicant_id=current_user.id,
+                    deal_type="document_notarization",
+                    deal_data={
+                        "document_id": document_id,
+                        "title": document.title,
+                        "borrower_name": document.borrower_name,
+                        "created_from_document": True
+                    }
+                )
+                deal_id = deal.id
+            
+            # Link document to deal
+            document.deal_id = deal_id
+            db.commit()
+            db.refresh(document)
+        
+        if not deal_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Document must be linked to a deal. Set auto_hydrate_deal=true or manually link document to a deal first."
+            )
+        
+        # Get deal
+        deal = db.query(Deal).filter(Deal.id == deal_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+        
+        # Create notarization service
+        notarization_service = NotarizationService(db)
+        
+        # Create notarization request
+        notarization = notarization_service.create_notarization_request(
+            deal_id=deal_id,
+            required_signers=request.required_signers,
+            message_prefix=request.message_prefix
+        )
+        
+        # Check if payment is required
+        if settings.NOTARIZATION_FEE_ENABLED:
+            # Get x402 payment service
+            payment_service = None
+            if http_request and hasattr(http_request.app.state, 'x402_payment_service'):
+                payment_service = http_request.app.state.x402_payment_service
+            
+            payment_service_wrapper = NotarizationPaymentService(db, payment_service)
+            
+            # Check if admin can skip
+            if current_user and payment_service_wrapper.can_skip_payment(current_user) and request.skip_payment:
+                # Admin skip - log audit action
+                log_audit_action(
+                    db,
+                    AuditAction.UPDATE,
+                    "notarization",
+                    notarization.id,
+                    current_user.id,
+                    metadata={
+                        "payment_skipped": True,
+                        "reason": "admin_privilege",
+                        "document_id": document_id,
+                        "deal_id": deal_id
+                    }
+                )
+                return {
+                    "status": "success",
+                    "notarization_id": notarization.id,
+                    "notarization_hash": notarization.notarization_hash,
+                    "deal_id": deal_id,
+                    "document_id": document_id,
+                    "payment_skipped": True,
+                    "payment_status": "skipped_admin"
+                }
+            
+            # Extract payer and receiver
+            payer_name = current_user.display_name or current_user.email
+            payer = Party(
+                id="notarization_payer",
+                name=payer_name,
+                role="Payer",
+                lei=None
+            )
+            
+            receiver = Party(
+                id="creditnexus_notarization_service",
+                name="CreditNexus Notarization Service",
+                role="Service Provider",
+                lei=None
+            )
+            
+            # Check for payment payload in request
+            payment_payload = request.payment_payload
+            
+            # Request payment
+            payment_result = await payment_service_wrapper.request_notarization_payment(
+                notarization=notarization,
+                payer=payer,
+                receiver=receiver,
+                payment_payload=payment_payload
+            )
+            
+            # If payment not provided, return 402
+            if payment_payload is None or payment_result.get("status") != "settled":
+                fee = payment_service_wrapper.get_notarization_fee()
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "status": "Payment Required",
+                        "notarization_id": notarization.id,
+                        "deal_id": deal_id,
+                        "document_id": document_id,
+                        "payment_request": payment_result.get("payment_request"),
+                        "amount": str(fee.amount),
+                        "currency": fee.currency.value,
+                        "payer": {
+                            "id": payer.id,
+                            "name": payer.name
+                        },
+                        "receiver": {
+                            "id": receiver.id,
+                            "name": receiver.name
+                        },
+                        "facilitator_url": payment_service.facilitator_url if payment_service else None
+                    }
+                )
+            
+            # Payment successful - create CDM payment event
+            fee = payment_service_wrapper.get_notarization_fee()
+            payment_event = PaymentEvent.from_cdm_party(
+                payer=payer,
+                receiver=receiver,
+                amount=Money(amount=fee.amount, currency=fee.currency),
+                payment_type=PaymentType.NOTARIZATION_FEE,
+                payment_method=PaymentMethod.X402,
+                trade_id=None
+            )
+            
+            payment_event = payment_event.model_copy(update={
+                "x402PaymentDetails": {
+                    "payment_payload": payment_payload,
+                    "verification": payment_result.get("verification"),
+                    "settlement": payment_result.get("settlement")
+                },
+                "transactionHash": payment_result.get("transaction_hash")
+            })
+            
+            payment_event = payment_event.transition_to_verified()
+            payment_event = payment_event.transition_to_settled(payment_result.get("transaction_hash", ""))
+            
+            # Store payment event
+            payment_event_db = PaymentEventModel(
+                payment_id=payment_event.paymentIdentifier.assignedIdentifier[0]["identifier"]["value"],
+                payment_method=payment_event.paymentMethod.value,
+                payment_type=payment_event.paymentType.value,
+                payer_id=payment_event.payerPartyReference.globalReference,
+                payer_name=payer.name,
+                receiver_id=payment_event.receiverPartyReference.globalReference,
+                receiver_name=receiver.name,
+                amount=payment_event.paymentAmount.amount,
+                currency=payment_event.paymentAmount.currency.value,
+                status=payment_event.paymentStatus.value,
+                x402_payment_payload=payment_payload,
+                x402_verification=payment_result.get("verification"),
+                x402_settlement=payment_result.get("settlement"),
+                transaction_hash=payment_result.get("transaction_hash"),
+                related_notarization_id=notarization.id,
+                cdm_event=payment_event.to_cdm_json(),
+                settled_at=datetime.utcnow()
+            )
+            db.add(payment_event_db)
+            db.flush()
+            
+            # Link payment to notarization
+            notarization.payment_event_id = payment_event_db.id
+            notarization.payment_status = "paid"
+            notarization.payment_transaction_hash = payment_result.get("transaction_hash")
+            db.commit()
+        
+        # Log audit action
+        log_audit_action(
+            db,
+            AuditAction.CREATE,
+            "notarization",
+            notarization.id,
+            current_user.id,
+            metadata={
+                "document_id": document_id,
+                "deal_id": deal_id,
+                "required_signers": request.required_signers
+            }
+        )
+        
+        return {
+            "status": "success",
+            "notarization_id": notarization.id,
+            "notarization_hash": notarization.notarization_hash,
+            "deal_id": deal_id,
+            "document_id": document_id,
+            "payment_status": notarization.payment_status or "skipped"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating document notarization: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to create notarization: {str(e)}"}
+        )
+
+
+@router.get("/documents/{document_id}/notarization")
+async def get_document_notarization(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get notarization status for a document."""
+    from app.db.models import NotarizationRecord
+    
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    if not document.deal_id:
+        return {
+            "status": "success",
+            "notarization": None,
+            "message": "Document not linked to a deal"
+        }
+    
+    # Get latest notarization for deal
+    notarization = db.query(NotarizationRecord).filter(
+        NotarizationRecord.deal_id == document.deal_id
+    ).order_by(NotarizationRecord.created_at.desc()).first()
+    
+    if not notarization:
+        return {
+            "status": "success",
+            "notarization": None,
+            "message": "No notarization found for this document"
+        }
+    
+    return {
+        "status": "success",
+        "notarization": {
+            "id": notarization.id,
+            "notarization_hash": notarization.notarization_hash,
+            "status": notarization.status,
+            "required_signers": notarization.required_signers,
+            "signatures": notarization.signatures,
+            "completed_at": notarization.completed_at.isoformat() if notarization.completed_at else None,
+            "created_at": notarization.created_at.isoformat() if notarization.created_at else None,
+            "payment_status": notarization.payment_status,
+            "cdm_event_id": notarization.cdm_event_id
+        }
+    }
+
+
+@router.get("/deals/{deal_id}/notarization")
+async def get_deal_notarization(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get notarization status for a deal."""
+    from app.db.models import NotarizationRecord
+    
+    deal = db.query(Deal).filter(Deal.id == deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    
+    # Get latest notarization for deal
+    notarization = db.query(NotarizationRecord).filter(
+        NotarizationRecord.deal_id == deal_id
+    ).order_by(NotarizationRecord.created_at.desc()).first()
+    
+    if not notarization:
+        return {
+            "status": "success",
+            "notarization": None,
+            "message": "No notarization found for this deal"
+        }
+    
+    return {
+        "status": "success",
+        "notarization": {
+            "id": notarization.id,
+            "notarization_hash": notarization.notarization_hash,
+            "status": notarization.status,
+            "required_signers": notarization.required_signers,
+            "signatures": notarization.signatures,
+            "completed_at": notarization.completed_at.isoformat() if notarization.completed_at else None,
+            "created_at": notarization.created_at.isoformat() if notarization.created_at else None,
+            "payment_status": notarization.payment_status,
+            "cdm_event_id": notarization.cdm_event_id
+        }
+    }

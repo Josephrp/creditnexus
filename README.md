@@ -2,13 +2,28 @@
 
 **"Where Legal Text Meets Ground Truth"**
 
-[![Documentation](https://img.shields.io/badge/Documentation-Read%20Docs-blue?style=flat-square)](https://docs.creditnexus.com)
-[![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://creditnexus.com)
+[![Documentation](https://img.shields.io/badge/Documentation-Read%20Docs-blue?style=flat-square)](https://tonic-ai.mintlify.app)
+[![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://josephrp.github.io/creditnexus)
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](YOUTUBE_URL)
+
+[![FDC3](https://img.shields.io/badge/FDC3-OpenFin-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/fdc3-compliance)
+[![DORA](https://img.shields.io/badge/DORA-Compliant-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/dora-disclosure)
+[![GDPR](https://img.shields.io/badge/GDPR-Compliant-green?style=flat-square)](https://tonic-ai.mintlify.app/compliance/gdpr-compliance)
+[![AI:Local](https://img.shields.io/badge/AI-Local%20Ready-orange?style=flat-square)](https://tonic-ai.mintlify.app/getting-started/configuration#llm-provider-configuration)
+[![Security](https://img.shields.io/badge/Security-Passed-brightgreen?style=flat-square)](https://github.com/josephrp/creditnexus/actions/workflows/security.yml)
+[![FINOS CDM](https://img.shields.io/badge/FINOS-CDM%20Compliant-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/cdm-compliance)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord)](https://discord.gg/7YS4Cz2Deq)
 
 CreditNexus is a next-generation financial operating system that bridges the gap between **Sustainabiity-Linked Loans (Legal Contracts)** and **Physical Reality (Satellite Data)**. It uses AI agents to extract covenants from PDF agreements and orchestrates "Ground Truth" verification using geospatial deep learning.
 
-> 📚 **[Full Documentation](https://docs.creditnexus.com)** | 🏢 **[Company Site](https://creditnexus.com)** | 🎥 **[Demo Video](YOUTUBE_URL)**
+> 📚 **[Full Documentation](https://tonic-ai.mintlify.app)** | 🏢 **[Company Site](https://josephrp.github.io/creditnexus)** | 🎥 **[Demo Video](YOUTUBE_URL)**
+
+## 🌐 Connect With Us
+
+- **Twitter/X**: [@josephpollack](https://x.com/josephpollack)
+- **GitHub**: [@fintechtonic](https://github.com/fintechtonic)
+- **HuggingFace**: [@tonic](https://hf.co/tonic)
+- **Discord**: [Join our community](https://discord.gg/7YS4Cz2Deq) - [![Discord Online](https://img.shields.io/discord/INVITE_ID?label=Discord&logo=discord&logoColor=white&style=flat-square)](https://discord.gg/7YS4Cz2Deq)
 
 ## 🚀 Quick Start
 
@@ -126,7 +141,64 @@ DIGISIGNER_BASE_URL=https://api.digisigner.com/v1
 DIGISIGNER_WEBHOOK_SECRET=your_webhook_secret_here  # Optional but recommended
 ```
 
-> 📖 **Full Setup Guide**: See [`dev/DIGISIGNER_WEBHOOK_SETUP.md`](dev/DIGISIGNER_WEBHOOK_SETUP.md) for detailed configuration, troubleshooting, and security considerations.
+> 📖 **Full Setup Guide**: See [DigiSigner Setup Guide](https://tonic-ai.mintlify.app/guides/digisigner-setup) for detailed configuration, troubleshooting, and security considerations.
+
+#### Twilio Setup (for Loan Recovery)
+
+CreditNexus integrates with Twilio for SMS and voice communication in loan recovery workflows. To enable:
+
+1. **Create a Twilio account** at https://www.twilio.com/
+2. **Get your credentials** from the Twilio Console:
+   - Account SID
+   - Auth Token
+   - Phone Number (with SMS/Voice capabilities)
+
+**Environment Variables:**
+Add to your `.env` file:
+```env
+TWILIO_ENABLED=true
+TWILIO_ACCOUNT_SID=your_account_sid_here
+TWILIO_AUTH_TOKEN=your_auth_token_here
+TWILIO_PHONE_NUMBER=+1234567890  # E.164 format
+TWILIO_SMS_ENABLED=true
+TWILIO_VOICE_ENABLED=true
+TWILIO_WEBHOOK_URL=https://your-domain.com/api/twilio/webhook/status
+```
+
+**Webhook Configuration:**
+Configure webhook URLs in Twilio Console:
+- SMS Status: `https://your-domain.com/api/twilio/webhook/sms`
+- Voice Status: `https://your-domain.com/api/twilio/webhook/voice`
+- Status Callback: `https://your-domain.com/api/twilio/webhook/status`
+
+> 📖 **Full Setup Guide**: See [Loan Recovery Feature Documentation](https://tonic-ai.mintlify.app/features/recovery) for complete details and [Twilio Setup Guide](https://tonic-ai.mintlify.app/guides/twilio-setup) for configuration.
+
+#### SentinelHub Setup (for Satellite Imagery)
+
+CreditNexus uses SentinelHub for satellite imagery access. To enable:
+
+1. **Create a SentinelHub account** at https://www.sentinel-hub.com/
+2. **Generate OAuth credentials** in your account settings
+3. **Add to `.env` file:**
+```env
+SENTINELHUB_KEY=your_client_id_here
+SENTINELHUB_SECRET=your_client_secret_here
+```
+
+> 📖 **Configuration Guide**: See [Documentation - Configuration](https://tonic-ai.mintlify.app/getting-started/configuration#sentinelhub-configuration) for detailed setup.
+
+#### MetaMask/Blockchain Setup (for Securitization)
+
+CreditNexus uses Base network for blockchain operations. To configure:
+
+1. **Add Base network to MetaMask** (see detailed guide below)
+2. **Configure environment variables:**
+```env
+X402_NETWORK_RPC_URL=https://mainnet.base.org  # or https://sepolia.base.org for testnet
+USDC_TOKEN_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # Base Mainnet USDC
+```
+
+> 📖 **Full Setup Guide**: See [MetaMask Setup Guide](https://tonic-ai.mintlify.app/guides/metamask-setup) for complete network configuration, contract addresses, and troubleshooting.
 
 #### Companies House API (for UK Regulatory Filings)
 
@@ -138,7 +210,7 @@ For automated UK charge filings (MR01), configure:
 COMPANIES_HOUSE_API_KEY=your_api_key_here
 ```
 
-> 📖 **Environment Configuration**: See [`dev/environement.md`](dev/environement.md) for all available environment variables.
+> 📖 **Environment Configuration**: See [Configuration Guide](https://tonic-ai.mintlify.app/getting-started/configuration) for all available environment variables.
 
 ### 0.6. Smart Contract Deployment (Optional - for Securitization Features)
 
@@ -254,7 +326,7 @@ npx hardhat verify --network base 0x...
 npx hardhat verify --network base 0x... 0x[TOKEN_ADDRESS]
 ```
 
-> 📖 **Smart Contract Documentation**: See [`contracts/README.md`](contracts/README.md) for detailed contract specifications and [`dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md`](dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md) for integration details.
+> 📖 **Smart Contract Documentation**: See [`contracts/README.md`](contracts/README.md) for detailed contract specifications and [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for integration details.
 
 ### 1. Backend (The Brain)
 
@@ -289,15 +361,15 @@ npm run dev
 
 ## 📖 Documentation & Resources
 
-- **[📚 Full Documentation](https://docs.creditnexus.com)** - Comprehensive technical documentation, API reference, guides, and architecture details
-- **[🏢 Company Site](https://creditnexus.com)** - Learn about our team, market positioning, and business model
+- **[📚 Full Documentation](https://tonic-ai.mintlify.app)** - Comprehensive technical documentation, API reference, guides, and architecture details
+- **[🏢 Company Site](https://josephrp.github.io/creditnexus)** - Learn about our team, market positioning, and business model
 - **[🎥 Demo Video](YOUTUBE_URL)** - Watch CreditNexus in action
 - **[⚖️ License](LICENSE.md)** - GPL-2 + Rail.md dual license
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Guidelines for contributing to the project
-- **[🔧 Environment Configuration](dev/environement.md)** - Complete list of environment variables and configuration options
-- **[✍️ DigiSigner Webhook Setup](dev/DIGISIGNER_WEBHOOK_SETUP.md)** - Guide for configuring DigiSigner webhooks for digital signatures
+- **[🔧 Environment Configuration](https://tonic-ai.mintlify.app/getting-started/configuration)** - Complete list of environment variables and configuration options
+- **[✍️ DigiSigner Webhook Setup](https://tonic-ai.mintlify.app/guides/digisigner-setup)** - Guide for configuring DigiSigner webhooks for digital signatures
 - **[📜 Smart Contracts](contracts/README.md)** - Solidity contract documentation and specifications
-- **[🏗️ Securitization Implementation](dev/SECURITIZATION_WORKFLOW_IMPLEMENTATION_PLAN.md)** - Complete securitization workflow implementation plan
+- **[🏗️ Securitization Feature](https://tonic-ai.mintlify.app/features/securitization)** - Complete securitization workflow documentation
 
 ---
 
@@ -343,7 +415,91 @@ Visualizes the financial impact (Margin Ratchets) of ESG performance.
 > **Access via: "Document Parser" in Top Nav**
 The foundational tool for extracting structured data from unstructured PDF legal documents.
 
-> 📖 **Learn More**: See [Documentation - Features](https://docs.creditnexus.com/features) for detailed feature descriptions and [Documentation - Guides](https://docs.creditnexus.com/guides) for step-by-step workflows.
+> 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features) for detailed feature descriptions and [Documentation - Guides](https://tonic-ai.mintlify.app/guides) for step-by-step workflows.
+
+### 6. Loan Recovery System
+
+> **Access via: "Loan Recovery" in Sidebar**
+Automated loan default detection and recovery workflow with Twilio integration.
+
+- **Default Detection**: Automatic detection of payment defaults and covenant breaches
+- **Recovery Actions**: SMS and voice communication via Twilio
+- **Borrower Contact Management**: Centralized contact information management
+- **CDM Events**: All recovery actions generate CDM-compliant events
+
+> 📖 **Learn More**: See [Loan Recovery Feature Documentation](https://tonic-ai.mintlify.app/features/recovery) for complete details and [Twilio Setup Guide](https://tonic-ai.mintlify.app/guides/twilio-setup) for configuration.
+
+### 7. Payment Systems (x402 Protocol)
+
+> **Access via: Securitization and Trade workflows**
+Blockchain-based payment processing using x402 protocol and USDC stablecoin.
+
+- **x402 Protocol**: Standardized payment request/response flow
+- **USDC Payments**: Stablecoin payments on Base network
+- **MetaMask Integration**: Wallet-based payment authorization
+- **Payment Events**: CDM-compliant payment event generation
+
+> 📖 **Learn More**: See [MetaMask Setup Guide](https://tonic-ai.mintlify.app/guides/metamask-setup) for network setup.
+
+### 8. Notarization (Blockchain-Based)
+
+> **Access via: Securitization Workflow**
+Blockchain-based document notarization using smart contracts.
+
+- **Smart Contract Notarization**: SecuritizationNotarization contract on Base network
+- **MetaMask Signing**: Wallet-based signature verification
+- **Immutable Records**: All notarizations stored on-chain
+- **Multi-Party Signing**: Support for multiple signers
+
+> 📖 **Learn More**: See [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for implementation details.
+
+### 9. Digital Signing (DigiSigner Integration)
+
+> **Access via: Document workflows**
+Digital signature workflows with DigiSigner integration and webhook notifications.
+
+- **DigiSigner Integration**: Professional e-signature service
+- **Webhook Notifications**: Real-time signature status updates
+- **Multi-Document Signing**: Batch document signing workflows
+- **Legal Validity**: Legally binding digital signatures
+
+> 📖 **Learn More**: See [DigiSigner Setup Guide](https://tonic-ai.mintlify.app/guides/digisigner-setup) for setup guide.
+
+### 10. Dealflow Management
+
+> **Access via: "Deals" in Sidebar**
+Comprehensive deal tracking and collaboration platform.
+
+- **Deal Dashboard**: Portfolio overview with filtering and search
+- **Deal Timeline**: Visual timeline of deal events and milestones
+- **Deal Notes**: Collaborative note-taking and comments
+- **Deal Detail View**: Comprehensive deal information and documents
+
+> 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features/dealflow-management) for detailed workflows.
+
+### 11. One-Click Audit Reports
+
+> **Access via: "Auditor" in Sidebar**
+Automated audit report generation with CDM event exploration.
+
+- **Report Generation**: Automated report generation from audit logs
+- **CDM Event Explorer**: Browse and filter CDM events
+- **Policy Decisions Explorer**: Review policy evaluation decisions
+- **Export Functionality**: Export reports in multiple formats (PDF, CSV, JSON)
+
+> 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features/audit-reports) for report generation guide.
+
+### 12. Securitization Workflow
+
+> **Access via: "Securitization" in Sidebar**
+Complete securitization workflow from pool creation to token minting.
+
+- **Pool Creation**: Create securitization pools with asset selection
+- **Notarization**: Blockchain-based pool notarization
+- **Tranche Minting**: ERC-721 tranche token creation
+- **Payment Distribution**: Automated payment waterfall processing
+
+> 📖 **Learn More**: See [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for complete workflow.
 
 ---
 
@@ -357,7 +513,7 @@ The platform components are designed to work as a "Chain of Command" using the *
   4.**Verify**: The **Verification Demo** runs the "Ground Truth" protocol. When a breach is detected, it broadcasts an updated context.
   5.**Surveil**: The **Risk War Room** listens for these alerts and automatically highlights assets in breach for immediate investigation.
 
-> 📖 **Learn More**: See [Documentation - Architecture](https://docs.creditnexus.com/architecture/overview) for detailed system design and [Documentation - FDC3 Compliance](https://docs.creditnexus.com/compliance/fdc3-compliance) for interoperability standards.
+> 📖 **Learn More**: See [Documentation - Architecture](https://tonic-ai.mintlify.app/architecture/overview) for detailed system design and [Documentation - FDC3 Compliance](https://tonic-ai.mintlify.app/compliance/fdc3-compliance) for interoperability standards.
 
 ---
 
@@ -422,7 +578,7 @@ npm run dev
 
 **Terminal 3 - Launch OpenFin:**
 ```powershell
-# Launch via RVM (no CLI needed - deprecated dependency removed)
+# Launch via RVM (no CLI needed !)
 .\scripts\launch_openfin.ps1
 # Or simply open the manifest URL in your browser:
 # http://localhost:8000/openfin/app.json
@@ -564,7 +720,7 @@ Then configure `openfin/app.json` to point to the production build location.
 - **Testing**: `uv run pytest`
 - **Code Quality**: ruff, black, mypy (configured in `pyproject.toml`)
 
-> 📖 **Learn More**: See [Documentation - Technical](https://docs.creditnexus.com/architecture) for technology details and [Documentation - Configuration](https://docs.creditnexus.com/getting-started/configuration) for environment setup.
+> 📖 **Learn More**: See [Documentation - Technical](https://tonic-ai.mintlify.app/architecture) for technology details and [Documentation - Configuration](https://tonic-ai.mintlify.app/getting-started/configuration) for environment setup.
 
 ---
 
@@ -583,7 +739,7 @@ To demonstrate the full power of the system:
     -   **Result**: Breach Detected!
   6.  See the **FDC3 Broadcast** trigger updates in the **Risk War Room** (if open) and generate a **Terms Change** event in the CDM ledger.
 
-> 📖 **Learn More**: See [Documentation - Verification Guide](https://docs.creditnexus.com/guides/verification) for detailed verification workflows.
+> 📖 **Learn More**: See [Documentation - Verification Guide](https://tonic-ai.mintlify.app/guides/verification) for detailed verification workflows.
 
 ---
 
@@ -595,15 +751,15 @@ To demonstrate the full power of the system:
 
 This application is provided as a **non-production demonstration**. However, transactions executed through this system may be **live and executory**, with real digital signatures and legal implications for all signees based on system configuration. Users are responsible for understanding the legal and regulatory implications of their use of this system.
 
-> 📖 **Learn More**: See [Documentation - DORA Disclosure](https://docs.creditnexus.com/compliance/dora-disclosure) for complete compliance information.
+> 📖 **Learn More**: See [Documentation - DORA Disclosure](https://tonic-ai.mintlify.app/compliance/dora-disclosure) for complete compliance information.
 
 ### Compliance Standards
 
-- **FDC3 2.0**: Full desktop interoperability compliance - [Documentation](https://docs.creditnexus.com/compliance/fdc3-compliance)
-- **OpenFin**: Native integration support - [Documentation](https://docs.creditnexus.com/compliance/openfin-compliance)
-- **FINOS CDM**: Complete Common Domain Model compliance - [Documentation](https://docs.creditnexus.com/compliance/cdm-compliance)
-- **DORA**: European cybersecurity regulation awareness - [Documentation](https://docs.creditnexus.com/compliance/dora-disclosure)
-- **Policy Engine**: Real-time compliance enforcement - [Documentation](https://docs.creditnexus.com/compliance/policy-compliance)
+- **FDC3 2.0**: Full desktop interoperability compliance - [Documentation](https://tonic-ai.mintlify.app/compliance/fdc3-compliance)
+- **OpenFin**: Native integration support - [Documentation](https://tonic-ai.mintlify.app/compliance/openfin-compliance)
+- **FINOS CDM**: Complete Common Domain Model compliance - [Documentation](https://tonic-ai.mintlify.app/compliance/cdm-compliance)
+- **DORA**: European cybersecurity regulation awareness - [Documentation](https://tonic-ai.mintlify.app/compliance/dora-disclosure)
+- **Policy Engine**: Real-time compliance enforcement - [Documentation](https://tonic-ai.mintlify.app/compliance/policy-compliance)
 
 ---
 
@@ -615,7 +771,7 @@ Our team brings over **20 years of combined experience** in the financial indust
 - **Biniyam Ajew** - Senior Developer (Full-stack development and system architecture)
 - **Boris Li** - Junior Developer (10 years at Citibank and Mastercard in payment systems, banking operations, and financial technology)
 
-> 📖 **Learn More**: See [Company Site - Team](https://creditnexus.com) for detailed team information.
+> 📖 **Learn More**: See [Company Site - Team](https://josephrp.github.io/creditnexus) for detailed team information.
 
 ---
 

@@ -1,0 +1,263 @@
+---
+title: Payments API (x402)
+description: API endpoints for x402 payment processing
+---
+
+## Payments API (x402)
+
+API endpoints for x402 payment protocol integration, including payment requests, verification, and settlement.
+
+**Base Path**: `/api` (x402 endpoints integrated in main routes)  
+**Code Reference**: `app/services/x402_payment_service.py`, `app/api/routes.py` (x402 endpoints)
+
+---
+
+## Payment Request
+
+### Request Payment (HTTP 402)
+
+<Endpoint method="POST" path="/api/trades/{trade_id}/settle" />
+
+Settle a trade with x402 payment. Returns HTTP 402 if payment required.
+
+**Request Body** (Optional):
+```json
+{
+  "payment_payload": {
+    "from": "0x...",
+    "to": "0x...",
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }
+}
+```
+
+**Response (402 Payment Required)**:
+```json
+{
+  "status_code": 402,
+  "status": "Payment Required",
+  "payment_request": {
+    "amount": "1000.00",
+    "currency": "USD",
+    "network": "base",
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "payer": {
+      "id": "party_1",
+      "name": "Borrower",
+      "lei": "LEI123",
+      "wallet_address": "0x..."
+    },
+    "receiver": {
+      "id": "party_2",
+      "name": "Lender",
+      "lei": "LEI456",
+      "wallet_address": "0x..."
+    },
+    "payment_type": "trade_settlement",
+    "cdm_reference": {},
+    "timestamp": "2026-01-15T10:00:00Z"
+  },
+  "facilitator_url": "https://facilitator.x402.org"
+}
+```
+
+**Response (200 Success)**:
+```json
+{
+  "status": "success",
+  "trade_id": 123,
+  "payment_verified": true,
+  "transaction_hash": "0x...",
+  "cdm_events": [...]
+}
+```
+
+**Code Reference**: `app/api/routes.py` (settle_trade endpoint)
+
+---
+
+## Payment Verification
+
+### Verify Payment
+
+The x402 payment service automatically verifies payments on the blockchain:
+
+```python
+verification = await x402_service.verify_payment(
+    payment_payload=payment_data
+)
+```
+
+**Verification Process**:
+1. Extract payment details from payload
+2. Query blockchain for transaction
+3. Verify transaction details match
+4. Confirm transaction status
+5. Return verification result
+
+**Code Reference**: `app/services/x402_payment_service.py` (verify_payment)
+
+---
+
+## Payment Types
+
+### Trade Settlement
+
+Payment for executed trades:
+- **Payment Type**: `trade_settlement`
+- **Amount**: Trade settlement amount
+- **Currency**: Trade currency (USD)
+- **Network**: Base network
+- **Token**: USDC
+
+### Loan Disbursement
+
+Initial loan funding:
+- **Payment Type**: `loan_disbursement`
+- **Amount**: Loan principal amount
+- **Currency**: Loan currency
+- **Network**: Base network
+- **Token**: USDC
+
+### Interest Payment
+
+Periodic interest distributions:
+- **Payment Type**: `interest`
+- **Amount**: Interest amount
+- **Currency**: Loan currency
+- **Network**: Base network
+- **Token**: USDC
+
+### Penalty Payment
+
+Late payment fees:
+- **Payment Type**: `penalty`
+- **Amount**: Penalty amount
+- **Currency**: Loan currency
+- **Network**: Base network
+- **Token**: USDC
+
+### Notarization Fee
+
+Payment for blockchain notarization:
+- **Payment Type**: `notarization_fee`
+- **Amount**: Notarization fee (default: $50.00)
+- **Currency**: USD
+- **Network**: Base network
+- **Token**: USDC
+
+**Code Reference**: `app/services/x402_payment_service.py` (payment_type parameter)
+
+---
+
+## CDM Integration
+
+All payments generate CDM-compliant payment events:
+
+```json
+{
+  "eventType": "PaymentEvent",
+  "eventDate": "2026-01-15T10:00:00Z",
+  "payment": {
+    "paymentType": "TradeSettlement",
+    "amount": {
+      "value": 1000.00,
+      "currency": {"code": "USD"}
+    },
+    "payer": {...},
+    "receiver": {...},
+    "paymentMethod": "x402",
+    "blockchainTransactionHash": "0x..."
+  }
+}
+```
+
+**Code Reference**: `app/models/cdm_payment.py` (PaymentEvent model)
+
+---
+
+## Error Responses
+
+### 402 Payment Required
+
+Payment payload not provided or invalid. Returns payment request structure.
+
+### 400 Bad Request
+
+Invalid payment payload or missing required fields.
+
+### 401 Unauthorized
+
+Invalid signature or wallet address verification failed.
+
+### 500 Internal Server Error
+
+Payment verification failed or blockchain error.
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField body="X402_ENABLED" type="boolean">
+  Enable x402 payment processing. Default: `true`
+</ParamField>
+
+<ParamField body="X402_FACILITATOR_URL" type="string">
+  x402 facilitator service URL. Default: `https://facilitator.x402.org`
+</ParamField>
+
+<ParamField body="X402_NETWORK" type="string">
+  Blockchain network. Default: `"base"`
+</ParamField>
+
+<ParamField body="X402_TOKEN" type="string">
+  Token symbol. Default: `"USDC"`
+</ParamField>
+
+<ParamField body="X402_NETWORK_RPC_URL" type="string">
+  Base network RPC URL
+</ParamField>
+
+**Setup Guide**: See [MetaMask Setup Guide](/guides/metamask-setup)
+
+---
+
+## Frontend Integration
+
+### useX402Payment Hook
+
+**Location**: `client/src/hooks/useX402Payment.ts`
+
+React hook for x402 payment processing:
+
+```typescript
+const { processPayment, paymentStatus, error } = useX402Payment();
+
+await processPayment({
+  amount: "1000.00",
+  currency: "USD",
+  payer: payerAddress,
+  receiver: receiverAddress
+});
+```
+
+**Code Reference**: `client/src/hooks/useX402Payment.ts`
+
+---
+
+## Additional Resources
+
+- [Payment Systems Feature](/features/payment-systems)
+- [MetaMask Setup Guide](/guides/metamask-setup)
+- [Configuration Guide](/getting-started/configuration#x402-payment-engine-configuration)
+- [x402 Protocol Documentation](https://x402.org)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/services/x402_payment_service.py`, `app/api/routes.py`

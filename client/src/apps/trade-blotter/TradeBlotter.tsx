@@ -129,11 +129,21 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
       const tradeAmountNum = parseFloat(tradeAmount) || 0;
       const rate = spread / 100; // Convert bps to percentage
       
+      // Validate trade amount
+      if (tradeAmountNum <= 0) {
+        setState(prev => ({
+          ...prev,
+          policyLoading: false,
+          policyError: 'Trade amount must be greater than 0',
+        }));
+        return;
+      }
+      
       // Generate trade ID
       const tradeId = `TRADE-${loanData.deal_id || 'AUTO'}-${Date.now()}`;
       
       // Call trade execution endpoint with policy evaluation
-      const response = await fetch('/api/trades/execute', {
+      const response = await fetchWithAuth('/api/trades/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,6 +156,11 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
           credit_agreement_id: null, // Could be enhanced to pass document ID
         }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to execute trade' }));
+        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}: Failed to execute trade`);
+      }
       
       const result = await response.json();
       
@@ -212,7 +227,7 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
     try {
       // Call trade settlement endpoint (without payment payload first to get payment request)
       // FastAPI Optional[PaymentPayloadRequest] = None means we can send empty body or omit it
-      const response = await fetch(`/api/trades/${tradeId}/settle`, {
+      const response = await fetchWithAuth(`/api/trades/${tradeId}/settle`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

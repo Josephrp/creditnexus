@@ -1,0 +1,206 @@
+---
+title: Document Extraction
+description: AI-powered extraction of structured data from credit agreements
+---
+
+## Overview
+
+The Document Extraction feature uses advanced Large Language Models (LLMs) to extract structured CDM-compliant data from unstructured PDF credit agreements. It supports multiple input modes including PDF upload, text input, audio transcription, and image OCR.
+
+**Code Reference**: `client/src/apps/docu-digitizer/DocumentParser.tsx`, `app/chains/extraction_chain.py`, `app/api/routes.py` (extract endpoints)
+
+---
+
+## Key Features
+
+### Multi-Modal Input
+
+- **PDF Upload**: Direct PDF file upload and processing
+- **Text Input**: Paste or type document text
+- **Audio Transcription**: Speech-to-text transcription using Gradio Spaces
+- **Image OCR**: Optical character recognition from images
+- **Document Library**: Select from previously extracted documents
+
+**Code Reference**: `client/src/apps/docu-digitizer/MultimodalInputTabs.tsx`
+
+### LLM Extraction
+
+- **Simple Extraction**: For documents under 50k characters
+- **Map-Reduce Extraction**: For larger documents (>50k characters)
+- **Multiple Providers**: OpenAI GPT-4o, vLLM, HuggingFace
+- **Structured Output**: CDM-compliant structured data extraction
+
+**Code Reference**: `app/chains/extraction_chain.py`, `app/chains/map_reduce_chain.py`
+
+### CDM Compliance
+
+- **Automatic Validation**: Policy compliance validation at extraction point
+- **CDM Models**: CreditAgreement, Party, LoanFacility models
+- **Event Generation**: Automatic CDM event generation
+- **Policy Enforcement**: Real-time policy evaluation
+
+**Code Reference**: `app/models/cdm.py`, `app/models/cdm_events.py`
+
+---
+
+## Workflow
+
+### 1. Input Document
+
+1. **Choose Input Method**: PDF upload, text paste, audio, or image
+2. **Upload/Enter Content**: Provide document content
+3. **Review Input**: Verify content is correct
+4. **Proceed to Extraction**: Click "Extract" button
+
+### 2. Extraction Process
+
+1. **LLM Processing**: System processes document with selected LLM
+2. **Structured Extraction**: Extracts CDM-compliant data
+3. **Policy Evaluation**: Evaluates against policy rules
+4. **Validation**: Validates extracted data
+5. **Result Display**: Shows extracted data with edit capability
+
+### 3. Review and Save
+
+1. **Review Data**: Review extracted CDM data
+2. **Edit if Needed**: Use clause editor or CDM accordion editor
+3. **Save to Library**: Save document to library
+4. **Broadcast FDC3**: Broadcast to desktop applications
+5. **Generate Documents**: Option to generate LMA templates
+
+---
+
+## API Endpoints
+
+### Extract Document
+
+<Endpoint method="POST" path="/api/extract" />
+
+Extract structured data from document text.
+
+**Request Body**:
+```json
+{
+  "text": "Credit Agreement text...",
+  "filename": "agreement.pdf"
+}
+```
+
+**Response**: Extracted CDM data with policy evaluation results
+
+**Code Reference**: `app/api/routes.py` (extract endpoint)
+
+### Upload Document
+
+<Endpoint method="POST" path="/api/upload" />
+
+Upload and extract from document file.
+
+**Request**: Multipart form data with file
+
+**Response**: Document record with extracted CDM data
+
+---
+
+## Extraction Chain
+
+### Simple Extraction Chain
+
+For documents under 50k characters:
+
+**Code Reference**: `app/chains/extraction_chain.py`
+
+### Map-Reduce Chain
+
+For larger documents:
+
+1. **Map Phase**: Split document into chunks
+2. **Extract Phase**: Extract from each chunk
+3. **Reduce Phase**: Combine extractions into final result
+
+**Code Reference**: `app/chains/map_reduce_chain.py`
+
+---
+
+## CDM Data Structure
+
+Extracted data follows CDM structure:
+
+```json
+{
+  "deal_id": "DEAL_2024_001",
+  "parties": [
+    {
+      "name": "Borrower Corp",
+      "role": "Borrower",
+      "lei": "12345678901234567890"
+    }
+  ],
+  "facilities": [
+    {
+      "facility_type": "TermLoan",
+      "commitment_amount": {
+        "amount": 1000000.00,
+        "currency": "USD"
+      }
+    }
+  ]
+}
+```
+
+**Code Reference**: `app/models/cdm.py` (CreditAgreement model)
+
+---
+
+## Policy Integration
+
+All extractions are evaluated against policy rules:
+
+- **Sanctions Screening**: Check for sanctioned parties
+- **Credit Risk**: Evaluate creditworthiness
+- **ESG Compliance**: Check ESG requirements
+- **Regulatory Filings**: Identify filing requirements
+
+**Code Reference**: `app/services/policy_service.py`
+
+---
+
+## User Interface
+
+### Document Parser
+
+**Location**: `client/src/apps/docu-digitizer/DocumentParser.tsx`
+
+**Features**:
+- **Multimodal Input Tabs**: PDF, text, audio, image input
+- **Extraction Results**: Display extracted CDM data
+- **Clause Editor**: Edit individual clauses
+- **CDM Accordion Editor**: Edit CDM structure
+- **FDC3 Broadcast**: Broadcast to desktop apps
+- **Save to Library**: Save extracted documents
+
+**Access**: Navigate to "Document Parser" in top navigation
+
+---
+
+## Best Practices
+
+1. **Quality Input**: Ensure document text is clear and complete
+2. **Review Results**: Always review extracted data for accuracy
+3. **Edit as Needed**: Use editors to correct any errors
+4. **Policy Compliance**: Verify policy evaluation results
+5. **Save Documents**: Save to library for future reference
+
+---
+
+## Additional Resources
+
+- [Document Extraction Guide](/guides/document-extraction)
+- [Configuration Guide](/getting-started/configuration#llm-provider-configuration)
+- [CDM Compliance](/compliance/cdm-compliance)
+- [Policy Compliance](/compliance/policy-compliance)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `client/src/apps/docu-digitizer/DocumentParser.tsx`, `app/chains/extraction_chain.py`, `app/api/routes.py`

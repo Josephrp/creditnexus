@@ -160,16 +160,19 @@ class RefreshTokenRequest(BaseModel):
 
 
 class UserSignupStep1(BaseModel):
-    """Step 1 signup request: Basic info and role selection."""
-    email: EmailStr
-    password: str
-    display_name: str
-    role: UserRole  # Selected role
+    """Step 1 signup request: Basic info and role selection (all fields optional for partial signup)."""
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    display_name: Optional[str] = None
+    role: Optional[UserRole] = None  # Selected role
     
     @field_validator("password")
     @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        """Validate password meets bank-grade security requirements."""
+    def validate_password_strength(cls, v: Optional[str]) -> Optional[str]:
+        """Validate password meets bank-grade security requirements (only if provided)."""
+        if v is None:
+            return v
+        
         errors = []
         
         if len(v) < MIN_PASSWORD_LENGTH:
@@ -573,6 +576,81 @@ async def signup_step1(
         expires_in=int(signup_token_expires.total_seconds()),
         message="User created successfully. Please complete profile in step 2."
     )
+
+
+class SignupProgressData(BaseModel):
+    """Request model for saving signup progress."""
+    user_id: int
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    role: Optional[str] = None
+    profile_data: Optional[dict] = None
+
+
+@jwt_router.post("/signup/save-progress")
+async def save_signup_progress(
+    request: Request,
+    progress_data: SignupProgressData,
+    db: Session = Depends(get_db)
+):
+    """Save signup progress without completing signup.
+    
+    Allows users to save their progress during the signup flow
+    without submitting for approval. Updates user with partial data.
+    """
+    user = db.query(User).filter(User.id == progress_data.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update user with partial data (only if provided)
+    if progress_data.email:
+        # Check if email is already taken by another user
+        existing_user = db.query(User).filter(
+            User.email == progress_data.email,
+            User.id != user.id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        user.email = progress_data.email
+    
+    if progress_data.display_name:
+        user.display_name = progress_data.display_name
+    
+    if progress_data.role:
+        user.role = progress_data.role
+    
+    # Store profile data in metadata or separate table if needed
+    # For now, we'll just update the signup_status to indicate progress
+    if user.signup_status == "pending":
+        user.signup_status = "in_progress"
+    
+    db.commit()
+    db.refresh(user)
+    
+    # Create audit log
+    audit_log = AuditLog(
+        user_id=user.id,
+        action=AuditAction.UPDATE.value,
+        target_type="user",
+        target_id=user.id,
+        action_metadata={"method": "save_signup_progress"},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.add(audit_log)
+    db.commit()
+    
+    return {
+        "status": "saved",
+        "user_id": user.id,
+        "message": "Signup progress saved successfully"
+    }
 
 
 @jwt_router.post("/signup/step2", response_model=TokenResponse, status_code=status.HTTP_200_OK)

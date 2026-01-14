@@ -1,0 +1,175 @@
+---
+title: Policies API
+description: API endpoints for policy rule management and testing
+---
+
+## Policies API
+
+API endpoints for policy rule management, validation, testing, and approval workflows.
+
+**Base Path**: `/api/policies`  
+**Code Reference**: `app/api/policy_editor_routes.py`
+
+---
+
+## Policy Management
+
+### List Policies
+
+<Endpoint method="GET" path="/api/policies" />
+
+List all policies with optional filters.
+
+**Query Parameters**:
+- `category`: Filter by category
+- `status`: Filter by status
+- `created_by`: Filter by creator ID
+- `limit`: Maximum results (default: 100)
+- `offset`: Pagination offset
+
+**Response**: List of policies with metadata
+
+---
+
+### Create Policy
+
+<Endpoint method="POST" path="/api/policies" />
+
+Create a new policy rule.
+
+**Request Body**:
+```json
+{
+  "name": "block_sanctioned_parties",
+  "category": "compliance",
+  "description": "Block transactions with sanctioned entities",
+  "rules_yaml": "- name: block_sanctioned_parties\n  when:\n    any:\n      - field: originator.lei\n        op: in\n        value: [\"SANCTIONED_LEI_LIST\"]\n  action: block\n  priority: 100",
+  "metadata": {}
+}
+```
+
+**Response**: Created policy with ID
+
+---
+
+### Update Policy
+
+<Endpoint method="PUT" path="/api/policies/{policy_id}" />
+
+Update an existing policy.
+
+**Request Body**:
+```json
+{
+  "name": "block_sanctioned_parties",
+  "rules_yaml": "...",
+  "changes_summary": "Updated sanctions list"
+}
+```
+
+**Response**: Updated policy
+
+---
+
+### Delete Policy
+
+<Endpoint method="DELETE" path="/api/policies/{policy_id}" />
+
+Delete a policy (soft delete).
+
+**Response**: Deletion confirmation
+
+---
+
+## Policy Validation
+
+### Validate Policy YAML
+
+<Endpoint method="POST" path="/api/policies/validate" />
+
+Validate policy YAML syntax and structure.
+
+**Request Body**:
+```json
+{
+  "rules_yaml": "- name: test_rule\n  when:\n    field: amount\n    op: gt\n    value: 1000\n  action: flag"
+}
+```
+
+**Response**: Validation result with errors (if any)
+
+---
+
+## Policy Testing
+
+### Test Policy
+
+<Endpoint method="POST" path="/api/policies/{policy_id}/test" />
+
+Test a policy with sample transactions.
+
+**Request Body**:
+```json
+{
+  "test_transactions": [
+    {
+      "transaction": {
+        "originator": {"lei": "SANCTIONED_LEI_123"},
+        "amount": 1000000.00
+      },
+      "expected_decision": "BLOCK",
+      "test_name": "Sanctioned party test"
+    }
+  ]
+}
+```
+
+**Response**: Test results with actual vs expected decisions
+
+---
+
+## Policy Approval
+
+### Approve Policy
+
+<Endpoint method="POST" path="/api/policies/{policy_id}/approve" />
+
+Approve a policy for production use.
+
+**Request Body**:
+```json
+{
+  "approval_comment": "Policy approved by compliance team"
+}
+```
+
+**Response**: Approval confirmation
+
+---
+
+### Reject Policy
+
+<Endpoint method="POST" path="/api/policies/{policy_id}/reject" />
+
+Reject a policy with reason.
+
+**Request Body**:
+```json
+{
+  "rejection_comment": "Policy needs additional review"
+}
+```
+
+**Response**: Rejection confirmation
+
+---
+
+## Additional Resources
+
+- [Policy Compliance](/compliance/policy-compliance)
+- [Policy Editor Feature](/features/policy-editor)
+
+---
+
+**Last Updated**: 2026-01-14  
+**Code Reference**: `app/api/policy_editor_routes.py`

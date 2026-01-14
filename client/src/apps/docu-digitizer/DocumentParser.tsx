@@ -10,6 +10,8 @@ import { useAuth, fetchWithAuth } from '@/context/AuthContext';
 import type { CreditAgreementData, CreditNexusLoanContext } from '@/context/FDC3Context';
 import { MultimodalInputTabs } from './MultimodalInputTabs';
 import type { TranscriptionResult, ExtractionResult, DocumentResult } from './MultimodalInputTabs';
+import { ClauseEditor } from '@/components/ClauseEditor';
+import { CdmAccordionEditor } from '@/components/CdmAccordionEditor';
 
 interface DocumentParserProps {
   onBroadcast?: () => void;
@@ -29,7 +31,7 @@ export function DocumentParser({
   const { broadcast } = useFDC3();
   const { isAuthenticated } = useAuth();
   const { addToast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [documentText, setDocumentText] = useState(initialContent || '');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<CreditAgreementData | null>(initialData || null);
@@ -43,6 +45,15 @@ export function DocumentParser({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [sourceFilename, setSourceFilename] = useState<string | null>(null);
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
+  
+  // Tab state management
+  const [activeTab, setActiveTab] = useState<string>('summary');
+  const [tabHistory, setTabHistory] = useState<string[]>(['summary']);
+  
+  // Clause editor state
+  const [showClauseEditor, setShowClauseEditor] = useState(false);
+  const [selectedClauses, setSelectedClauses] = useState<any[]>([]);
+  const [clauseEditorDocumentId, setClauseEditorDocumentId] = useState<number | null>(null);
   
   // Multimodal sources state
   const [multimodalSources, setMultimodalSources] = useState<{
@@ -281,6 +292,12 @@ export function DocumentParser({
         throw new Error(errorMessage);
       }
 
+      const data = await response.json();
+      if (data.document?.id) {
+        setClauseEditorDocumentId(data.document.id);
+        setShowClauseEditor(true);
+      }
+
       setSaveSuccess(true);
       addToast('Document saved to library', 'success');
       if (onSaveToLibrary) {
@@ -383,9 +400,18 @@ export function DocumentParser({
   const [loadedDocumentId, setLoadedDocumentId] = useState<string | null>(null);
   const isLoadingDocumentRef = useRef(false);
 
+  // Sync tab state from URL
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'summary';
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
   // Load document from URL query param
   useEffect(() => {
     const documentId = searchParams.get('documentId');
+    const tab = searchParams.get('tab');
     
     // Only load if:
     // 1. documentId exists in URL
@@ -422,6 +448,11 @@ export function DocumentParser({
             }
             setLoadedDocumentId(documentId);
             addToast('Document loaded from library', 'success');
+            
+            // Restore tab state if specified in URL
+            if (tab) {
+              setActiveTab(tab);
+            }
           } else {
             // Reset refs on failure to allow retry
             loadedDocumentIdRef.current = null;
@@ -716,11 +747,21 @@ export function DocumentParser({
             </Button>
           </div>
 
-          <Tabs defaultValue="summary" className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => {
+            setActiveTab(value);
+            setSearchParams(prev => {
+              const newParams = new URLSearchParams(prev);
+              newParams.set('tab', value);
+              return newParams;
+            });
+            setTabHistory(prev => [...prev, value]);
+          }} className="w-full">
             <TabsList className="bg-slate-800 border border-slate-700">
               <TabsTrigger value="summary">Summary</TabsTrigger>
               <TabsTrigger value="parties">Parties</TabsTrigger>
               <TabsTrigger value="facilities">Facilities</TabsTrigger>
+              <TabsTrigger value="edit">Edit CDM</TabsTrigger>
+              <TabsTrigger value="clauses">Clauses</TabsTrigger>
               <TabsTrigger value="json">JSON</TabsTrigger>
             </TabsList>
 
@@ -812,21 +853,71 @@ export function DocumentParser({
             <TabsContent value="parties">
               <Card className="border-slate-700 bg-slate-800/50">
                 <CardContent className="p-6">
-                  <div className="space-y-3">
-                    {editableData?.parties?.map((party, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700">
-                        <div>
-                          <p className="font-medium">{party.name}</p>
-                          <p className="text-sm text-muted-foreground">{party.role}</p>
+                  {editableData?.parties && editableData.parties.length > 0 ? (
+                    <div className="space-y-3">
+                      {editableData.parties.map((party, idx) => (
+                        <div key={idx} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-xs text-muted-foreground">Name</label>
+                                <input
+                                  type="text"
+                                  value={party.name || ''}
+                                  onChange={(e) => {
+                                    const updatedParties = [...(editableData.parties || [])];
+                                    updatedParties[idx] = { ...party, name: e.target.value };
+                                    handleFieldChange('parties', updatedParties);
+                                  }}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground">Role</label>
+                                <input
+                                  type="text"
+                                  value={party.role || ''}
+                                  onChange={(e) => {
+                                    const updatedParties = [...(editableData.parties || [])];
+                                    updatedParties[idx] = { ...party, role: e.target.value };
+                                    handleFieldChange('parties', updatedParties);
+                                  }}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground">LEI</label>
+                                <input
+                                  type="text"
+                                  value={party.lei || ''}
+                                  onChange={(e) => {
+                                    const updatedParties = [...(editableData.parties || [])];
+                                    updatedParties[idx] = { ...party, lei: e.target.value };
+                                    handleFieldChange('parties', updatedParties);
+                                  }}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm font-mono"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium">{party.name}</p>
+                                <p className="text-sm text-muted-foreground">{party.role}</p>
+                              </div>
+                              {party.lei && (
+                                <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded">
+                                  LEI: {party.lei}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {party.lei && (
-                          <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded">
-                            LEI: {party.lei}
-                          </span>
-                        )}
-                      </div>
-                    )) || <p className="text-muted-foreground">No parties found</p>}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No parties found. {isEditing && 'Add parties in the Edit CDM tab.'}</p>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -834,32 +925,186 @@ export function DocumentParser({
             <TabsContent value="facilities">
               <Card className="border-slate-700 bg-slate-800/50">
                 <CardContent className="p-6">
-                  <div className="space-y-3">
-                    {editableData?.facilities?.map((facility, idx) => (
-                      <div key={idx} className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-medium">{facility.facility_name}</p>
-                          <span className="text-emerald-400 font-medium">
-                            {facility.commitment_amount?.currency} {facility.commitment_amount?.amount?.toLocaleString()}
-                          </span>
+                  {editableData?.facilities && editableData.facilities.length > 0 ? (
+                    <div className="space-y-3">
+                      {editableData.facilities.map((facility, idx) => (
+                        <div key={idx} className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-xs text-muted-foreground">Facility Name</label>
+                                <input
+                                  type="text"
+                                  value={facility.facility_name || ''}
+                                  onChange={(e) => {
+                                    const updatedFacilities = [...(editableData.facilities || [])];
+                                    updatedFacilities[idx] = { ...facility, facility_name: e.target.value };
+                                    handleFieldChange('facilities', updatedFacilities);
+                                  }}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Amount</label>
+                                  <input
+                                    type="number"
+                                    value={facility.commitment_amount?.amount || ''}
+                                    onChange={(e) => {
+                                      const updatedFacilities = [...(editableData.facilities || [])];
+                                      updatedFacilities[idx] = {
+                                        ...facility,
+                                        commitment_amount: {
+                                          ...facility.commitment_amount,
+                                          amount: parseFloat(e.target.value) || 0,
+                                          currency: facility.commitment_amount?.currency || 'USD'
+                                        }
+                                      };
+                                      handleFieldChange('facilities', updatedFacilities);
+                                    }}
+                                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Currency</label>
+                                  <input
+                                    type="text"
+                                    value={facility.commitment_amount?.currency || 'USD'}
+                                    onChange={(e) => {
+                                      const updatedFacilities = [...(editableData.facilities || [])];
+                                      updatedFacilities[idx] = {
+                                        ...facility,
+                                        commitment_amount: {
+                                          ...facility.commitment_amount,
+                                          currency: e.target.value,
+                                          amount: facility.commitment_amount?.amount || 0
+                                        }
+                                      };
+                                      handleFieldChange('facilities', updatedFacilities);
+                                    }}
+                                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground">Maturity Date</label>
+                                <input
+                                  type="date"
+                                  value={facility.maturity_date || ''}
+                                  onChange={(e) => {
+                                    const updatedFacilities = [...(editableData.facilities || [])];
+                                    updatedFacilities[idx] = { ...facility, maturity_date: e.target.value };
+                                    handleFieldChange('facilities', updatedFacilities);
+                                  }}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Benchmark</label>
+                                  <input
+                                    type="text"
+                                    value={facility.interest_terms?.rate_option?.benchmark || ''}
+                                    onChange={(e) => {
+                                      const updatedFacilities = [...(editableData.facilities || [])];
+                                      updatedFacilities[idx] = {
+                                        ...facility,
+                                        interest_terms: {
+                                          ...facility.interest_terms,
+                                          rate_option: {
+                                            ...facility.interest_terms?.rate_option,
+                                            benchmark: e.target.value
+                                          }
+                                        }
+                                      };
+                                      handleFieldChange('facilities', updatedFacilities);
+                                    }}
+                                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Spread (bps)</label>
+                                  <input
+                                    type="number"
+                                    value={facility.interest_terms?.rate_option?.spread_bps || ''}
+                                    onChange={(e) => {
+                                      const updatedFacilities = [...(editableData.facilities || [])];
+                                      updatedFacilities[idx] = {
+                                        ...facility,
+                                        interest_terms: {
+                                          ...facility.interest_terms,
+                                          rate_option: {
+                                            ...facility.interest_terms?.rate_option,
+                                            spread_bps: parseFloat(e.target.value) || 0
+                                          }
+                                        }
+                                      };
+                                      handleFieldChange('facilities', updatedFacilities);
+                                    }}
+                                    className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="font-medium">{facility.facility_name}</p>
+                                <span className="text-emerald-400 font-medium">
+                                  {facility.commitment_amount?.currency} {facility.commitment_amount?.amount?.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Maturity:</span>{' '}
+                                  {facility.maturity_date}
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Benchmark:</span>{' '}
+                                  {facility.interest_terms?.rate_option?.benchmark}
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Spread:</span>{' '}
+                                  {facility.interest_terms?.rate_option?.spread_bps} bps
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Maturity:</span>{' '}
-                            {facility.maturity_date}
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Benchmark:</span>{' '}
-                            {facility.interest_terms?.rate_option?.benchmark}
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Spread:</span>{' '}
-                            {facility.interest_terms?.rate_option?.spread_bps} bps
-                          </div>
-                        </div>
-                      </div>
-                    )) || <p className="text-muted-foreground">No facilities found</p>}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No facilities found. {isEditing && 'Add facilities in the Edit CDM tab.'}</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="edit">
+              <Card className="border-slate-700 bg-slate-800/50">
+                <CardContent className="p-6">
+                  {editableData ? (
+                    <CdmAccordionEditor
+                      cdmData={editableData}
+                      onUpdate={setEditableData}
+                      documentId={clauseEditorDocumentId || undefined}
+                      multimodalSources={multimodalSources}
+                    />
+                  ) : (
+                    <p className="text-muted-foreground">No data to edit</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="clauses">
+              <Card className="border-slate-700 bg-slate-800/50">
+                <CardContent className="p-6">
+                  {clauseEditorDocumentId ? (
+                    <ClauseEditor />
+                  ) : (
+                    <p className="text-muted-foreground">Save document to library to enable clause editing</p>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
