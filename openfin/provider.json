@@ -3,21 +3,15 @@
   "startup_app": {
     "uuid": "creditnexus-provider",
     "name": "CreditNexus FDC3 Provider",
-    "url": "http://localhost:8000/fdc3-provider.html",
+    "url": "http://localhost:8000",
     "autoShow": false,
     "defaultWidth": 1,
     "defaultHeight": 1
   },
   "runtime": {
-    "version": "35.127.81.16",
+    "version": "stable",
     "arguments": "--enable-mesh --security-realm=creditnexus"
   },
-  "services": [
-    {
-      "name": "fdc3",
-      "manifestUrl": "https://cdn.openfin.co/services/openfin/fdc3/2.0.3/app.json"
-    }
-  ],
   "provider": {
     "name": "CreditNexus Provider",
     "version": "1.0.0",

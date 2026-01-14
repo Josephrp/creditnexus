@@ -1,3 +1,18 @@
+/**
+ * @deprecated This hook is deprecated. Use FDC3Context and useFDC3 from FDC3Context.tsx instead.
+ * This file will be removed in a future version.
+ * 
+ * Migration guide:
+ * - Replace `import { useFDC3 } from '@/hooks/useFDC3'`
+ * - With `import { useFDC3 } from '@/context/FDC3Context'`
+ * 
+ * The FDC3Context provides the same API with additional features:
+ * - Intent handling (raiseIntent, addIntentListener)
+ * - App channel support
+ * - Better error handling
+ * - Context type validation
+ */
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Context, Listener } from '@finos/fdc3';
 
@@ -39,7 +54,7 @@ export interface CreditAgreementData {
 }
 
 export interface CreditNexusLoanContext extends Context {
-  type: 'fdc3.creditnexus.loan';
+  type: 'finos.creditnexus.loan';
   id?: {
     LIN?: string;
     DealID?: string;
@@ -74,7 +89,7 @@ export function useFDC3() {
     if (available && window.fdc3) {
       let subscription: Listener | null = null;
 
-      window.fdc3.addContextListener('fdc3.creditnexus.loan', (ctx: Context) => {
+      window.fdc3.addContextListener('finos.creditnexus.loan', (ctx: Context) => {
         const loanContext = ctx as CreditNexusLoanContext;
         contextListeners.forEach(h => h(loanContext));
       }).then((listener: Listener) => {
