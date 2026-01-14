@@ -6,6 +6,7 @@ mapping and result interpretation. This service layer bridges CDM models and
 the vendor-agnostic policy engine interface.
 """
 
+from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,6 +14,8 @@ from typing import Dict, Any, Optional, List
 from decimal import Decimal
 from functools import lru_cache
 import asyncio
+
+from sqlalchemy.orm import Session
 
 from app.models.cdm import CreditAgreement
 from app.models.loan_asset import LoanAsset
@@ -305,7 +308,8 @@ class PolicyService:
         self,
         deal_id: Optional[int] = None,
         document_id: Optional[int] = None,
-        days_ahead: int = 7
+        days_ahead: int = 7,
+        db: Optional["Session"] = None
     ) -> List[DeadlineAlert]:
         """
         Check for approaching filing deadlines.
@@ -314,19 +318,26 @@ class PolicyService:
             deal_id: Optional deal ID to check
             document_id: Optional document ID to check
             days_ahead: Number of days ahead to check (default: 7)
+            db: Optional database session
             
         Returns:
             List of DeadlineAlert objects for deadlines within days_ahead
         """
-        from app.db.models import DocumentFiling, Document
+        from app.db.models import DocumentFiling
         from datetime import timedelta
         
         alerts = []
         cutoff_date = datetime.utcnow() + timedelta(days=days_ahead)
         
-        # Query pending filings
-        from app.db import get_db
-        db = next(get_db())
+        # Use provided session or get one
+        if db is None:
+            try:
+                from app.db import get_db
+                db = next(get_db())
+            except Exception as e:
+                logger.error(f"Failed to get database session in check_filing_deadlines: {e}")
+                return []
+        
         query = db.query(DocumentFiling).filter(
             DocumentFiling.filing_status == "pending"
         )

@@ -13,7 +13,7 @@ from app.services.dynamic_whitelist_service import DynamicWhitelistService
 from app.services.verification_service import VerificationService
 from app.services.notarization_service import NotarizationService
 from app.services.cdm_payload_generator import get_deal_cdm_payload
-from app.db.models import Deal, Document, DocumentVersion, User
+from app.db.models import Deal, Document, DocumentVersion, User, WorkflowDelegation
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -688,14 +688,27 @@ class WorkflowDelegationService:
         """Process workflow link and create local workflow instance.
         
         Args:
-            encrypted_payload: Encrypted workflow link payload
+            encrypted_payload: Encrypted workflow link payload or workflow ID
             receiver_user_id: Optional receiver user ID
             
         Returns:
             Dictionary with processed workflow data
         """
-        # Parse link payload
+        # Try to parse as encrypted link payload first
         link_data = self.link_generator.parse_workflow_link_payload(encrypted_payload)
+        
+        # If parsing fails, check if it's a workflow_id (UUID)
+        if not link_data:
+            logger.info(f"Payload not a valid encrypted string, checking if it's a workflow_id: {encrypted_payload}")
+            delegation = (
+                self.db.query(WorkflowDelegation)
+                .filter(WorkflowDelegation.workflow_id == encrypted_payload)
+                .first()
+            )
+            
+            if delegation and delegation.link_payload:
+                logger.info(f"Found delegation record for {encrypted_payload}, using stored link_payload")
+                link_data = self.link_generator.parse_workflow_link_payload(delegation.link_payload)
         
         if not link_data:
             raise ValueError("Invalid or expired workflow link")

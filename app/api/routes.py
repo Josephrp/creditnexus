@@ -15,7 +15,7 @@ import pandas as pd
 from app.chains.extraction_chain import extract_data, extract_data_smart
 from app.models.cdm import ExtractionResult, CreditAgreement
 from app.db import get_db
-from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction, PolicyDecision as PolicyDecisionModel, PolicyDecision, ClauseCache, LMATemplate, Deal, DealNote, GreenFinanceAssessment
+from app.db.models import StagedExtraction, ExtractionStatus, Document, DocumentVersion, Workflow, WorkflowState, User, AuditLog, AuditAction, PolicyDecision as PolicyDecisionModel, ClauseCache, LMATemplate, Deal, DealNote, GreenFinanceAssessment
 from app.auth.jwt_auth import get_current_user, require_auth
 from app.services.policy_service import PolicyService
 from app.services.x402_payment_service import X402PaymentService
@@ -790,6 +790,28 @@ async def deep_research_query(
         )
 
 
+@router.get("/deep-research/results")
+async def list_deep_research_results(
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """List DeepResearch results."""
+    from app.db.models import DeepResearchResult
+    
+    query = db.query(DeepResearchResult)
+    if deal_id:
+        query = query.filter(DeepResearchResult.deal_id == deal_id)
+    
+    results = query.order_by(DeepResearchResult.created_at.desc()).limit(limit).all()
+    
+    return {
+        "status": "success",
+        "results": [r.to_dict() for r in results]
+    }
+
+
 @router.get("/deep-research/results/{research_id}")
 async def get_deep_research_result(
     research_id: str,
@@ -807,12 +829,22 @@ async def get_deep_research_result(
     Returns:
         Research result with answer, knowledge items, and CDM events
     """
-    # TODO: Query deep_research_results table when migration is applied
-    # For now, return placeholder
-    raise HTTPException(
-        status_code=501,
-        detail={"status": "not_implemented", "message": "Research results retrieval will be available after database migration"}
-    )
+    from app.db.models import DeepResearchResult
+    
+    result = db.query(DeepResearchResult).filter(
+        DeepResearchResult.research_id == research_id
+    ).first()
+    
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "message": f"Research result {research_id} not found"}
+        )
+    
+    return {
+        "status": "success",
+        "result": result.to_dict()
+    }
 
 
 # ============================================================================
@@ -853,6 +885,7 @@ async def research_person(
             AuditReport
         )
         from app.services.deal_service import DealService
+        from app.db.models import IndividualProfile as IndividualProfileModel
         
         # Execute research workflow
         result = await execute_peoplehub_research(
@@ -867,19 +900,21 @@ async def research_person(
             web_summaries=result.get("web_summaries")
         )
         
-        # Store individual profile (TODO: Create database models)
-        # For now, create Pydantic models
-        individual_profile = IndividualProfile(
+        # Store in database
+        db_profile = IndividualProfileModel(
             person_name=request.person_name,
             linkedin_url=request.linkedin_url,
             profile_data={
                 "linkedin_data": result.get("linkedin_data"),
                 "web_summaries": result.get("web_summaries"),
-                "research_report": result.get("final_report")
+                "research_report": result.get("final_report"),
+                "psychometric_profile": psychometric_profile.model_dump() if psychometric_profile else None
             },
-            deal_id=request.deal_id,
-            created_at=datetime.now()
+            deal_id=request.deal_id
         )
+        db.add(db_profile)
+        db.commit()
+        db.refresh(db_profile)
         
         # Extract credit check data
         def _extract_credit_check_data(profile: PsychometricProfile) -> Dict[str, Any]:
@@ -894,7 +929,7 @@ async def research_person(
         # Generate audit report
         audit_report = AuditReport(
             report_type="individual",
-            profile_id=None,  # Will be set when database model is created
+            profile_id=db_profile.id,
             report_data={
                 "research_report": result.get("final_report"),
                 "psychometric_profile": psychometric_profile.model_dump(),
@@ -948,7 +983,7 @@ async def research_person(
             db=db,
             action=AuditAction.CREATE,
             target_type="person_research",
-            target_id=None,  # Will be set when database model is created
+            target_id=db_profile.id,
             user_id=current_user.id,
             metadata={
                 "person_name": request.person_name,
@@ -956,16 +991,14 @@ async def research_person(
             }
         )
         
-        db.commit()
-        
         return {
             "status": "success",
-            "research_report": result.get("final_report"),
-            "psychometric_profile": psychometric_profile.model_dump(),
-            "audit_report": audit_report.model_dump(),
+            "profile_id": db_profile.id,
+            "person_name": db_profile.person_name,
+            "report": result.get("final_report"),
+            "psychometric_profile": psychometric_profile.model_dump() if psychometric_profile else None,
             "cdm_event": research_event
         }
-        
     except Exception as e:
         db.rollback()
         logger.error(f"Error researching person: {e}", exc_info=True)
@@ -974,6 +1007,46 @@ async def research_person(
             detail={"status": "error", "message": f"Person research failed: {str(e)}"}
         )
 
+
+@router.get("/business-intelligence/individual-profiles")
+async def list_individual_profiles(
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """List Individual BI Profiles."""
+    from app.db.models import IndividualProfile
+    
+    query = db.query(IndividualProfile)
+    if deal_id:
+        query = query.filter(IndividualProfile.deal_id == deal_id)
+    
+    results = query.order_by(IndividualProfile.created_at.desc()).limit(limit).all()
+    
+    return {
+        "status": "success",
+        "results": [r.to_dict() for r in results]
+    }
+
+
+@router.get("/business-intelligence/individual-profile/{profile_id}")
+async def get_individual_profile(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Get individual BI profile by ID."""
+    from app.db.models import IndividualProfile
+    
+    result = db.query(IndividualProfile).filter(IndividualProfile.id == profile_id).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    return {
+        "status": "success",
+        "result": result.to_dict()
+    }
 
 class KYCComplianceRequest(BaseModel):
     """Request model for KYC compliance evaluation."""
@@ -1488,6 +1561,32 @@ async def analyze_loan_application(
             status_code=500,
             detail={"status": "error", "message": f"Loan application analysis failed: {str(e)}"}
         )
+
+
+@router.get("/quantitative-analysis/results")
+async def list_quantitative_analysis_results(
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """List Quantitative Analysis results."""
+    from app.db.models import QuantitativeAnalysisResult
+    
+    query = db.query(QuantitativeAnalysisResult)
+    if deal_id:
+        query = query.filter(QuantitativeAnalysisResult.deal_id == deal_id)
+    
+    # Non-admin users only see their own results
+    if not current_user.is_admin:
+        query = query.filter(QuantitativeAnalysisResult.user_id == current_user.id)
+    
+    results = query.order_by(QuantitativeAnalysisResult.created_at.desc()).limit(limit).all()
+    
+    return {
+        "status": "success",
+        "results": [r.to_dict() for r in results]
+    }
 
 
 @router.get("/quantitative-analysis/results/{analysis_id}")
@@ -10205,10 +10304,10 @@ async def wallet_signup(
 
 @router.get("/licenses/{license_type}")
 async def get_license(license_type: str):
-    """Get license file content (LICENCE.md or RAIL.md).
+    """Get license file content (LICENSE.md or RAIL.md).
     
     Args:
-        license_type: Type of license file ('licence' or 'rail').
+        license_type: Type of license file ('license' or 'rail').
         
     Returns:
         JSON object with license content and type.
@@ -10216,14 +10315,14 @@ async def get_license(license_type: str):
     Raises:
         HTTPException: If license type is invalid or file not found.
     """
-    if license_type not in ['licence', 'rail']:
+    if license_type not in ['license', 'rail', 'licence']:
         raise HTTPException(
             status_code=400,
-            detail={"status": "error", "message": "Invalid license type. Must be 'licence' or 'rail'"}
+            detail={"status": "error", "message": "Invalid license type. Must be 'license' or 'rail'"}
         )
     
     # Determine filename
-    filename = 'LICENCE.md' if license_type == 'licence' else 'RAIL.md'
+    filename = 'LICENSE.md' if license_type in ['license', 'licence'] else 'RAIL.md'
     
     # Get path to root directory (3 levels up from app/api/routes.py)
     root_path = Path(__file__).parent.parent.parent / filename
@@ -12697,6 +12796,279 @@ async def submit_manual_filing(
         )
 
 
+# ============================================================================
+
+
+@router.get("/filings/export")
+async def export_filings(
+    format: str = Query("csv", description="Export format: csv or excel"),
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
+    status: Optional[str] = Query(None, description="Filter by filing status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Export filing data to CSV or Excel.
+    
+    Exports all filings (optionally filtered) with all metadata, deadlines, and status information.
+    """
+    from app.db.models import DocumentFiling
+    from app.services.filing_service import FilingService
+    
+    try:
+        # Build query
+        query = db.query(DocumentFiling)
+        
+        if deal_id:
+            query = query.filter(DocumentFiling.deal_id == deal_id)
+        if jurisdiction:
+            query = query.filter(DocumentFiling.jurisdiction == jurisdiction)
+        if status:
+            query = query.filter(DocumentFiling.filing_status == status)
+        
+        filings = query.all()
+        
+        if not filings:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "No filings found matching criteria"}
+            )
+        
+        # Prepare data for export
+        filing_service = FilingService(db)
+        export_data = []
+        
+        for filing in filings:
+            # Calculate priority
+            priority = "unknown"
+            if filing.deadline:
+                priority = filing_service.calculate_filing_priority(filing.deadline)
+            
+            # Calculate days until deadline
+            days_until_deadline = None
+            if filing.deadline:
+                days_until_deadline = (filing.deadline - datetime.utcnow()).days
+            
+            row = {
+                "Filing ID": filing.id,
+                "Document ID": filing.document_id,
+                "Deal ID": filing.deal_id,
+                "Agreement Type": filing.agreement_type,
+                "Jurisdiction": filing.jurisdiction,
+                "Filing Authority": filing.filing_authority,
+                "Filing System": filing.filing_system,
+                "Filing Status": filing.filing_status,
+                "Filing Reference": filing.filing_reference,
+                "Deadline": filing.deadline.isoformat() if filing.deadline else None,
+                "Days Until Deadline": days_until_deadline,
+                "Priority": priority,
+                "Filing URL": filing.filing_url,
+                "Confirmation URL": filing.confirmation_url,
+                "Manual Submission URL": filing.manual_submission_url,
+                "Submitted By": filing.submitted_by,
+                "Submitted At": filing.submitted_at.isoformat() if filing.submitted_at else None,
+                "Submission Notes": filing.submission_notes,
+                "Error Message": filing.error_message,
+                "Retry Count": filing.retry_count,
+                "Created At": filing.created_at.isoformat() if filing.created_at else None,
+                "Updated At": filing.updated_at.isoformat() if filing.updated_at else None,
+                "Filed At": filing.filed_at.isoformat() if filing.filed_at else None
+            }
+            export_data.append(row)
+        
+        # Create DataFrame
+        df = pd.DataFrame(export_data)
+        
+        # Export based on format
+        if format.lower() == "excel":
+            # Excel export
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Filings', index=False)
+            output.seek(0)
+            
+            # Audit logging
+            log_audit_action(
+                db=db,
+                action=AuditAction.EXPORT,
+                target_type="filings",
+                user_id=current_user.id,
+                metadata={
+                    "format": "excel",
+                    "count": len(filings),
+                    "deal_id": deal_id,
+                    "jurisdiction": jurisdiction,
+                    "status": status
+                }
+            )
+            
+            return StreamingResponse(
+                io.BytesIO(output.read()),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                }
+            )
+        else:
+            # CSV export
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            output.seek(0)
+            
+            # Audit logging
+            log_audit_action(
+                db=db,
+                action=AuditAction.EXPORT,
+                target_type="filings",
+                user_id=current_user.id,
+                metadata={
+                    "format": "csv",
+                    "count": len(filings),
+                    "deal_id": deal_id,
+                    "jurisdiction": jurisdiction,
+                    "status": status
+                }
+            )
+            
+            return Response(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting filings: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to export filings: {str(e)}"}
+        )
+
+
+@router.get("/filings/compliance-report")
+async def get_compliance_report(
+    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
+    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    days_ahead: Optional[int] = Query(None, description="Days ahead for alerts"),
+    limit: Optional[int] = Query(None, description="Limit for alerts"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    # #region agent log
+    with open(r'c:\Users\MeMyself\creditnexus\.cursor\debug.log', 'a') as f:
+        import json, time
+        f.write(json.dumps({'location': 'routes.py:12961', 'message': 'Entering get_compliance_report API', 'data': {'deal_id': deal_id, 'jurisdiction': jurisdiction}, 'timestamp': int(time.time()*1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'B'}) + '\n')
+    # #endregion
+    """Generate compliance report for filings.
+    
+    Returns comprehensive compliance statistics including:
+    - Overall compliance rate
+    - Breakdown by status, jurisdiction, and authority
+    - Deadline alerts (filings due within 7 days)
+    - Overdue filings
+    """
+    from app.services.filing_service import FilingService
+    
+    try:
+        filing_service = FilingService(db)
+        
+        # Parse dates
+        start_dt = None
+        end_dt = None
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        
+        report = filing_service.generate_compliance_report(
+            deal_id=deal_id,
+            jurisdiction=jurisdiction,
+            start_date=start_dt,
+            end_date=end_dt
+        )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.VIEW,
+            target_type="compliance_report",
+            user_id=current_user.id,
+            metadata={
+                "deal_id": deal_id,
+                "jurisdiction": jurisdiction,
+                "total_filings": report["summary"]["total_filings"]
+            }
+        )
+        
+        return {
+            "status": "success",
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error generating compliance report: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to generate compliance report: {str(e)}"}
+        )
+
+
+@router.get("/filings/deadline-alerts")
+async def get_deadline_alerts(
+    deal_id: Optional[int] = Query(None, description="Optional deal ID to filter"),
+    document_id: Optional[int] = Query(None, description="Optional document ID to filter"),
+    days_ahead: int = Query(7, ge=1, le=365, description="Number of days ahead to check (max 365)"),
+    limit: Optional[int] = Query(None, description="Maximum number of alerts to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get deadline alerts for approaching filing deadlines."""
+    from app.services.policy_service import PolicyService
+    from app.services.policy_engine_factory import get_policy_engine
+    
+    try:
+        policy_service = PolicyService(get_policy_engine())
+        alerts = policy_service.check_filing_deadlines(
+            deal_id=deal_id,
+            document_id=document_id,
+            days_ahead=days_ahead,
+            db=db
+        )
+        
+        # Apply limit if provided
+        if limit and limit > 0:
+            alerts = alerts[:limit]
+        
+        alerts_dict = [
+            {
+                "filing_id": alert.filing_id,
+                "document_id": alert.document_id,
+                "deal_id": alert.deal_id,
+                "authority": alert.authority,
+                "deadline": alert.deadline.isoformat() if hasattr(alert.deadline, 'isoformat') else str(alert.deadline),
+                "days_remaining": alert.days_remaining,
+                "urgency": alert.urgency,
+                "penalty": alert.penalty
+            }
+            for alert in alerts
+        ]
+        
+        return {
+            "status": "success",
+            "alerts": alerts_dict
+        }
+    except Exception as e:
+        logger.error(f"Error getting deadline alerts: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get deadline alerts: {str(e)}"}
+        )
+
+
 @router.get("/filings/{filing_id}")
 async def get_filing_status(
     filing_id: int,
@@ -13039,217 +13411,6 @@ async def filing_status_webhook(
         return Response(content="OK", status_code=200)
 
 
-@router.get("/filings/compliance-report")
-async def get_compliance_report(
-    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
-    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_auth)
-):
-    """Generate compliance report for filings.
-    
-    Returns comprehensive compliance statistics including:
-    - Overall compliance rate
-    - Breakdown by status, jurisdiction, and authority
-    - Deadline alerts (filings due within 7 days)
-    - Overdue filings
-    """
-    from app.services.filing_service import FilingService
-    
-    try:
-        filing_service = FilingService(db)
-        
-        # Parse dates
-        start_dt = None
-        end_dt = None
-        if start_date:
-            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        if end_date:
-            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        
-        report = filing_service.generate_compliance_report(
-            deal_id=deal_id,
-            jurisdiction=jurisdiction,
-            start_date=start_dt,
-            end_date=end_dt
-        )
-        
-        # Audit logging
-        log_audit_action(
-            db=db,
-            action=AuditAction.VIEW,
-            target_type="compliance_report",
-            user_id=current_user.id,
-            metadata={
-                "deal_id": deal_id,
-                "jurisdiction": jurisdiction,
-                "total_filings": report["summary"]["total_filings"]
-            }
-        )
-        
-        return {
-            "status": "success",
-            "report": report
-        }
-    except Exception as e:
-        logger.error(f"Error generating compliance report: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"Failed to generate compliance report: {str(e)}"}
-        )
-
-
-@router.get("/filings/export")
-async def export_filings(
-    format: str = Query("csv", description="Export format: csv or excel"),
-    deal_id: Optional[int] = Query(None, description="Filter by deal ID"),
-    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
-    status: Optional[str] = Query(None, description="Filter by filing status"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_auth)
-):
-    """Export filing data to CSV or Excel.
-    
-    Exports all filings (optionally filtered) with all metadata, deadlines, and status information.
-    """
-    from app.db.models import DocumentFiling
-    from app.services.filing_service import FilingService
-    
-    try:
-        # Build query
-        query = db.query(DocumentFiling)
-        
-        if deal_id:
-            query = query.filter(DocumentFiling.deal_id == deal_id)
-        if jurisdiction:
-            query = query.filter(DocumentFiling.jurisdiction == jurisdiction)
-        if status:
-            query = query.filter(DocumentFiling.filing_status == status)
-        
-        filings = query.all()
-        
-        if not filings:
-            raise HTTPException(
-                status_code=404,
-                detail={"status": "error", "message": "No filings found matching criteria"}
-            )
-        
-        # Prepare data for export
-        filing_service = FilingService(db)
-        export_data = []
-        
-        for filing in filings:
-            # Calculate priority
-            priority = "unknown"
-            if filing.deadline:
-                priority = filing_service.calculate_filing_priority(filing.deadline)
-            
-            # Calculate days until deadline
-            days_until_deadline = None
-            if filing.deadline:
-                days_until_deadline = (filing.deadline - datetime.utcnow()).days
-            
-            row = {
-                "Filing ID": filing.id,
-                "Document ID": filing.document_id,
-                "Deal ID": filing.deal_id,
-                "Agreement Type": filing.agreement_type,
-                "Jurisdiction": filing.jurisdiction,
-                "Filing Authority": filing.filing_authority,
-                "Filing System": filing.filing_system,
-                "Filing Status": filing.filing_status,
-                "Filing Reference": filing.filing_reference,
-                "Deadline": filing.deadline.isoformat() if filing.deadline else None,
-                "Days Until Deadline": days_until_deadline,
-                "Priority": priority,
-                "Filing URL": filing.filing_url,
-                "Confirmation URL": filing.confirmation_url,
-                "Manual Submission URL": filing.manual_submission_url,
-                "Submitted By": filing.submitted_by,
-                "Submitted At": filing.submitted_at.isoformat() if filing.submitted_at else None,
-                "Submission Notes": filing.submission_notes,
-                "Error Message": filing.error_message,
-                "Retry Count": filing.retry_count,
-                "Created At": filing.created_at.isoformat() if filing.created_at else None,
-                "Updated At": filing.updated_at.isoformat() if filing.updated_at else None,
-                "Filed At": filing.filed_at.isoformat() if filing.filed_at else None
-            }
-            export_data.append(row)
-        
-        # Create DataFrame
-        df = pd.DataFrame(export_data)
-        
-        # Export based on format
-        if format.lower() == "excel":
-            # Excel export
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='Filings', index=False)
-            output.seek(0)
-            
-            # Audit logging
-            log_audit_action(
-                db=db,
-                action=AuditAction.EXPORT,
-                target_type="filings",
-                user_id=current_user.id,
-                metadata={
-                    "format": "excel",
-                    "count": len(filings),
-                    "deal_id": deal_id,
-                    "jurisdiction": jurisdiction,
-                    "status": status
-                }
-            )
-            
-            return StreamingResponse(
-                io.BytesIO(output.read()),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={
-                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                }
-            )
-        else:
-            # CSV export
-            output = io.StringIO()
-            df.to_csv(output, index=False)
-            output.seek(0)
-            
-            # Audit logging
-            log_audit_action(
-                db=db,
-                action=AuditAction.EXPORT,
-                target_type="filings",
-                user_id=current_user.id,
-                metadata={
-                    "format": "csv",
-                    "count": len(filings),
-                    "deal_id": deal_id,
-                    "jurisdiction": jurisdiction,
-                    "status": status
-                }
-            )
-            
-            return Response(
-                content=output.getvalue(),
-                media_type="text/csv",
-                headers={
-                    "Content-Disposition": f"attachment; filename=filings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                }
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error exporting filings: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"Failed to export filings: {str(e)}"}
-        )
-
-
 @router.post("/payments/process/{payload}")
 async def process_payment_link(
     payload: str,
@@ -13372,7 +13533,7 @@ async def process_payment_link(
                     db.add(payment_event)
                     db.flush()
                     
-                    notarization.payment_event_id = payment_event.id
+                    notarization.payment_event_id = payment_event_db.id
                     notarization.payment_status = "paid"
                     notarization.payment_transaction_hash = payment_event.transaction_hash
                     db.commit()
@@ -13467,52 +13628,6 @@ async def process_payment_link(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to process payment: {str(e)}"}
-        )
-
-
-@router.get("/filings/deadline-alerts")
-async def get_deadline_alerts(
-    deal_id: Optional[int] = Query(None, description="Optional deal ID to filter"),
-    document_id: Optional[int] = Query(None, description="Optional document ID to filter"),
-    days_ahead: int = Query(7, ge=1, le=365, description="Number of days ahead to check (max 365)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get deadline alerts for approaching filing deadlines."""
-    from app.services.policy_service import PolicyService
-    from app.services.policy_engine_factory import get_policy_engine
-    
-    try:
-        policy_service = PolicyService(get_policy_engine())
-        alerts = policy_service.check_filing_deadlines(
-            deal_id=deal_id,
-            document_id=document_id,
-            days_ahead=days_ahead
-        )
-        
-        alerts_dict = [
-            {
-                "filing_id": alert.filing_id,
-                "document_id": alert.document_id,
-                "deal_id": alert.deal_id,
-                "authority": alert.authority,
-                "deadline": alert.deadline.isoformat() if hasattr(alert.deadline, 'isoformat') else str(alert.deadline),
-                "days_remaining": alert.days_remaining,
-                "urgency": alert.urgency,
-                "penalty": alert.penalty
-            }
-            for alert in alerts
-        ]
-        
-        return {
-            "status": "success",
-            "alerts": alerts_dict
-        }
-    except Exception as e:
-        logger.error(f"Error getting deadline alerts: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"Failed to get deadline alerts: {str(e)}"}
         )
 
 

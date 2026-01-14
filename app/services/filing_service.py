@@ -60,14 +60,7 @@ from app.templates.securitization import (
 logger = logging.getLogger(__name__)
 
 
-class FilingError(Exception):
-    """Base exception for filing operations."""
-    pass
-
-
-class FilingAPIError(FilingError):
-    """Exception for API filing errors."""
-    pass
+from app.services.filing_exceptions import FilingError, FilingAPIError
 
 
 class FilingService:
@@ -590,6 +583,11 @@ class FilingService:
         self,
         filing_id: int
     ) -> Dict[str, Any]:
+        # #region agent log
+        with open(r'c:\Users\MeMyself\creditnexus\.cursor\debug.log', 'a') as f:
+            import json, time
+            f.write(json.dumps({'location': 'filing_service.py:585', 'message': 'Entering track_filing_status', 'data': {'filing_id': filing_id}, 'timestamp': int(time.time()*1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'B'}) + '\n')
+        # #endregion
         """
         Track the status of a regulatory filing.
         
@@ -609,16 +607,16 @@ class FilingService:
         # In mock mode, return stored status
         # In production, would poll regulatory body API
         if filing.metadata and filing.metadata.get('mock'):
-        return {
-            'filing_id': filing.id,
-            'status': filing.status,
-            'regulatory_body': filing.regulatory_body,
-            'filing_type': filing.filing_type,
-            'filed_at': filing.filed_at.isoformat() if filing.filed_at else None,
-            'receipt': filing.metadata.get('filing_receipt') if filing.metadata else None,
-            'filing_number': filing.filing_number,
-            'last_updated': filing.created_at.isoformat() if filing.created_at else None
-        }
+            return {
+                'filing_id': filing.id,
+                'status': filing.status,
+                'regulatory_body': filing.regulatory_body,
+                'filing_type': filing.filing_type,
+                'filed_at': filing.filed_at.isoformat() if filing.filed_at else None,
+                'receipt': filing.metadata.get('filing_receipt') if filing.metadata else None,
+                'filing_number': filing.filing_number,
+                'last_updated': filing.created_at.isoformat() if filing.created_at else None
+            }
         else:
             # Would poll actual regulatory body API here
             return {
@@ -760,7 +758,7 @@ class FilingService:
         }
         
         # Generate document text
-        sec_10d_text = _generate_sec_10d_document_text(sec_10d_data)
+        sec_10d_text = self._generate_sec_10d_document_text(sec_10d_data)
         sec_10d_data['document_text'] = sec_10d_text
         
         # Save as generated document if user_id provided
@@ -777,10 +775,10 @@ class FilingService:
         return sec_10d_data
 
 
-def _generate_sec_10d_document_text(data: Dict[str, Any]) -> str:
-    """Generate SEC Form 10-D document text."""
-    
-    text = f"""
+    def _generate_sec_10d_document_text(self, data: Dict[str, Any]) -> str:
+        """Generate SEC Form 10-D document text."""
+        
+        text = f"""
 UNITED STATES
 SECURITIES AND EXCHANGE COMMISSION
 Washington, D.C. 20549
@@ -834,8 +832,8 @@ By: _________________________
     [Authorized Signatory]
     Date: {data['filing_date']}
 """
-    
-    return text.strip()
+        
+        return text.strip()
     
     # ============================================================================
     # Document Filing Methods
@@ -1807,3 +1805,100 @@ By: _________________________
         
         logger.info(f"Updated filing {filing_id} status to submitted with reference {filing_reference}")
         return filing
+
+    def generate_compliance_report(
+        self,
+        deal_id: Optional[int] = None,
+        jurisdiction: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        # #region agent log
+        with open(r'c:\Users\MeMyself\creditnexus\.cursor\debug.log', 'a') as f:
+            import json, time
+            f.write(json.dumps({'location': 'filing_service.py:1807', 'message': 'Entering generate_compliance_report', 'data': {'deal_id': deal_id, 'jurisdiction': jurisdiction}, 'timestamp': int(time.time()*1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'B'}) + '\n')
+        # #endregion
+        """Generate a compliance report for filings.
+        
+        Args:
+            deal_id: Optional deal ID filter
+            jurisdiction: Optional jurisdiction filter
+            start_date: Optional start date filter
+            end_date: Optional end date filter
+            
+        Returns:
+            Dictionary with compliance statistics and breakdown
+        """
+        from app.db.models import DocumentFiling
+        from sqlalchemy import func
+        
+        # Build query
+        query = self.db.query(DocumentFiling)
+        
+        if deal_id:
+            query = query.filter(DocumentFiling.deal_id == deal_id)
+        if jurisdiction:
+            query = query.filter(DocumentFiling.jurisdiction == jurisdiction)
+        if start_date:
+            query = query.filter(DocumentFiling.created_at >= start_date)
+        if end_date:
+            query = query.filter(DocumentFiling.created_at <= end_date)
+            
+        filings = query.all()
+        
+        # Calculate summary statistics
+        total = len(filings)
+        if total == 0:
+            return {
+                "summary": {
+                    "total_filings": 0,
+                    "compliant_count": 0,
+                    "compliance_rate": 100.0,
+                    "pending_count": 0,
+                    "overdue_count": 0
+                },
+                "breakdown": {
+                    "status": {},
+                    "jurisdiction": {},
+                    "authority": {}
+                }
+            }
+            
+        compliant = sum(1 for f in filings if f.filing_status == "accepted")
+        pending = sum(1 for f in filings if f.filing_status == "pending")
+        rejected = sum(1 for f in filings if f.filing_status == "rejected")
+        
+        now = datetime.utcnow()
+        overdue = sum(1 for f in filings if f.filing_status == "pending" and f.deadline and f.deadline < now)
+        
+        # Breakdown by status
+        status_breakdown = {}
+        for f in filings:
+            status_breakdown[f.filing_status] = status_breakdown.get(f.filing_status, 0) + 1
+            
+        # Breakdown by jurisdiction
+        juris_breakdown = {}
+        for f in filings:
+            juris_breakdown[f.jurisdiction] = juris_breakdown.get(f.jurisdiction, 0) + 1
+            
+        # Breakdown by authority
+        auth_breakdown = {}
+        for f in filings:
+            auth_breakdown[f.filing_authority] = auth_breakdown.get(f.filing_authority, 0) + 1
+            
+        return {
+            "summary": {
+                "total_filings": total,
+                "compliant_count": compliant,
+                "compliance_rate": (compliant / total) * 100.0,
+                "pending_count": pending,
+                "overdue_count": overdue,
+                "rejected_count": rejected
+            },
+            "breakdown": {
+                "status": status_breakdown,
+                "jurisdiction": juris_breakdown,
+                "authority": auth_breakdown
+            },
+            "generated_at": now.isoformat()
+        }

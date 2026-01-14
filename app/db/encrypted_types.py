@@ -56,7 +56,7 @@ class EncryptedString(TypeDecorator):
             self._encryption_service = get_encryption_service()
         return self._encryption_service
     
-    def process_bind_param(self, value: Optional[str], dialect) -> Optional[bytes]:
+    def process_bind_param(self, value: Optional[str], dialect) -> Optional[str]:
         """Encrypt value before storing in database.
         
         Args:
@@ -64,14 +64,14 @@ class EncryptedString(TypeDecorator):
             dialect: SQLAlchemy dialect (unused)
             
         Returns:
-            Encrypted bytes, or None if value is None
+            Encrypted string (ASCII), or None if value is None
         """
         if value is None:
             return None
         
         if not settings.ENCRYPTION_ENABLED:
             # If encryption disabled, store as plain text (for development)
-            return value.encode('utf-8') if isinstance(value, str) else value
+            return value
         
         try:
             encryption_service = self._get_encryption_service()
@@ -80,22 +80,24 @@ class EncryptedString(TypeDecorator):
             if encrypted is None:
                 # Encryption service returned None (disabled or error)
                 logger.warning("Encryption service returned None, storing as plain text")
-                return value.encode('utf-8') if isinstance(value, str) else value
+                return value
             
-            return encrypted
+            # Fernet tokens are ASCII-safe base64, so we can store them as strings in VARCHAR/TEXT columns
+            # This avoids "operator does not exist: character varying = bytea" errors
+            return encrypted.decode('ascii')
         except Exception as e:
             logger.error(f"Failed to encrypt string value: {e}")
             # In production, this should raise; for now, log and store plain text
             # TODO: Make this configurable (fail-safe vs fail-secure)
             if settings.ENCRYPTION_ENABLED:
                 raise ValueError(f"Encryption failed and ENCRYPTION_ENABLED=True: {e}")
-            return value.encode('utf-8') if isinstance(value, str) else value
+            return value
     
-    def process_result_value(self, value: Optional[bytes], dialect) -> Optional[str]:
+    def process_result_value(self, value: Optional[Any], dialect) -> Optional[str]:
         """Decrypt value after retrieving from database.
         
         Args:
-            value: Encrypted bytes from database
+            value: Encrypted data from database (bytes or ASCII string)
             dialect: SQLAlchemy dialect (unused)
             
         Returns:
@@ -119,12 +121,22 @@ class EncryptedString(TypeDecorator):
         try:
             encryption_service = self._get_encryption_service()
             
-            # Handle both encrypted bytes and plain text (grace period)
+            # If value is string, it might be an encrypted Fernet token or plain text
             if isinstance(value, str):
-                # Already decrypted or plain text
+                if value.startswith('gAAAAA'):
+                    try:
+                        # Attempt to decrypt the string value
+                        decrypted = encryption_service.decrypt(value.encode('ascii'))
+                        if decrypted:
+                            if isinstance(decrypted, bytes):
+                                return decrypted.decode('utf-8')
+                            return str(decrypted)
+                    except Exception:
+                        # If decryption fails, it might be plain text that happens to start with gAAAAA
+                        pass
                 return value
             
-            # Try to decrypt
+            # Try to decrypt bytes directly
             decrypted = encryption_service.decrypt(value)
             
             if decrypted is None:
@@ -196,7 +208,7 @@ class EncryptedText(TypeDecorator):
             self._encryption_service = get_encryption_service()
         return self._encryption_service
     
-    def process_bind_param(self, value: Optional[str], dialect) -> Optional[bytes]:
+    def process_bind_param(self, value: Optional[str], dialect) -> Optional[str]:
         """Encrypt value before storing in database.
         
         Args:
@@ -204,14 +216,14 @@ class EncryptedText(TypeDecorator):
             dialect: SQLAlchemy dialect (unused)
             
         Returns:
-            Encrypted bytes, or None if value is None
+            Encrypted string (ASCII), or None if value is None
         """
         if value is None:
             return None
         
         if not settings.ENCRYPTION_ENABLED:
             # If encryption disabled, store as plain text (for development)
-            return value.encode('utf-8') if isinstance(value, str) else value
+            return value
         
         try:
             encryption_service = self._get_encryption_service()
@@ -220,21 +232,22 @@ class EncryptedText(TypeDecorator):
             if encrypted is None:
                 # Encryption service returned None (disabled or error)
                 logger.warning("Encryption service returned None, storing as plain text")
-                return value.encode('utf-8') if isinstance(value, str) else value
+                return value
             
-            return encrypted
+            # Return as ASCII string to avoid bytea type mismatch in Postgres
+            return encrypted.decode('ascii')
         except Exception as e:
             logger.error(f"Failed to encrypt text value: {e}")
             # In production, this should raise; for now, log and store plain text
             if settings.ENCRYPTION_ENABLED:
                 raise ValueError(f"Encryption failed and ENCRYPTION_ENABLED=True: {e}")
-            return value.encode('utf-8') if isinstance(value, str) else value
+            return value
     
-    def process_result_value(self, value: Optional[bytes], dialect) -> Optional[str]:
+    def process_result_value(self, value: Optional[Any], dialect) -> Optional[str]:
         """Decrypt value after retrieving from database.
         
         Args:
-            value: Encrypted bytes from database
+            value: Encrypted data from database (bytes or ASCII string)
             dialect: SQLAlchemy dialect (unused)
             
         Returns:
@@ -258,12 +271,22 @@ class EncryptedText(TypeDecorator):
         try:
             encryption_service = self._get_encryption_service()
             
-            # Handle both encrypted bytes and plain text (grace period)
+            # If value is string, it might be an encrypted Fernet token or plain text
             if isinstance(value, str):
-                # Already decrypted or plain text
+                if value.startswith('gAAAAA'):
+                    try:
+                        # Attempt to decrypt the string value
+                        decrypted = encryption_service.decrypt(value.encode('ascii'))
+                        if decrypted:
+                            if isinstance(decrypted, bytes):
+                                return decrypted.decode('utf-8')
+                            return str(decrypted)
+                    except Exception:
+                        # If decryption fails, it might be plain text
+                        pass
                 return value
             
-            # Try to decrypt
+            # Try to decrypt bytes directly
             decrypted = encryption_service.decrypt(value)
             
             if decrypted is None:

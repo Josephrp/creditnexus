@@ -277,7 +277,8 @@ async def get_available_deals(
 ):
     """Get available deals for securitization."""
     try:
-        query = db.query(Deal)
+        from sqlalchemy.orm import joinedload
+        query = db.query(Deal).options(joinedload(Deal.documents))
         
         if status:
             query = query.filter(Deal.status == status)
@@ -287,18 +288,7 @@ async def get_available_deals(
         
         return {
             "status": "success",
-            "deals": [
-                {
-                    "id": deal.id,
-                    "deal_id": deal.deal_id,
-                    "borrower_name": deal.borrower_name,
-                    "total_commitment": str(deal.total_commitment) if deal.total_commitment else None,
-                    "currency": deal.currency,
-                    "status": deal.status,
-                    "created_at": deal.created_at.isoformat() if deal.created_at else None
-                }
-                for deal in deals
-            ],
+            "deals": [deal.to_dict() for deal in deals],
             "pagination": {
                 "page": page,
                 "limit": limit,
@@ -364,7 +354,8 @@ async def get_available_assets(
 ):
     """Get combined list of available deals and loans for securitization."""
     try:
-        deals_query = db.query(Deal).filter(Deal.status == "active")
+        from sqlalchemy.orm import joinedload
+        deals_query = db.query(Deal).options(joinedload(Deal.documents)).filter(Deal.status == "active")
         loans_query = db.query(LoanAsset)
         
         deals = deals_query.order_by(Deal.created_at.desc()).limit(limit // 2).all()
@@ -373,18 +364,19 @@ async def get_available_assets(
         assets = []
         
         if not asset_type or asset_type == "deal":
-            assets.extend([
-                {
+            deal_list = []
+            for deal in deals:
+                deal_dict = deal.to_dict()
+                deal_list.append({
                     "asset_id": str(deal.id),
                     "asset_type": "deal",
                     "deal_id": deal.deal_id,
-                    "name": deal.borrower_name,
-                    "value": str(deal.total_commitment) if deal.total_commitment else "0",
-                    "currency": deal.currency or "USD",
+                    "name": deal_dict["borrower_name"],
+                    "value": str(deal_dict["total_commitment"]),
+                    "currency": deal_dict["currency"],
                     "status": deal.status
-                }
-                for deal in deals
-            ])
+                })
+            assets.extend(deal_list)
         
         if not asset_type or asset_type == "loan_asset":
             assets.extend([

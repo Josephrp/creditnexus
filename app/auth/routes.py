@@ -237,7 +237,16 @@ async def callback(
     user = db.query(User).filter(User.replit_user_id == replit_user_id).first()
     
     if not user and email:
-        user = db.query(User).filter(User.email == email).first()
+        # Workaround for non-deterministic encryption: fetch and filter
+        all_users = db.query(User).all()
+        for u in all_users:
+            try:
+                if u.email == email:
+                    user = u
+                    break
+            except Exception:
+                continue
+        
         if user:
             user.replit_user_id = replit_user_id
     
