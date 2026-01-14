@@ -11,9 +11,13 @@ interface Toast {
   duration?: number;
 }
 
+type ToastInput = 
+  | string 
+  | { title?: string; description?: string; type?: ToastType; variant?: 'default' | 'destructive' };
+
 interface ToastContextType {
   toasts: Toast[];
-  addToast: (message: string, type?: ToastType, duration?: number) => void;
+  addToast: (input: ToastInput, type?: ToastType, duration?: number) => void;
   removeToast: (id: string) => void;
 }
 
@@ -63,9 +67,28 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType = 'info', duration = 5000) => {
+  const addToast = useCallback((input: ToastInput, type?: ToastType, duration = 5000) => {
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newToast: Toast = { id, message, type, duration };
+    
+    // Handle object format: {title, description, type/variant}
+    if (typeof input === 'object' && input !== null) {
+      const toastType = input.type || (input.variant === 'destructive' ? 'error' : input.variant === 'default' ? 'info' : 'info');
+      const message = input.description || input.title || 'Notification';
+      const newToast: Toast = { id, message, type: toastType, duration };
+      
+      setToasts(prev => [...prev, newToast]);
+      
+      if (duration > 0) {
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, duration);
+      }
+      return;
+    }
+    
+    // Handle string format: message, type, duration
+    const toastType = type || 'info';
+    const newToast: Toast = { id, message: input as string, type: toastType, duration };
     
     setToasts(prev => [...prev, newToast]);
     

@@ -101,10 +101,10 @@ def create_peoplehub_research_graph():
     return workflow.compile()
 
 
-def start_node(state: ResearchState) -> ResearchState:
+def start_node(state: ResearchState) -> Dict[str, Any]:
     """Initialize research state."""
+    # Only return fields that are being updated to avoid concurrent update errors
     return {
-        **state,
         "status": "Initializing research...",
         "errors": [],
         "search_results": [],
@@ -113,21 +113,21 @@ def start_node(state: ResearchState) -> ResearchState:
     }
 
 
-def fetch_linkedin_node(state: ResearchState) -> ResearchState:
+def fetch_linkedin_node(state: ResearchState) -> Dict[str, Any]:
     """Fetch LinkedIn profile data."""
     # Implementation: Use Bright Data LinkedIn API or similar
     # This would integrate with existing LinkedIn scraping infrastructure
     logger.info(f"Fetching LinkedIn profile: {state.get('linkedin_url', 'N/A')}")
     # Placeholder - implement actual LinkedIn fetching
     # For now, return empty data
+    # Only return fields that are being updated to avoid concurrent update errors
     return {
-        **state,
         "linkedin_data": {},
         "status": "Fetched LinkedIn profile"
     }
 
 
-def generate_search_query_node(state: ResearchState) -> ResearchState:
+def generate_search_query_node(state: ResearchState) -> Dict[str, Any]:
     """Generate search query from person name and LinkedIn data."""
     llm = get_chat_model(temperature=0.7)
     
@@ -149,15 +149,15 @@ Return only the search query, nothing else.
         response = llm.invoke(prompt)
         search_query = response.content.strip()
         
+        # Only return fields that are being updated to avoid concurrent update errors
         return {
-            **state,
             "search_query": search_query,
             "status": "Generated search query"
         }
     except Exception as e:
         logger.error(f"Error generating search query: {e}")
+        # Only return fields that are being updated
         return {
-            **state,
             "errors": state.get("errors", []) + [f"Search query generation failed: {str(e)}"],
             "status": "Error generating search query"
         }

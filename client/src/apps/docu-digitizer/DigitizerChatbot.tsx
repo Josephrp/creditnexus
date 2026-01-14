@@ -28,7 +28,8 @@ import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
-import { AgentProgressIndicator, AgentProgressStep } from '../../components/agent-results/AgentProgressIndicator';
+import { AgentProgressIndicator } from '../../components/agent-results/AgentProgressIndicator';
+import type { AgentProgressStep } from '../../components/agent-results/AgentProgressIndicator';
 import { useToast } from '../../components/ui/toast';
 
 interface ChatMessage {

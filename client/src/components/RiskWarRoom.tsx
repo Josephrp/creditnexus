@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useFDC3 } from '@/context/FDC3Context';
 import { fetchWithAuth } from '@/context/AuthContext';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card } from './ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { Search, RadioTower, AlertTriangle, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
 
 interface SearchResult {
     score: number;
@@ -242,6 +243,11 @@ export default function RiskWarRoom() {
                         <p className="font-mono text-sm">SECURE CHANNEL ACTIVE. NO SIGNALS.</p>
                     </div>
                 )}
+            </div>
+
+            {/* Chatbot Panel */}
+            <div className="mt-6">
+                <DashboardChatbotPanel />
             </div>
         </div>
     );

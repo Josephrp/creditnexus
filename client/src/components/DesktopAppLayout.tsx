@@ -280,6 +280,7 @@ export function DesktopAppLayout() {
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
+      '/app/agent-dashboard': 'agent-dashboard',
       '/library': 'library',
       '/auditor': 'auditor',
     };
@@ -465,6 +466,7 @@ export function DesktopAppLayout() {
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
+      '/app/agent-dashboard': 'agent-dashboard',
       '/app/loan-recovery': 'loan-recovery',
       '/library': 'library',
       '/auditor': 'auditor',
@@ -622,6 +624,7 @@ export function DesktopAppLayout() {
       'policy-editor': '/app/policy-editor',
       'verification-config': '/app/verification-config',
       'securitization': '/app/securitization',
+      'agent-dashboard': '/app/agent-dashboard',
       'library': '/library',
       'auditor': '/auditor',
       'workflow-share': '/app/workflow/share',

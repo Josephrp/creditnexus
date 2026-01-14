@@ -38,13 +38,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AgentResultCard, AgentType } from '@/components/agent-results/AgentResultCard';
+import { AgentResultCard } from '@/components/agent-results/AgentResultCard';
+import type { AgentType } from '@/components/agent-results/AgentResultCard';
 import { DeepResearchResultView } from '@/components/agent-results/DeepResearchResultView';
 import { LangAlphaResultView } from '@/components/agent-results/LangAlphaResultView';
 import { PeopleHubResultView } from '@/components/agent-results/PeopleHubResultView';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { SkeletonDocumentList } from '@/components/ui/skeleton';
+import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
 
 interface AgentResult {
   id: string;
@@ -540,6 +542,11 @@ export function AgentDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel />
+      </div>
     </div>
   );
 }

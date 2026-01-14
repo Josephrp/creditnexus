@@ -1146,10 +1146,10 @@ async def evaluate_kyc_compliance(
     except Exception as e:
         db.rollback()
         logger.error(f"Error evaluating KYC compliance: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail={"status": "error", "message": f"KYC evaluation failed: {str(e)}"}
-            )
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"KYC evaluation failed: {str(e)}"}
+        )
 
 
 # ============================================================================
@@ -1235,12 +1235,13 @@ async def analyze_company(
                                 status = progress_data.get('status', 'in_progress')
                                 current_step = progress_data.get('current_step', 'Processing...')
                                 
-                                yield f"data: {json.dumps({
+                                progress_payload = {
                                     'status': status,
                                     'progress': progress,
                                     'current_step': current_step,
                                     'message': progress_data.get('message', '')
-                                })}\n\n"
+                                }
+                                yield f"data: {json.dumps(progress_payload)}\n\n"
                                 
                                 last_progress = progress
                                 if status in ['completed', 'error']:
@@ -1256,12 +1257,13 @@ async def analyze_company(
                     result = await analysis_task
                     
                     # Send completion
-                    yield f"data: {json.dumps({
+                    completion_payload = {
                         'status': 'completed',
                         'progress': 100,
                         'current_step': 'Analysis complete',
                         'result': result
-                    })}\n\n"
+                    }
+                    yield f"data: {json.dumps(completion_payload)}\n\n"
                     
                 except Exception as e:
                     logger.error(f"Error in streaming analysis: {e}", exc_info=True)
@@ -1422,12 +1424,13 @@ async def analyze_loan_application(
                                 status = progress_data.get('status', 'in_progress')
                                 current_step = progress_data.get('current_step', 'Processing...')
                                 
-                                yield f"data: {json.dumps({
+                                progress_payload = {
                                     'status': status,
                                     'progress': progress,
                                     'current_step': current_step,
                                     'message': progress_data.get('message', '')
-                                })}\n\n"
+                                }
+                                yield f"data: {json.dumps(progress_payload)}\n\n"
                                 
                                 last_progress = progress
                                 if status in ['completed', 'error']:
@@ -1439,12 +1442,13 @@ async def analyze_loan_application(
                             break
                     
                     result = await analysis_task
-                    yield f"data: {json.dumps({
+                    completion_payload = {
                         'status': 'completed',
                         'progress': 100,
                         'current_step': 'Analysis complete',
                         'result': result
-                    })}\n\n"
+                    }
+                    yield f"data: {json.dumps(completion_payload)}\n\n"
                     
                 except Exception as e:
                     logger.error(f"Error in streaming loan application analysis: {e}", exc_info=True)
@@ -7175,7 +7179,41 @@ async def settle_trade_with_payment(
     
     try:
         # Step 1: Get trade execution event
+        # #region agent log
+        import json
+        log_data = {
+            "sessionId": "debug-session",
+            "runId": "trade-settlement",
+            "hypothesisId": "A",
+            "location": "routes.py:7182",
+            "message": "Attempting to get trade execution",
+            "data": {"trade_id": trade_id},
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+        try:
+            with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+                f.write(json.dumps(log_data) + "\n")
+        except Exception:
+            pass
+        # #endregion
         trade_event = get_trade_execution(trade_id, db)
+        
+        # #region agent log
+        log_data = {
+            "sessionId": "debug-session",
+            "runId": "trade-settlement",
+            "hypothesisId": "A",
+            "location": "routes.py:7184",
+            "message": "Trade lookup result",
+            "data": {"trade_id": trade_id, "found": trade_event is not None},
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+        try:
+            with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+                f.write(json.dumps(log_data) + "\n")
+        except Exception:
+            pass
+        # #endregion
         
         if not trade_event:
             raise HTTPException(

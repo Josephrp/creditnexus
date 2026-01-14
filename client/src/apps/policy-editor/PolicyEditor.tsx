@@ -39,6 +39,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/ta
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Alert, AlertDescription } from '../../components/ui/alert';
+import { DashboardChatbotPanel } from '../../components/DashboardChatbotPanel';
 
 // Types
 interface Policy {
@@ -780,6 +781,11 @@ export function PolicyEditor() {
           </CardContent>
         </Card>
       )}
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel />
+      </div>
     </div>
   );
 }
