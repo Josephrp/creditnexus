@@ -14,7 +14,7 @@ import random
 import json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Callable
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -1274,6 +1274,34 @@ The document contains placeholder content representing a credit agreement.
         else:  # 5% + 15% + 25% + 20% + 15% + 10% + 5% + 3% + 2%
             return DealStatus.WITHDRAWN.value
     
+    def _flatten_dict(self, d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
+        """
+        Recursively flatten a nested dictionary.
+        
+        Args:
+            d: Dictionary to flatten
+            parent_key: Parent key for nested dictionaries
+            sep: Separator for nested keys
+            
+        Returns:
+            Flattened dictionary
+        """
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
+            elif isinstance(v, list):
+                # Handle lists by checking each item
+                for i, item in enumerate(v):
+                    if isinstance(item, dict):
+                        items.extend(self._flatten_dict(item, f"{new_key}[{i}]", sep=sep).items())
+                    else:
+                        items.append((f"{new_key}[{i}]", item))
+            else:
+                items.append((new_key, v))
+        return dict(items)
+    
     def _generate_deal_documents(self, deals: List[Deal]) -> List[Document]:
         """
         Generate deal documents (18-36) with title, borrower_name, borrower_lei, etc.
@@ -1409,7 +1437,7 @@ The document contains placeholder content representing a credit agreement.
                                     "data": {
                                         "cdm_json_length": len(cdm_json),
                                         "source_cdm_data_type": type(source_cdm_data).__name__,
-                                        "has_date_objects": any(isinstance(v, (date, datetime)) for v in _flatten_dict(source_cdm_data).values()) if isinstance(source_cdm_data, dict) else False
+                                        "has_date_objects": any(isinstance(v, (date, datetime)) for v in self._flatten_dict(source_cdm_data).values()) if isinstance(source_cdm_data, dict) else False
                                     },
                                     "timestamp": int(datetime.now().timestamp() * 1000)
                                 }
@@ -1424,7 +1452,7 @@ The document contains placeholder content representing a credit agreement.
                             elif hasattr(cdm, 'dict'):
                                 # For Pydantic v1, convert date objects to ISO strings manually
                                 source_cdm_data = cdm.dict()
-                                # datetime and date are already imported at module level
+                                from datetime import date, datetime
                                 
                                 def json_serial(obj):
                                     """JSON serializer for objects not serializable by default json code"""
@@ -3418,7 +3446,7 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
             logger.warning(f"Failed to create ChromaDB seed index: {e}")
         
         return indexed_count
-
+    
     def complete_partially_filled_data(
         self,
         complete_deals: bool = True,
@@ -3487,11 +3515,19 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
             self.db.rollback()
         
         return completion_stats
-
-
+    
     def _complete_partial_deals(self) -> int:
-        """Complete missing fields in partially filled demo deals."""
-        partial_deals = self.db.query(Deal).filter(Deal.is_demo == True).all()
+        """
+        Complete missing fields in partially filled demo deals.
+        
+        Returns:
+            Number of deals completed
+        """
+        # Find demo deals with missing or incomplete deal_data
+        partial_deals = self.db.query(Deal).filter(
+            Deal.is_demo == True
+        ).all()
+        
         completed_count = 0
         
         for deal in partial_deals:
@@ -3499,20 +3535,23 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                 needs_completion = False
                 deal_data = deal.deal_data or {}
                 
-                required_fields = ["loan_amount", "term_years", "interest_rate", "industry", "sustainability_linked", "collateral_type"]
+                # Check for missing critical fields in deal_data
+                required_fields = [
+                    "loan_amount", "term_years", "interest_rate", "industry",
+                    "sustainability_linked", "esg_targets", "collateral_type"
+                ]
+                
                 for field in required_fields:
                     if field not in deal_data or deal_data[field] is None:
                         needs_completion = True
                         break
                 
+                # Check if deal_type is missing
                 if not deal.deal_type:
                     needs_completion = True
                 
-                if deal_data.get("sustainability_linked", False):
-                    if "esg_targets" not in deal_data or deal_data["esg_targets"] is None:
-                        needs_completion = True
-                
                 if needs_completion:
+                    # Get application data if available
                     application = deal.application
                     if application and application.application_data:
                         app_data = application.application_data
@@ -3522,24 +3561,33 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         loan_amount = deal_data.get("loan_amount", 1000000)
                         industry = deal_data.get("industry", "Technology")
                     
+                    # Get industry-specific config
                     from app.prompts.demo.deal_generation import get_industry_config
                     industry_config = get_industry_config(industry)
                     
+                    # Complete missing deal_data fields
                     if "loan_amount" not in deal_data or deal_data["loan_amount"] is None:
                         deal_data["loan_amount"] = loan_amount
+                    
                     if "term_years" not in deal_data or deal_data["term_years"] is None:
                         term_min, term_max = industry_config["term_range"]
                         deal_data["term_years"] = random.randint(term_min, term_max)
+                    
                     if "interest_rate" not in deal_data or deal_data["interest_rate"] is None:
                         rate_min, rate_max = industry_config["interest_rate_range"]
                         deal_data["interest_rate"] = round(random.uniform(rate_min, rate_max), 2)
+                    
                     if "industry" not in deal_data or deal_data["industry"] is None:
                         deal_data["industry"] = industry
+                    
                     if "sustainability_linked" not in deal_data or deal_data["sustainability_linked"] is None:
+                        # 30% of deals are sustainability-linked
                         deal_data["sustainability_linked"] = random.random() < 0.30
+                    
                     if "collateral_type" not in deal_data or deal_data["collateral_type"] is None:
                         deal_data["collateral_type"] = random.choice(industry_config["collateral_types"])
                     
+                    # Complete ESG targets if sustainability-linked
                     if deal_data.get("sustainability_linked", False):
                         if "esg_targets" not in deal_data or deal_data["esg_targets"] is None:
                             deal_data["esg_targets"] = {
@@ -3548,15 +3596,19 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                                 "measurement_frequency": "Quarterly"
                             }
                     
+                    # Set deal_type if missing
                     if not deal.deal_type:
                         deal.deal_type = DealType.LOAN_APPLICATION.value
                     
+                    # Update deal
                     deal.deal_data = deal_data
                     deal.updated_at = datetime.utcnow()
                     self.db.add(deal)
                     completed_count += 1
+                    
             except Exception as e:
-                logger.error(f"Failed to complete deal {deal.deal_id}: {str(e)}", exc_info=True)
+                error_msg = f"Failed to complete deal {deal.deal_id}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
                 continue
         
         self.db.flush()
@@ -3564,33 +3616,64 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
         return completed_count
     
     def _complete_partial_loan_assets(self) -> int:
-        """Complete missing fields in partially filled demo loan assets."""
+        """
+        Complete missing fields in partially filled demo loan assets.
+        
+        Returns:
+            Number of loan assets completed
+        """
+        # Find demo loan assets (those associated with demo deals)
         demo_deal_ids = [d.deal_id for d in self.db.query(Deal).filter(Deal.is_demo == True).all()]
+        
         if not demo_deal_ids:
             return 0
         
-        partial_loan_assets = self.db.query(LoanAsset).filter(LoanAsset.loan_id.in_(demo_deal_ids)).all()
+        partial_loan_assets = self.db.query(LoanAsset).filter(
+            LoanAsset.loan_id.in_(demo_deal_ids)
+        ).all()
+        
         completed_count = 0
         
         for loan_asset in partial_loan_assets:
             try:
-                needs_completion = (
-                    not loan_asset.original_text or not loan_asset.legal_vector or
-                    not loan_asset.collateral_address or loan_asset.geo_lat is None or
-                    loan_asset.geo_lon is None or not loan_asset.satellite_snapshot_url or
-                    not loan_asset.geo_vector or not loan_asset.spt_data or
-                    not loan_asset.green_finance_metrics or loan_asset.location_type is None or
-                    loan_asset.air_quality_index is None or loan_asset.composite_sustainability_score is None
-                )
+                needs_completion = False
+                
+                # Check for missing critical fields
+                if not loan_asset.original_text:
+                    needs_completion = True
+                if not loan_asset.legal_vector:
+                    needs_completion = True
+                if not loan_asset.collateral_address:
+                    needs_completion = True
+                if loan_asset.geo_lat is None or loan_asset.geo_lon is None:
+                    needs_completion = True
+                if not loan_asset.satellite_snapshot_url:
+                    needs_completion = True
+                if not loan_asset.geo_vector:
+                    needs_completion = True
+                if not loan_asset.spt_data:
+                    needs_completion = True
+                if not loan_asset.green_finance_metrics:
+                    needs_completion = True
+                if loan_asset.location_type is None:
+                    needs_completion = True
+                if loan_asset.air_quality_index is None:
+                    needs_completion = True
+                if loan_asset.composite_sustainability_score is None:
+                    needs_completion = True
                 
                 if needs_completion:
+                    # Get associated deal
                     deal = self.db.query(Deal).filter(Deal.deal_id == loan_asset.loan_id).first()
                     if not deal:
                         continue
                     
+                    # Use the same generation logic as _generate_loan_assets_for_deals
+                    # Get ESG targets from deal
                     esg_targets = deal.deal_data.get("esg_targets", {}) if deal.deal_data else {}
                     ndvi_threshold = esg_targets.get("ndvi_threshold", 0.75)
                     
+                    # Generate or complete missing address
                     if not loan_asset.collateral_address:
                         addresses = [
                             "123 Industrial Way, Detroit, MI 48201",
@@ -3600,6 +3683,7 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         ]
                         loan_asset.collateral_address = random.choice(addresses)
                     
+                    # Generate or complete coordinates
                     if loan_asset.geo_lat is None or loan_asset.geo_lon is None:
                         geo_coords = {
                             "123 Industrial Way, Detroit, MI 48201": (42.3314, -83.0458),
@@ -3611,9 +3695,11 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         loan_asset.geo_lat = geo_lat
                         loan_asset.geo_lon = geo_lon
                     
+                    # Generate or complete NDVI score
                     if loan_asset.last_verified_score is None:
                         loan_asset.last_verified_score = random.uniform(0.50, 0.95)
                     
+                    # Calculate or complete risk status
                     if loan_asset.risk_status == "PENDING" or not loan_asset.risk_status:
                         if loan_asset.last_verified_score >= ndvi_threshold:
                             loan_asset.risk_status = "COMPLIANT"
@@ -3622,17 +3708,21 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         else:
                             loan_asset.risk_status = "BREACH"
                     
+                    # Get or complete interest rates
                     base_interest_rate = deal.deal_data.get("interest_rate", 5.25) if deal.deal_data else 5.25
                     penalty_bps = esg_targets.get("penalty_bps", 25) if isinstance(esg_targets, dict) else 25
                     
                     if loan_asset.base_interest_rate is None:
                         loan_asset.base_interest_rate = float(base_interest_rate)
+                    
                     if loan_asset.current_interest_rate is None:
                         current_rate = base_interest_rate + (penalty_bps / 10000 if loan_asset.risk_status == "BREACH" else 0)
                         loan_asset.current_interest_rate = float(current_rate)
+                    
                     if loan_asset.penalty_bps is None:
                         loan_asset.penalty_bps = penalty_bps if loan_asset.risk_status == "BREACH" else 0
                     
+                    # Generate or complete original_text
                     if not loan_asset.original_text:
                         loan_amount = deal.deal_data.get('loan_amount', 1000000) if deal.deal_data else 1000000
                         term_years = deal.deal_data.get('term_years', 5) if deal.deal_data else 5
@@ -3648,12 +3738,19 @@ This sustainability-linked credit agreement establishes a loan facility with the
 
 The borrower agrees to maintain the specified NDVI threshold and will be subject to quarterly verification."""
                     
+                    # Generate or complete legal_vector
                     if not loan_asset.legal_vector:
                         loan_asset.legal_vector = [random.uniform(-1.0, 1.0) for _ in range(1536)]
+                    
+                    # Generate or complete satellite_snapshot_url
                     if not loan_asset.satellite_snapshot_url:
                         loan_asset.satellite_snapshot_url = f"https://josephrp.github.io/creditnexus/snapshots/{deal.deal_id}/{datetime.utcnow().strftime('%Y%m%d')}.tif"
+                    
+                    # Generate or complete geo_vector
                     if not loan_asset.geo_vector:
                         loan_asset.geo_vector = [random.uniform(-1.0, 1.0) for _ in range(512)]
+                    
+                    # Generate or complete spt_data
                     if not loan_asset.spt_data:
                         loan_asset.spt_data = {
                             "target_type": "NDVI",
@@ -3672,10 +3769,14 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                             ],
                             "next_verification_date": (datetime.utcnow() + timedelta(days=90)).isoformat()
                         }
+                    
+                    # Set spt_threshold if missing
                     if loan_asset.spt_threshold is None:
                         loan_asset.spt_threshold = ndvi_threshold
                     
+                    # Generate or complete green finance metrics
                     if not loan_asset.green_finance_metrics or loan_asset.location_type is None:
+                        # Location classification
                         location_type_map = {
                             "123 Industrial Way, Detroit, MI 48201": "urban",
                             "456 Farm Road, Napa, CA 94558": "rural",
@@ -3685,6 +3786,7 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         location_type = location_type_map.get(loan_asset.collateral_address, random.choice(["urban", "suburban", "rural"]))
                         loan_asset.location_type = location_type
                         
+                        # Generate air quality data
                         if location_type == "urban":
                             aqi = random.uniform(80, 150)
                         elif location_type == "suburban":
@@ -3693,6 +3795,8 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                             aqi = random.uniform(20, 60)
                         
                         loan_asset.air_quality_index = aqi
+                        
+                        # Calculate composite sustainability score
                         vegetation_health = loan_asset.last_verified_score
                         if aqi <= 50:
                             air_quality_score = 1.0
@@ -3705,8 +3809,14 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                         else:
                             air_quality_score = 0.2
                         
-                        composite_score = (vegetation_health * 0.30 + air_quality_score * 0.25 + 0.45)
+                        composite_score = (
+                            vegetation_health * 0.30 +
+                            air_quality_score * 0.25 +
+                            0.45  # Simplified calculation
+                        )
                         loan_asset.composite_sustainability_score = composite_score
+                        
+                        # Build green_finance_metrics
                         loan_asset.green_finance_metrics = {
                             "location_type": location_type,
                             "location_confidence": random.uniform(0.75, 0.95),
@@ -3722,8 +3832,11 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                             }
                         }
                     
+                    # Set last_verified_at if missing
                     if not loan_asset.last_verified_at:
                         loan_asset.last_verified_at = datetime.utcnow() - timedelta(days=random.randint(1, 30))
+                    
+                    # Generate or complete asset_metadata
                     if not loan_asset.asset_metadata:
                         loan_asset.asset_metadata = {
                             "verification_method": "Sentinel-2B",
@@ -3734,8 +3847,10 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
                     
                     self.db.add(loan_asset)
                     completed_count += 1
+                    
             except Exception as e:
-                logger.error(f"Failed to complete loan asset {loan_asset.loan_id}: {str(e)}", exc_info=True)
+                error_msg = f"Failed to complete loan asset {loan_asset.loan_id}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
                 continue
         
         self.db.flush()
@@ -3743,93 +3858,143 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
         return completed_count
     
     def _complete_partial_applications(self) -> int:
-        """Complete missing fields in partially filled demo applications."""
+        """
+        Complete missing fields in partially filled demo applications.
+        
+        Returns:
+            Number of applications completed
+        """
+        # Find demo applications (those associated with demo deals)
+        demo_deal_ids = [d.deal_id for d in self.db.query(Deal).filter(Deal.is_demo == True).all()]
         demo_application_ids = [
             d.application_id for d in self.db.query(Deal).filter(
                 Deal.is_demo == True,
                 Deal.application_id.isnot(None)
             ).all()
         ]
+        
         if not demo_application_ids:
             return 0
         
-        partial_applications = self.db.query(Application).filter(Application.id.in_(demo_application_ids)).all()
+        partial_applications = self.db.query(Application).filter(
+            Application.id.in_(demo_application_ids)
+        ).all()
+        
         completed_count = 0
         
         for application in partial_applications:
             try:
-                needs_completion = (
-                    not application.application_data or
-                    not application.application_data.get("loan_amount") or
-                    not application.application_data.get("industry") or
-                    (application.application_type == ApplicationType.BUSINESS.value and not application.business_data) or
-                    (application.application_type == ApplicationType.INDIVIDUAL.value and not application.individual_data)
-                )
+                needs_completion = False
+                
+                # Check for missing critical fields
+                if not application.application_data:
+                    needs_completion = True
+                elif not application.application_data.get("loan_amount"):
+                    needs_completion = True
+                elif not application.application_data.get("industry"):
+                    needs_completion = True
+                
+                if application.application_type == ApplicationType.BUSINESS.value:
+                    if not application.business_data:
+                        needs_completion = True
+                elif application.application_type == ApplicationType.INDIVIDUAL.value:
+                    if not application.individual_data:
+                        needs_completion = True
                 
                 if needs_completion:
+                    # Complete application_data
                     if not application.application_data:
                         application.application_data = {}
+                    
                     app_data = application.application_data
                     
                     if not app_data.get("loan_amount"):
                         app_data["loan_amount"] = random.randint(100000, 10000000)
+                    
                     if not app_data.get("industry"):
                         from app.prompts.demo.deal_generation import get_industry_weights
                         industry_weights = get_industry_weights()
                         industries = list(industry_weights.keys())
                         weights = list(industry_weights.values())
                         app_data["industry"] = random.choices(industries, weights=weights)[0]
+                    
                     if not app_data.get("purpose"):
                         app_data["purpose"] = random.choice(["Working capital", "Expansion", "Refinancing", "Equipment purchase", "Inventory"])
+                    
                     if not app_data.get("years_in_business"):
                         app_data["years_in_business"] = random.randint(2, 50)
+                    
                     if not app_data.get("annual_revenue"):
                         app_data["annual_revenue"] = app_data["loan_amount"] * random.uniform(2, 10)
+                    
                     if not app_data.get("credit_score"):
                         app_data["credit_score"] = random.randint(650, 850)
+                    
                     application.application_data = app_data
                     
+                    # Complete business_data for business applications
                     if application.application_type == ApplicationType.BUSINESS.value:
                         if not application.business_data:
                             application.business_data = {}
+                        
                         business_data = application.business_data
+                        
                         if not business_data.get("company_name"):
                             business_data["company_name"] = f"Demo Company {application.id}"
+                        
                         if not business_data.get("tax_id"):
                             business_data["tax_id"] = f"{random.randint(10, 99)}-{random.randint(1000000, 9999999)}"
+                        
                         if not business_data.get("legal_structure"):
                             business_data["legal_structure"] = random.choice(["Corporation", "LLC", "Partnership"])
+                        
                         if not business_data.get("number_of_employees"):
                             business_data["number_of_employees"] = random.randint(10, 5000)
+                        
                         if not business_data.get("business_address"):
                             business_data["business_address"] = f"{random.randint(1, 9999)} Business St, City, ST {random.randint(10000, 99999)}"
+                        
                         application.business_data = business_data
+                    
+                    # Complete individual_data for individual applications
                     elif application.application_type == ApplicationType.INDIVIDUAL.value:
                         if not application.individual_data:
                             application.individual_data = {}
+                        
                         individual_data = application.individual_data
+                        
                         if not individual_data.get("first_name"):
                             individual_data["first_name"] = "John"
+                        
                         if not individual_data.get("last_name"):
                             individual_data["last_name"] = f"Doe{application.id}"
+                        
                         if not individual_data.get("date_of_birth"):
                             individual_data["date_of_birth"] = (datetime.utcnow() - timedelta(days=random.randint(25*365, 65*365))).date().isoformat()
+                        
                         if not individual_data.get("ssn_last_4"):
                             individual_data["ssn_last_4"] = f"{random.randint(1000, 9999)}"
+                        
                         if not individual_data.get("employment_status"):
                             individual_data["employment_status"] = random.choice(["Employed", "Self-employed", "Retired"])
+                        
                         if not individual_data.get("annual_income"):
                             individual_data["annual_income"] = app_data.get("annual_revenue", 100000)
+                        
                         if not individual_data.get("residential_address"):
                             individual_data["residential_address"] = f"{random.randint(1, 9999)} Residential Ave, City, ST {random.randint(10000, 99999)}"
+                        
                         if not individual_data.get("years_at_address"):
                             individual_data["years_at_address"] = random.randint(1, 20)
+                        
                         application.individual_data = individual_data
                     
                     self.db.add(application)
                     completed_count += 1
+                    
             except Exception as e:
-                logger.error(f"Failed to complete application {application.id}: {str(e)}", exc_info=True)
+                error_msg = f"Failed to complete application {application.id}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
                 continue
         
         self.db.flush()
@@ -3837,31 +4002,57 @@ The borrower agrees to maintain the specified NDVI threshold and will be subject
         return completed_count
     
     def _complete_partial_documents(self) -> int:
-        """Complete missing fields in partially filled demo documents."""
+        """
+        Complete missing fields in partially filled demo documents.
+        
+        Returns:
+            Number of documents completed
+        """
+        # Find demo documents (those associated with demo deals)
         demo_deal_ids = [d.id for d in self.db.query(Deal).filter(Deal.is_demo == True).all()]
+        
         if not demo_deal_ids:
             return 0
         
-        partial_documents = self.db.query(Document).filter(Document.deal_id.in_(demo_deal_ids)).all()
+        partial_documents = self.db.query(Document).filter(
+            Document.deal_id.in_(demo_deal_ids)
+        ).all()
+        
         completed_count = 0
         
         for document in partial_documents:
             try:
-                needs_completion = (
-                    not document.title or not document.document_type or not document.status
-                )
+                needs_completion = False
+                
+                # Check for missing critical fields
+                if not document.title:
+                    needs_completion = True
+                if not document.document_type:
+                    needs_completion = True
+                if not document.status:
+                    needs_completion = True
                 
                 if needs_completion:
+                    # Complete title if missing
                     if not document.title:
                         document.title = f"Document for Deal {document.deal_id}"
+                    
+                    # Complete document_type if missing
                     if not document.document_type:
-                        document.document_type = random.choice(["credit_agreement", "term_sheet", "amendment", "notice", "certificate"])
+                        document.document_type = random.choice([
+                            "credit_agreement", "term_sheet", "amendment", "notice", "certificate"
+                        ])
+                    
+                    # Complete status if missing
                     if not document.status:
                         document.status = "draft"
+                    
                     self.db.add(document)
                     completed_count += 1
+                    
             except Exception as e:
-                logger.error(f"Failed to complete document {document.id}: {str(e)}", exc_info=True)
+                error_msg = f"Failed to complete document {document.id}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
                 continue
         
         self.db.flush()
