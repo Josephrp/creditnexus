@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
-import { 
-  Eye, 
-  Edit, 
-  FileText, 
-  Calendar, 
-  DollarSign, 
+import {
+  Eye,
+  Edit,
+  FileText,
+  Calendar,
+  DollarSign,
   Building2
 } from 'lucide-react';
 
@@ -32,21 +32,27 @@ interface DemoDealCardProps {
   className?: string;
 }
 
-export function DemoDealCard({ 
-  deal, 
-  onView, 
-  onEdit, 
+export function DemoDealCard({
+  deal,
+  onView,
+  onEdit,
   onViewDocuments,
-  className = '' 
+  className = ''
 }: DemoDealCardProps) {
-  const formatCurrency = (amount: number | undefined, currency: string = 'USD') => {
+  const formatCurrency = (amount: number | undefined, currencyCode?: string | null) => {
     if (!amount) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    const currency = currencyCode || 'USD';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch (err) {
+      console.warn(`Invalid currency code: ${currency}`, err);
+      return `${currency} ${amount.toLocaleString()}`;
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -99,7 +105,7 @@ export function DemoDealCard({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="pt-0">
         <div className="space-y-3">
           {/* Borrower Info */}

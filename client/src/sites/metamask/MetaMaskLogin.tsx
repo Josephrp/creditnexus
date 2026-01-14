@@ -103,15 +103,15 @@ export function MetaMaskLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-[var(--surface-gradient-start)] via-[var(--surface-panel)] to-[var(--surface-gradient-end)] text-[var(--color-foreground)] flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="surface-panel">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Wallet className="h-8 w-8 text-blue-400" />
+            <div className="w-16 h-16 bg-[var(--color-primary)]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Wallet className="h-8 w-8 text-[var(--color-primary)]" />
             </div>
             <CardTitle className="text-2xl">MetaMask Login</CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-[var(--color-muted-foreground)]">
               Connect your wallet to sign in securely
             </CardDescription>
           </CardHeader>
@@ -121,7 +121,7 @@ export function MetaMaskLogin() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Step 1: Connect Your Wallet</h3>
-                  <p className="text-sm text-slate-400 mb-4">
+                  <p className="text-sm text-[var(--color-muted-foreground)] mb-4">
                     Click the button below to connect your MetaMask wallet
                   </p>
                   <MetaMaskConnect onConnect={() => setStep('sign')} />
@@ -138,13 +138,13 @@ export function MetaMaskLogin() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Step 2: Authenticate</h3>
-                  <p className="text-sm text-slate-400 mb-4">
+                  <p className="text-sm text-[var(--color-muted-foreground)] mb-4">
                     Sign a message to verify ownership of your wallet address
                   </p>
                   <Button
                     onClick={handleAuthenticate}
                     disabled={authenticating}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white"
+                    className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-[var(--color-on-primary)]"
                   >
                     {authenticating ? (
                       <>
@@ -165,8 +165,8 @@ export function MetaMaskLogin() {
             {/* Step 3: Authenticating */}
             {step === 'authenticate' && (
               <div className="text-center space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-400 mx-auto" />
-                <p className="text-slate-400">Authenticating...</p>
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--color-primary)] mx-auto" />
+                <p className="text-[var(--color-muted-foreground)]">Authenticating...</p>
               </div>
             )}
 
@@ -177,14 +177,14 @@ export function MetaMaskLogin() {
                   <CheckCircle className="h-8 w-8 text-emerald-400" />
                 </div>
                 <h3 className="text-lg font-semibold">Authentication Successful!</h3>
-                <p className="text-sm text-slate-400">Redirecting to dashboard...</p>
+                <p className="text-sm text-[var(--color-muted-foreground)]">Redirecting to dashboard...</p>
               </div>
             )}
 
             {/* Error Display */}
             {error && (
-              <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
-                <div className="flex items-center gap-2 text-red-400">
+              <div className="p-4 bg-[var(--color-destructive)]/20 border border-[var(--color-destructive)]/50 rounded-lg">
+                <div className="flex items-center gap-2 text-[var(--color-destructive)]">
                   <AlertCircle className="h-5 w-5" />
                   <p className="text-sm">{error}</p>
                 </div>
@@ -192,9 +192,9 @@ export function MetaMaskLogin() {
             )}
 
             {/* Instructions */}
-            <div className="border-t border-slate-700 pt-6">
+            <div className="border-t border-[var(--color-border)] pt-6">
               <h4 className="text-sm font-semibold mb-3">How it works:</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <ul className="space-y-2 text-sm text-[var(--color-muted-foreground)]">
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-400">1.</span>
                   <span>Connect your MetaMask wallet</span>
@@ -211,13 +211,13 @@ export function MetaMaskLogin() {
             </div>
 
             {/* Alternative Login */}
-            <div className="border-t border-slate-700 pt-6">
-              <p className="text-sm text-slate-400 text-center mb-3">
+            <div className="border-t border-[var(--color-border)] pt-6">
+              <p className="text-sm text-[var(--color-muted-foreground)] text-center mb-3">
                 Don't have a wallet?
               </p>
               <Button
                 variant="outline"
-                className="w-full border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="w-full border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--surface-panel)]"
                 onClick={() => navigate('/login')}
               >
                 Use Email Login

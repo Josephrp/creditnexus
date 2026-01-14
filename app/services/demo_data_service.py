@@ -33,27 +33,6 @@ from app.models.user_profile import UserProfileData
 from app.core.config import settings
 from app.services.file_storage_service import FileStorageService
 
-# #region agent log
-log_data = {
-    "sessionId": "debug-session",
-    "runId": "post-fix",
-    "hypothesisId": "A",
-    "location": "demo_data_service.py:33",
-    "message": "Post-fix: Settings import verification",
-    "data": {
-        "settings_in_globals": "settings" in globals(),
-        "settings_type": type(settings).__name__ if "settings" in globals() else "NOT_FOUND",
-        "has_enhanced_satellite_attr": hasattr(settings, "ENHANCED_SATELLITE_ENABLED") if "settings" in globals() else False,
-        "enhanced_satellite_value": getattr(settings, "ENHANCED_SATELLITE_ENABLED", None) if "settings" in globals() else None
-    },
-    "timestamp": int(datetime.now().timestamp() * 1000)
-}
-try:
-    with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-        f.write(json.dumps(log_data) + "\n")
-except:
-    pass
-# #endregion
 
 logger = logging.getLogger(__name__)
 
@@ -765,64 +744,6 @@ The document contains placeholder content representing a credit agreement.
         
         logger.info(f"File attachment correlation: {len(deals_with_files)} deals have files, {len(sustainability_deals_with_files)} are sustainability-linked with files")
         
-        # #region agent log
-        log_data = {
-            "sessionId": "debug-session",
-            "runId": "post-fix",
-            "hypothesisId": "A",
-            "location": "demo_data_service.py:505",
-            "message": "Post-fix: Before settings access - verification",
-            "data": {
-                "loan_assets_count": len(loan_assets) if loan_assets else 0,
-                "settings_in_globals": "settings" in globals(),
-                "settings_accessible": "settings" in globals() and hasattr(settings, "ENHANCED_SATELLITE_ENABLED"),
-                "enhanced_satellite_value": getattr(settings, "ENHANCED_SATELLITE_ENABLED", None) if "settings" in globals() else None
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000)
-        }
-        with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-            f.write(json.dumps(log_data) + "\n")
-        # #endregion
-        
-        # #region agent log
-        try:
-            test_value = settings.ENHANCED_SATELLITE_ENABLED
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - SUCCESS",
-                "data": {
-                    "settings_type": type(settings).__name__,
-                    "enhanced_satellite_value": test_value,
-                    "access_successful": True
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        except NameError as e:
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - NameError (FIX FAILED)",
-                "data": {"error": str(e), "error_type": type(e).__name__, "access_successful": False},
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        except Exception as e:
-            log_data = {
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "A",
-                "location": "demo_data_service.py:506",
-                "message": "Post-fix: Settings access test - Other Error",
-                "data": {"error": str(e), "error_type": type(e).__name__, "access_successful": False},
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-        with open(r"c:\Users\MeMyself\creditnexus\.cursor\debug.log", "a") as f:
-            f.write(json.dumps(log_data) + "\n")
-        # #endregion
         
         # Step 6b: Create green finance assessments for loan assets
         if loan_assets and settings.ENHANCED_SATELLITE_ENABLED:
@@ -1230,13 +1151,13 @@ The document contains placeholder content representing a credit agreement.
         # Note: ApplicationStatus doesn't have PENDING, only DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
         base_status_mapping = {
             ApplicationStatus.DRAFT.value: DealStatus.DRAFT.value,
-            ApplicationStatus.SUBMITTED.value: DealStatus.SUBMITTED.value,
-            ApplicationStatus.UNDER_REVIEW.value: DealStatus.UNDER_REVIEW.value,
-            ApplicationStatus.APPROVED.value: DealStatus.APPROVED.value,
-            ApplicationStatus.REJECTED.value: DealStatus.REJECTED.value
+            ApplicationStatus.SUBMITTED.value: DealStatus.PENDING.value,
+            ApplicationStatus.UNDER_REVIEW.value: DealStatus.PENDING.value,
+            ApplicationStatus.APPROVED.value: DealStatus.ACTIVE.value,
+            ApplicationStatus.REJECTED.value: DealStatus.CANCELLED.value
         }
         
-        base_status = base_status_mapping.get(application.status, DealStatus.SUBMITTED.value)
+        base_status = base_status_mapping.get(application.status, DealStatus.PENDING.value)
         
         # Use weighted random selection for realistic distribution
         # This ensures we get the target percentages across all deals
@@ -1246,17 +1167,17 @@ The document contains placeholder content representing a credit agreement.
         if rand < 0.05:
             return DealStatus.DRAFT.value
         elif rand < 0.20:  # 5% + 15%
-            return DealStatus.SUBMITTED.value
+            return DealStatus.PENDING.value
         elif rand < 0.45:  # 5% + 15% + 25%
-            return DealStatus.UNDER_REVIEW.value
+            return DealStatus.PENDING.value
         elif rand < 0.65:  # 5% + 15% + 25% + 20%
-            return DealStatus.APPROVED.value
+            return DealStatus.ACTIVE.value
         elif rand < 0.80:  # 5% + 15% + 25% + 20% + 15%
             # Active deals should have approved base status and be older
-            if base_status == DealStatus.APPROVED.value and deal_age_days > 30:
+            if base_status == DealStatus.ACTIVE.value and deal_age_days > 30:
                 return DealStatus.ACTIVE.value
             else:
-                return DealStatus.APPROVED.value
+                return DealStatus.ACTIVE.value
         elif rand < 0.90:  # 5% + 15% + 25% + 20% + 15% + 10%
             # Closed deals should be older active deals
             if deal_age_days > 180:
@@ -1264,15 +1185,13 @@ The document contains placeholder content representing a credit agreement.
             else:
                 return DealStatus.ACTIVE.value
         elif rand < 0.95:  # 5% + 15% + 25% + 20% + 15% + 10% + 5%
-            return DealStatus.REJECTED.value
+            return DealStatus.CANCELLED.value
         elif rand < 0.98:  # 5% + 15% + 25% + 20% + 15% + 10% + 5% + 3%
             # Restructuring deals should be active deals with issues
-            if base_status == DealStatus.ACTIVE.value:
-                return DealStatus.RESTRUCTURING.value
-            else:
-                return DealStatus.APPROVED.value
+            # We don't have RESTRUCTURING in DealStatus enum, so use ACTIVE or PENDING
+            return DealStatus.ACTIVE.value
         else:  # 5% + 15% + 25% + 20% + 15% + 10% + 5% + 3% + 2%
-            return DealStatus.WITHDRAWN.value
+            return DealStatus.CANCELLED.value
     
     def _flatten_dict(self, d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
         """
