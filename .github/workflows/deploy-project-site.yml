@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -75,6 +75,23 @@ jobs:
     needs: build
     timeout-minutes: 15
     steps:
+      - name: Wait for any stuck deployments to timeout
+        run: |
+          echo "Waiting 30 seconds for any stuck deployments to timeout..."
+          sleep 30
+
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Retry deployment if conflicted
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "Previous deployment failed, waiting 60 seconds and retrying..."
+          sleep 60
+
+      - name: Deploy to GitHub Pages (retry)
+        if: steps.deployment.outcome == 'failure'
+        id: deployment_retry
         uses: actions/deploy-pages@v4
