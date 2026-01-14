@@ -46,6 +46,7 @@ import {
   PERMISSION_SATELLITE_VIEW,
 } from '@/utils/permissions';
 import { VerificationWidget } from '@/components/VerificationWidget';
+import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
 
 interface PortfolioAnalytics {
   summary: {
@@ -119,11 +120,11 @@ interface DashboardMetrics {
 }
 
 const workflowStateColors: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', label: 'Draft' },
-  under_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Under Review' },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Approved' },
-  published: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Published' },
-  archived: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Archived' },
+  draft: { bg: 'bg-[var(--color-slate-500)]/20', text: 'text-[var(--color-slate-400)]', label: 'Draft' },
+  under_review: { bg: 'bg-[var(--color-amber-500)]/20', text: 'text-[var(--color-amber-400)]', label: 'Under Review' },
+  approved: { bg: 'bg-[var(--color-emerald-500)]/20', text: 'text-[var(--color-emerald-400)]', label: 'Approved' },
+  published: { bg: 'bg-[var(--color-blue-500)]/20', text: 'text-[var(--color-blue-400)]', label: 'Published' },
+  archived: { bg: 'bg-[var(--color-gray-500)]/20', text: 'text-[var(--color-gray-400)]', label: 'Archived' },
 };
 
 const actionIcons: Record<string, typeof FileText> = {
@@ -141,17 +142,17 @@ const actionIcons: Record<string, typeof FileText> = {
 };
 
 const actionColors: Record<string, { bg: string; text: string }> = {
-  create: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  update: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  delete: { bg: 'bg-red-500/20', text: 'text-red-400' },
-  approve: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  reject: { bg: 'bg-red-500/20', text: 'text-red-400' },
-  publish: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
-  export: { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-  submit_review: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  login: { bg: 'bg-green-500/20', text: 'text-green-400' },
-  logout: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  broadcast: { bg: 'bg-indigo-500/20', text: 'text-indigo-400' }
+  create: { bg: 'bg-[var(--color-info-bg)]', text: 'text-[var(--color-info)]' },
+  update: { bg: 'bg-[var(--color-warning-bg)]', text: 'text-[var(--color-warning)]' },
+  delete: { bg: 'bg-[var(--color-error-bg)]', text: 'text-[var(--color-error)]' },
+  approve: { bg: 'bg-[var(--color-emerald-500)]/20', text: 'text-[var(--color-emerald-400)]' },
+  reject: { bg: 'bg-[var(--color-red-500)]/20', text: 'text-[var(--color-red-400)]' },
+  publish: { bg: 'bg-[var(--color-purple-500)]/20', text: 'text-[var(--color-purple-400)]' },
+  export: { bg: 'bg-[var(--color-cyan-500)]/20', text: 'text-[var(--color-cyan-400)]' },
+  submit_review: { bg: 'bg-[var(--color-amber-500)]/20', text: 'text-[var(--color-amber-400)]' },
+  login: { bg: 'bg-[var(--color-green-500)]/20', text: 'text-[var(--color-green-400)]' },
+  logout: { bg: 'bg-[var(--color-slate-500)]/20', text: 'text-[var(--color-slate-400)]' },
+  broadcast: { bg: 'bg-[var(--color-indigo-500)]/20', text: 'text-[var(--color-indigo-400)]' }
 };
 
 function formatCurrency(amount: number, currency: string = 'USD'): string {
@@ -198,15 +199,15 @@ interface MetricCardProps {
 
 function MetricCard({ title, value, subtitle, icon: Icon, iconBg, iconColor, trend, trendLabel }: MetricCardProps) {
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-colors">
+    <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6 hover:border-[var(--color-primary)]/60 transition-colors">
       <div className="flex items-center gap-3 mb-3">
         <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center`}>
           <Icon className={`h-5 w-5 ${iconColor}`} />
         </div>
-        <span className="text-sm text-slate-400">{title}</span>
+        <span className="text-sm text-[var(--color-muted-foreground)]">{title}</span>
       </div>
       <div className="flex items-baseline gap-2">
-        <p className="text-3xl font-bold text-white">{value}</p>
+        <p className="text-3xl font-bold text-[var(--color-foreground)]">{value}</p>
         {trend !== undefined && (
           <span className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -214,8 +215,8 @@ function MetricCard({ title, value, subtitle, icon: Icon, iconBg, iconColor, tre
           </span>
         )}
       </div>
-      {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
-      {trendLabel && <p className="text-xs text-slate-500 mt-1">{trendLabel}</p>}
+      {subtitle && <p className="text-sm text-[var(--color-muted-foreground)] mt-1">{subtitle}</p>}
+      {trendLabel && <p className="text-xs text-[var(--color-muted-foreground)] mt-1">{trendLabel}</p>}
     </div>
   );
 }
@@ -226,25 +227,25 @@ interface ActivityItemProps {
 
 function ActivityItem({ activity }: ActivityItemProps) {
   const Icon = actionIcons[activity.action] || Activity;
-  const colors = actionColors[activity.action] || { bg: 'bg-slate-500/20', text: 'text-slate-400' };
+  const colors = actionColors[activity.action] || { bg: 'bg-[var(--color-slate-500)]/20', text: 'text-[var(--color-slate-400)]' };
   
   return (
-    <div className="flex items-start gap-3 p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors">
+    <div className="flex items-start gap-3 p-3 bg-[var(--surface-panel-secondary)] rounded-lg hover:bg-[var(--surface-panel-hover)] transition-colors">
       <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
         <Icon className={`h-4 w-4 ${colors.text}`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-white">
+        <p className="text-sm text-[var(--color-foreground)]">
           <span className="font-medium">{activity.user_name}</span>
-          <span className="text-slate-400"> {activity.action_text} </span>
+          <span className="text-[var(--color-muted-foreground)]"> {activity.action_text} </span>
           {activity.target_name && (
-            <span className="font-medium text-slate-200">{activity.target_name}</span>
+            <span className="font-medium text-[var(--color-muted-foreground)]">{activity.target_name}</span>
           )}
           {!activity.target_name && activity.target_type && activity.target_type !== 'user' && (
-            <span className="text-slate-400">{activity.target_type}</span>
+            <span className="text-[var(--color-muted-foreground)]">{activity.target_type}</span>
           )}
         </p>
-        <p className="text-xs text-slate-500 mt-1">
+        <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
           {activity.occurred_at ? formatTimeAgo(activity.occurred_at) : ''}
         </p>
       </div>
@@ -355,10 +356,10 @@ export function Dashboard() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <p className="text-slate-300 mb-4">{error}</p>
+          <p className="text-[var(--color-muted-foreground)] mb-4">{error}</p>
           <button
             onClick={() => fetchData()}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm mx-auto"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-panel)] hover:bg-[var(--surface-panel-hover)] rounded-lg text-sm mx-auto"
           >
             <RefreshCw className="h-4 w-4" />
             Retry
@@ -380,23 +381,23 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Portfolio Dashboard</h2>
-          <p className="text-slate-400 mt-1">Overview of your credit agreement portfolio</p>
+          <h2 className="text-2xl font-semibold text-[var(--color-foreground)]">Portfolio Dashboard</h2>
+          <p className="text-[var(--color-muted-foreground)] mt-1">Overview of your credit agreement portfolio</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)] cursor-pointer">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/20"
+              className="rounded border-[var(--color-border)] bg-[var(--surface-panel)] text-[var(--color-foreground)] focus:ring-[var(--color-foreground)]/20"
             />
             Auto-refresh
           </label>
           <button
             onClick={() => fetchData(false)}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-panel)] hover:bg-[var(--surface-panel-hover)] disabled:opacity-50 rounded-lg text-sm transition-colors"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -405,13 +406,13 @@ export function Dashboard() {
       </div>
 
       {summary.total_documents === 0 && (
-        <div className="bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/20 rounded-xl p-6 text-center">
-          <FileText className="h-12 w-12 text-emerald-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">Welcome to CreditNexus</h3>
-          <p className="text-slate-400 mb-4 max-w-md mx-auto">
+        <div className="bg-gradient-to-r from-[var(--color-primary)]/10 to-[var(--color-accent)]/10 border border-[var(--color-primary)]/20 rounded-xl p-6 text-center">
+          <FileText className="h-12 w-12 text-[var(--color-primary)] mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-[var(--color-foreground)] mb-2">Welcome to CreditNexus</h3>
+          <p className="text-[var(--color-muted-foreground)] mb-4 max-w-md mx-auto">
             Your portfolio is empty. Start by uploading a credit agreement document using the Docu-Digitizer, then save it to your library.
           </p>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[var(--color-muted-foreground)]">
             Log in to save and manage your documents.
           </p>
         </div>
@@ -423,8 +424,8 @@ export function Dashboard() {
           value={summary.total_documents}
           subtitle="Credit agreements"
           icon={FileText}
-          iconBg="bg-blue-500/20"
-          iconColor="text-blue-400"
+          iconBg="bg-[var(--color-blue-500)]/20"
+          iconColor="text-[var(--color-blue-400)]"
           trend={metrics?.docs_trend_percent}
           trendLabel={metrics?.docs_this_week ? `${metrics.docs_this_week} this week` : undefined}
         />
@@ -433,8 +434,8 @@ export function Dashboard() {
           title="Total Commitments"
           value={formatCurrency(summary.total_commitment_usd)}
           icon={DollarSign}
-          iconBg="bg-emerald-500/20"
-          iconColor="text-emerald-400"
+          iconBg="bg-[var(--color-emerald-500)]/20"
+          iconColor="text-[var(--color-emerald-400)]"
           subtitle={Object.keys(summary.commitments_by_currency).length > 0 
             ? `Across ${Object.keys(summary.commitments_by_currency).length} currencies`
             : undefined}
@@ -445,8 +446,8 @@ export function Dashboard() {
           value={metrics?.pending_review ?? (workflow_distribution.under_review || 0)}
           subtitle={metrics?.approved_this_week ? `${metrics.approved_this_week} approved this week` : undefined}
           icon={Clock}
-          iconBg="bg-amber-500/20"
-          iconColor="text-amber-400"
+          iconBg="bg-[var(--color-amber-500)]/20"
+          iconColor="text-[var(--color-amber-400)]"
         />
 
         <MetricCard
@@ -454,8 +455,8 @@ export function Dashboard() {
           value={`${summary.sustainability_percentage}%`}
           subtitle={`${summary.sustainability_linked_count} of ${summary.total_documents} documents`}
           icon={Leaf}
-          iconBg="bg-green-500/20"
-          iconColor="text-green-400"
+          iconBg="bg-[var(--color-green-500)]/20"
+          iconColor="text-[var(--color-green-400)]"
         />
       </div>
 
@@ -465,8 +466,8 @@ export function Dashboard() {
           value={metrics?.published_count ?? (workflow_distribution.published || 0)}
           subtitle="Final documents"
           icon={FileCheck}
-          iconBg="bg-purple-500/20"
-          iconColor="text-purple-400"
+          iconBg="bg-[var(--color-purple-500)]/20"
+          iconColor="text-[var(--color-purple-400)]"
         />
 
         <MetricCard
@@ -474,8 +475,8 @@ export function Dashboard() {
           value={metrics?.draft_count ?? (workflow_distribution.draft || 0)}
           subtitle="Work in progress"
           icon={Edit}
-          iconBg="bg-slate-500/20"
-          iconColor="text-slate-400"
+          iconBg="bg-[var(--color-slate-500)]/20"
+          iconColor="text-[var(--color-slate-400)]"
         />
 
         <MetricCard
@@ -483,8 +484,8 @@ export function Dashboard() {
           value={workflow_distribution.approved || 0}
           subtitle="Ready to publish"
           icon={CheckCircle}
-          iconBg="bg-emerald-500/20"
-          iconColor="text-emerald-400"
+          iconBg="bg-[var(--color-emerald-500)]/20"
+          iconColor="text-[var(--color-emerald-400)]"
         />
 
         <MetricCard
@@ -492,28 +493,28 @@ export function Dashboard() {
           value={`${totalWorkflowDocs > 0 ? Math.round(((workflow_distribution.approved || 0) + (workflow_distribution.published || 0)) / totalWorkflowDocs * 100) : 0}%`}
           subtitle="Completed rate"
           icon={TrendingUp}
-          iconBg="bg-indigo-500/20"
-          iconColor="text-indigo-400"
+          iconBg="bg-[var(--color-indigo-500)]/20"
+          iconColor="text-[var(--color-indigo-400)]"
         />
       </div>
 
       <PermissionGate permission={PERMISSION_AUDIT_VIEW}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+          <div className="lg:col-span-1 bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-slate-400" />
-                <h3 className="text-lg font-medium text-white">Activity Feed</h3>
+                <Activity className="h-5 w-5 text-[var(--color-muted-foreground)]" />
+                <h3 className="text-lg font-medium text-[var(--color-foreground)]">Activity Feed</h3>
               </div>
             {dashboardMetrics?.last_updated && (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-[var(--color-muted-foreground)]">
                 Updated {formatTimeAgo(dashboardMetrics.last_updated)}
               </span>
             )}
           </div>
           
           {!dashboardMetrics?.activity_feed || dashboardMetrics.activity_feed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+            <div className="flex flex-col items-center justify-center h-64 text-[var(--color-muted-foreground)]">
               <Activity className="h-8 w-8 mb-2" />
               <p className="text-sm">No recent activity</p>
               <p className="text-xs mt-1">Actions will appear here as they happen</p>
@@ -527,14 +528,14 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="lg:col-span-2 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="lg:col-span-2 bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-medium text-white">Workflow Distribution</h3>
+            <BarChart3 className="h-5 w-5 text-[var(--color-muted-foreground)]" />
+            <h3 className="text-lg font-medium text-[var(--color-foreground)]">Workflow Distribution</h3>
           </div>
           
           {totalWorkflowDocs === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-500">
+            <div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">
               No documents in workflow yet
             </div>
           ) : (
@@ -547,9 +548,9 @@ export function Dashboard() {
                   <div key={state}>
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-sm ${config.text}`}>{config.label}</span>
-                      <span className="text-sm text-slate-400">{count} ({percentage.toFixed(1)}%)</span>
+                      <span className="text-sm text-[var(--color-muted-foreground)]">{count} ({percentage.toFixed(1)}%)</span>
                     </div>
-                    <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-3 bg-[var(--surface-panel-secondary)] rounded-full overflow-hidden">
                       <div
                         className={`h-full ${config.bg.replace('/20', '')} transition-all duration-500`}
                         style={{ width: `${percentage}%` }}
@@ -566,14 +567,14 @@ export function Dashboard() {
 
       <PermissionGate permission={PERMISSION_DOCUMENT_VIEW}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-medium text-white">Recent Documents</h3>
+            <Clock className="h-5 w-5 text-[var(--color-muted-foreground)]" />
+            <h3 className="text-lg font-medium text-[var(--color-foreground)]">Recent Documents</h3>
           </div>
           
           {recent_activity.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-500">
+            <div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">
               No recent documents
             </div>
           ) : (
@@ -586,13 +587,13 @@ export function Dashboard() {
                 return (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors"
+                    className="flex items-center justify-between p-3 bg-[var(--surface-panel-secondary)] rounded-lg hover:bg-[var(--surface-panel-hover)] transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-white truncate">{doc.title}</p>
+                      <p className="text-sm font-medium text-[var(--color-foreground)] truncate">{doc.title}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Building2 className="h-3 w-3 text-slate-500" />
-                        <span className="text-xs text-slate-400 truncate">
+                        <Building2 className="h-3 w-3 text-[var(--color-muted-foreground)]" />
+                        <span className="text-xs text-[var(--color-muted-foreground)] truncate">
                           {doc.borrower_name || 'Unknown borrower'}
                         </span>
                       </div>
@@ -601,7 +602,7 @@ export function Dashboard() {
                       <span className={`text-xs px-2 py-1 rounded ${stateConfig.bg} ${stateConfig.text}`}>
                         {stateConfig.label}
                       </span>
-                      <span className="text-xs text-slate-500 whitespace-nowrap">
+                      <span className="text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">
                         {doc.updated_at ? formatTimeAgo(doc.updated_at) : ''}
                       </span>
                     </div>
@@ -612,14 +613,14 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-5 w-5 text-slate-400" />
-            <h3 className="text-lg font-medium text-white">Agreement Timeline</h3>
+            <Calendar className="h-5 w-5 text-[var(--color-muted-foreground)]" />
+            <h3 className="text-lg font-medium text-[var(--color-foreground)]">Agreement Timeline</h3>
           </div>
           
           {maturity_timeline.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-500">
+            <div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">
               No agreements with dates
             </div>
           ) : (
@@ -627,12 +628,12 @@ export function Dashboard() {
               {maturity_timeline.slice(0, 8).map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-[var(--surface-panel-secondary)] rounded-lg"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-white truncate">{doc.title}</p>
+                    <p className="text-sm font-medium text-[var(--color-foreground)] truncate">{doc.title}</p>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-[var(--color-muted-foreground)]">
                         {doc.agreement_date ? formatDate(doc.agreement_date) : 'No date'}
                       </span>
                       {doc.sustainability_linked && (
@@ -660,10 +661,10 @@ export function Dashboard() {
       <PermissionGate permission={PERMISSION_TEMPLATE_VIEW}>
         {dashboardMetrics?.template_metrics && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Sparkles className="h-5 w-5 text-purple-400" />
-                <h3 className="text-lg font-medium text-white">Template Generation Metrics</h3>
+                <h3 className="text-lg font-medium text-[var(--color-foreground)]">Template Generation Metrics</h3>
               </div>
             
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -671,43 +672,43 @@ export function Dashboard() {
                 <div className="text-2xl font-bold text-purple-400 mb-1">
                   {dashboardMetrics.template_metrics.total_generations}
                 </div>
-                <div className="text-xs text-slate-400">Total Generations</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Total Generations</div>
               </div>
               <div className="text-center p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                 <div className="text-2xl font-bold text-emerald-400 mb-1">
                   {dashboardMetrics.template_metrics.success_rate}%
                 </div>
-                <div className="text-xs text-slate-400">Success Rate</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Success Rate</div>
               </div>
               <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
                 <div className="text-2xl font-bold text-blue-400 mb-1">
                   {dashboardMetrics.template_metrics.average_generation_time_seconds}s
                 </div>
-                <div className="text-xs text-slate-400">Avg Time</div>
+                <div className="text-xs text-[var(--color-muted-foreground)]">Avg Time</div>
               </div>
             </div>
 
             {dashboardMetrics.template_metrics.most_used_templates.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">Most Used Templates</h4>
+                <h4 className="text-sm font-medium text-[var(--color-muted-foreground)] mb-3">Most Used Templates</h4>
                 <div className="space-y-2">
                   {dashboardMetrics.template_metrics.most_used_templates.map((template, idx) => (
                     <div
                       key={template.template_id}
-                      className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-[var(--surface-panel-secondary)] rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
                           <span className="text-xs font-bold text-purple-400">#{idx + 1}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">{template.template_name}</p>
-                          <p className="text-xs text-slate-400">{template.template_category}</p>
+                          <p className="text-sm font-medium text-[var(--color-foreground)]">{template.template_name}</p>
+                          <p className="text-xs text-[var(--color-muted-foreground)]">{template.template_category}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-purple-400">{template.usage_count}</div>
-                        <div className="text-xs text-slate-500">uses</div>
+                        <div className="text-xs text-[var(--color-muted-foreground)]">uses</div>
                       </div>
                     </div>
                   ))}
@@ -717,13 +718,13 @@ export function Dashboard() {
           </div>
 
           <PermissionGate permission={PERMISSION_TEMPLATE_GENERATE}>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Zap className="h-5 w-5 text-yellow-400" />
-                <h3 className="text-lg font-medium text-white">Quick Generate</h3>
+                <h3 className="text-lg font-medium text-[var(--color-foreground)]">Quick Generate</h3>
               </div>
               
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-[var(--color-muted-foreground)] mb-4">
                 Start generating LMA documents from templates with your CDM data.
               </p>
               
@@ -733,16 +734,16 @@ export function Dashboard() {
                   const event = new CustomEvent('navigateToApp', { detail: { app: 'document-generator' } });
                   window.dispatchEvent(event);
                 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg text-white font-medium transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg text-[var(--color-foreground)] font-medium transition-all"
               >
                 <Sparkles className="h-5 w-5" />
                 Open Document Generator
                 <ArrowRight className="h-4 w-4" />
               </button>
             
-            <div className="mt-4 p-3 bg-slate-700/30 rounded-lg">
-              <p className="text-xs text-slate-400 mb-2">Quick Tips:</p>
-              <ul className="text-xs text-slate-500 space-y-1">
+            <div className="mt-4 p-3 bg-[var(--surface-panel-secondary)] rounded-lg">
+              <p className="text-xs text-[var(--color-muted-foreground)] mb-2">Quick Tips:</p>
+              <ul className="text-xs text-[var(--color-muted-foreground)] space-y-1">
                 <li>• Extract data from documents first</li>
                 <li>• Select appropriate LMA template</li>
                 <li>• Review and customize generated content</li>
@@ -752,19 +753,19 @@ export function Dashboard() {
           </PermissionGate>
 
           <PermissionGate permissions={[PERMISSION_DEAL_VIEW, PERMISSION_DEAL_VIEW_OWN]} requireAll={false}>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Building2 className="h-5 w-5 text-emerald-400" />
-                <h3 className="text-lg font-medium text-white">Deal Management</h3>
+                <h3 className="text-lg font-medium text-[var(--color-foreground)]">Deal Management</h3>
               </div>
               
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-[var(--color-muted-foreground)] mb-4">
                 Manage your loan and credit deals, track lifecycle, and view timelines.
               </p>
               
               <button
                 onClick={() => navigate('/dashboard/deals')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-lg text-white font-medium transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-lg text-[var(--color-foreground)] font-medium transition-all"
               >
                 <Building2 className="h-5 w-5" />
                 View Deals
@@ -777,10 +778,10 @@ export function Dashboard() {
       </PermissionGate>
 
       <PermissionGate permission={PERMISSION_DOCUMENT_VIEW}>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="bg-[var(--surface-panel)] border border-[var(--surface-panel-border)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <Leaf className="h-5 w-5 text-green-400" />
-            <h3 className="text-lg font-medium text-white">ESG Breakdown</h3>
+            <h3 className="text-lg font-medium text-[var(--color-foreground)]">ESG Breakdown</h3>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -795,25 +796,25 @@ export function Dashboard() {
               <span className="text-2xl font-bold text-green-400">{esg_breakdown.sustainability_linked}</span>
             </div>
             
-            <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+            <div className="flex items-center justify-between p-4 bg-[var(--surface-panel-secondary)] rounded-lg border border-[var(--surface-panel-border)]">
               <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-slate-400" />
+                <FileText className="h-5 w-5 text-[var(--color-muted-foreground)]" />
                 <div>
-                  <span className="text-sm text-slate-300 block">Standard</span>
-                  <span className="text-xs text-slate-400/70">Traditional agreements</span>
+                  <span className="text-sm text-[var(--color-muted-foreground)] block">Standard</span>
+                  <span className="text-xs text-[var(--color-muted-foreground)]/70">Traditional agreements</span>
                 </div>
               </div>
-              <span className="text-2xl font-bold text-slate-300">{esg_breakdown.non_sustainability}</span>
+              <span className="text-2xl font-bold text-[var(--color-muted-foreground)]">{esg_breakdown.non_sustainability}</span>
             </div>
             
             {Object.keys(esg_breakdown.esg_score_distribution).length > 0 && (
-              <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">ESG Categories</p>
+              <div className="p-4 bg-[var(--surface-panel-secondary)] rounded-lg border border-[var(--surface-panel-border)]">
+                <p className="text-xs text-[var(--color-muted-foreground)] uppercase tracking-wider mb-3">ESG Categories</p>
                 <div className="space-y-2">
                   {Object.entries(esg_breakdown.esg_score_distribution).map(([category, count]) => (
                     <div key={category} className="flex items-center justify-between">
-                      <span className="text-sm text-slate-400">{category}</span>
-                      <span className="text-sm font-medium text-slate-300">{count}</span>
+                      <span className="text-sm text-[var(--color-muted-foreground)]">{category}</span>
+                      <span className="text-sm font-medium text-[var(--color-muted-foreground)]">{count}</span>
                     </div>
                   ))}
                 </div>
@@ -843,6 +844,11 @@ export function Dashboard() {
           />
         </div>
       </PermissionGate>
+
+      {/* Dashboard Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel />
+      </div>
     </div>
   );
 }

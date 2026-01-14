@@ -122,6 +122,39 @@ def extract_text_from_pdf(file_content: bytes) -> str:
     
     return "\n".join(text_parts)
 
+
+def extract_text_from_file(file_content: bytes, filename: Optional[str] = None) -> str:
+    """Extract text from a file (PDF or TXT).
+    
+    Args:
+        file_content: The raw bytes of the file.
+        filename: Optional filename to determine file type.
+        
+    Returns:
+        Extracted text from the file.
+        
+    Raises:
+        ValueError: If file type is unsupported or file is invalid.
+    """
+    if filename:
+        extension = filename.lower().split(".")[-1] if "." in filename else ""
+    else:
+        # Try to detect from content
+        if file_content.startswith(b'%PDF-'):
+            extension = "pdf"
+        else:
+            extension = "txt"
+    
+    if extension == "pdf" or file_content.startswith(b'%PDF-'):
+        return extract_text_from_pdf(file_content)
+    elif extension == "txt" or extension == "":
+        try:
+            return file_content.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise ValueError(f"Failed to decode text file: {str(e)}")
+    else:
+        raise ValueError(f"Unsupported file type: {extension}. Supported types: PDF, TXT")
+
 router = APIRouter(prefix="/api")
 
 
@@ -455,6 +488,1068 @@ async def upload_and_extract(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to process file: {str(e)}"}
+        )
+
+
+@router.post("/extract/accounting")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def extract_accounting_document(
+    file: UploadFile = File(...),
+    document_type: Optional[str] = Query(None, description="Document type: balance_sheet, income_statement, cash_flow, tax_return"),
+    deal_id: Optional[int] = Query(None, description="Optional deal ID to attach document"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Extract accounting data from uploaded document.
+    
+    Follows existing pattern from extract_document():
+    - File upload handling
+    - Extraction chain invocation
+    - Policy evaluation integration
+    - CDM event generation
+    - Audit logging
+    - Deal attachment
+    """
+    from app.chains.accounting_extraction_chain import extract_accounting_data_smart
+    from app.models.accounting_document import AccountingExtractionResult
+    from app.models.cdm import ExtractionStatus
+    from app.models.cdm_events import generate_cdm_policy_evaluation, generate_cdm_observation
+    from app.services.deal_service import DealService
+    
+    try:
+        # Read file content
+        content = await file.read()
+        text = extract_text_from_file(content, file.filename)
+        
+        if not text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail={"status": "error", "message": "The uploaded file contains no extractable text."}
+            )
+        
+        logger.info(f"Extracted {len(text)} characters from accounting document")
+        
+        # Extract accounting data
+        result = extract_accounting_data_smart(text, document_type=document_type)
+        
+        if not result.agreement:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": "Failed to extract accounting data",
+                    "extraction_status": result.extraction_status.value
+                }
+            )
+        
+        # Create document record
+        doc = Document(
+            title=f"Accounting Document: {document_type or 'Unknown'}",
+            uploaded_by=current_user.id,
+            deal_id=deal_id,
+            source_filename=file.filename,
+            original_text=text[:10000],  # Store first 10k chars
+            extraction_status=result.extraction_status.value,
+            cdm_data=result.agreement.model_dump() if result.agreement else None
+        )
+        db.add(doc)
+        db.flush()
+        
+        # Policy evaluation (if enabled)
+        policy_evaluation_event = None
+        policy_decision = None
+        if policy_service and result.agreement:
+            try:
+                # Evaluate accounting document for compliance
+                logger.info(f"Policy evaluation for accounting document (document_id={doc.id})")
+                policy_result = policy_service.evaluate_accounting_document(
+                    accounting_document=result.agreement.model_dump(),
+                    document_id=doc.id
+                )
+                
+                # Generate CDM policy evaluation event
+                from app.models.cdm_events import generate_cdm_policy_evaluation
+                policy_evaluation_event = generate_cdm_policy_evaluation(
+                    transaction_id=str(doc.id),
+                    transaction_type="accounting_document_extraction",
+                    decision=policy_result.decision,
+                    rule_applied=policy_result.rule_applied or "accounting_document_default",
+                    related_event_identifiers=[extraction_event["meta"]["globalKey"]],
+                    evaluation_trace=policy_result.trace,
+                    matched_rules=policy_result.matched_rules
+                )
+                cdm_events.append(policy_evaluation_event)
+                
+                # Store policy decision
+                from app.db.models import PolicyDecision as PolicyDecisionModel
+                policy_decision_db = PolicyDecisionModel(
+                    transaction_id=str(doc.id),
+                    transaction_type="accounting_document_extraction",
+                    decision=policy_result.decision,
+                    rule_applied=policy_result.rule_applied,
+                    trace_id=policy_result.trace_id,
+                    trace=policy_result.trace,
+                    matched_rules=policy_result.matched_rules,
+                    additional_metadata={"document_type": document_type},
+                    cdm_events=[policy_evaluation_event],
+                    user_id=current_user.id if current_user else None,
+                    document_id=doc.id
+                )
+                db.add(policy_decision_db)
+                
+                policy_decision = {
+                    "decision": policy_result.decision,
+                    "rule_applied": policy_result.rule_applied,
+                    "trace_id": policy_result.trace_id
+                }
+                
+                # Handle BLOCK decision
+                if policy_result.decision == "BLOCK":
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=403,
+                        detail={
+                            "status": "blocked",
+                            "reason": policy_result.rule_applied,
+                            "cdm_event": policy_evaluation_event
+                        }
+                    )
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.warning(f"Policy evaluation failed for accounting document: {e}")
+                # Continue without policy evaluation
+        
+        # Create CDM event for accounting document extraction
+        extraction_event = generate_cdm_observation(
+            trade_id=str(doc.id),  # Use document ID
+            satellite_hash="",  # Not applicable for accounting docs
+            ndvi_score=0.0,  # Not applicable
+            status="EXTRACTED"
+        )
+        # Modify event type to AccountingDocumentExtraction
+        extraction_event["eventType"] = "AccountingDocumentExtraction"
+        extraction_event["accountingDocument"] = {
+            "documentId": doc.id,
+            "documentType": document_type or "unknown",
+            "extractionStatus": result.extraction_status.value,
+            "extractedData": result.agreement.model_dump() if result.agreement else None
+        }
+        
+        # Store CDM events
+        cdm_events = [extraction_event]
+        if policy_evaluation_event:
+            cdm_events.append(policy_evaluation_event)
+        
+        # Attach to deal if provided
+        if deal_id:
+            try:
+                deal_service = DealService(db)
+                deal_service.attach_document_to_deal(
+                    deal_id=deal_id,
+                    document_id=doc.id,
+                    user_id=current_user.id
+                )
+            except Exception as e:
+                logger.warning(f"Failed to attach document to deal: {e}")
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="document",
+            target_id=doc.id,
+            user_id=current_user.id,
+            metadata={
+                "document_type": "accounting",
+                "accounting_type": document_type,
+                "extraction_status": result.extraction_status.value,
+                "deal_id": deal_id
+            }
+        )
+        
+        db.commit()
+        db.refresh(doc)
+        
+        return {
+            "status": "success",
+            "document_id": doc.id,
+            "accounting_data": result.agreement.model_dump() if result.agreement else None,
+            "extraction_status": result.extraction_status.value,
+            "cdm_events": cdm_events
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error extracting accounting document: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to extract accounting document: {str(e)}"}
+        )
+
+
+# ============================================================================
+# DeepResearch API Endpoints
+# ============================================================================
+
+
+class DeepResearchQueryRequest(BaseModel):
+    """Request model for DeepResearch query."""
+    query: str = Field(..., description="Research question")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID to link research")
+    workflow_id: Optional[int] = Field(None, description="Optional workflow ID to link research")
+
+
+@router.post("/deep-research/query")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def deep_research_query(
+    request: DeepResearchQueryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Execute DeepResearch query with CDM event integration.
+    
+    Triggers:
+    - Creates ResearchQuery CDM event
+    - Links to deal/workflow if provided
+    - Stores research result in database
+    - Updates deal timeline if deal_id provided
+    """
+    from app.services.deep_research_service import DeepResearchService
+    from app.services.deal_service import DealService
+    
+    try:
+        service = DeepResearchService(db)
+        
+        # Execute research
+        result = await service.research(
+            query=request.query,
+            deal_id=request.deal_id,
+            workflow_id=request.workflow_id,
+            user_id=current_user.id
+        )
+        
+        # TODO: Store research result in deep_research_results table
+        # For now, just return the result
+        
+        # Update deal timeline if deal_id provided
+        if request.deal_id:
+            try:
+                deal_service = DealService(db)
+                # Add research event to deal timeline
+                deal_service.add_timeline_event(
+                    deal_id=request.deal_id,
+                    event_type="research_query",
+                    event_data={
+                        "query": request.query,
+                        "answer": result.get("answer", "")[:500]  # First 500 chars
+                    },
+                    user_id=current_user.id
+                )
+                logger.info(f"Research query completed for deal {request.deal_id}")
+            except Exception as e:
+                logger.warning(f"Failed to update deal timeline: {e}")
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="research_query",
+            target_id=None,  # Will be set when table is created
+            user_id=current_user.id,
+            metadata={
+                "query": request.query,
+                "deal_id": request.deal_id,
+                "workflow_id": request.workflow_id
+            }
+        )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "answer": result.get("answer", ""),
+            "knowledge_items": result.get("knowledge_items", []),
+            "visited_urls": result.get("visited_urls", []),
+            "cdm_event": result.get("cdm_event")
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error executing research query: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Research query failed: {str(e)}"}
+        )
+
+
+@router.get("/deep-research/results/{research_id}")
+async def get_deep_research_result(
+    research_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get DeepResearch result by research_id.
+    
+    Args:
+        research_id: UUID of the research result
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Research result with answer, knowledge items, and CDM events
+    """
+    # TODO: Query deep_research_results table when migration is applied
+    # For now, return placeholder
+    raise HTTPException(
+        status_code=501,
+        detail={"status": "not_implemented", "message": "Research results retrieval will be available after database migration"}
+    )
+
+
+# ============================================================================
+# Business Intelligence API Endpoints
+# ============================================================================
+
+
+class PersonResearchRequest(BaseModel):
+    """Request model for person research."""
+    person_name: str = Field(..., description="Full name of the person to research")
+    linkedin_url: Optional[str] = Field(None, description="Optional LinkedIn profile URL")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID to link research")
+
+
+@router.post("/business-intelligence/research-person")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def research_person(
+    request: PersonResearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Research person and generate business intelligence report.
+    
+    Triggers:
+    - Creates PersonResearch CDM event
+    - Links to deal if provided
+    - Updates deal timeline
+    - Generates audit report
+    """
+    try:
+        from app.workflows.peoplehub_research_graph import execute_peoplehub_research
+        from app.services.psychometric_analysis_service import analyze_individual
+        from app.models.business_intelligence import (
+            IndividualProfile,
+            PsychometricProfile,
+            AuditReport
+        )
+        from app.services.deal_service import DealService
+        
+        # Execute research workflow
+        result = await execute_peoplehub_research(
+            person_name=request.person_name,
+            linkedin_url=request.linkedin_url
+        )
+        
+        # Perform psychometric analysis
+        psychometric_profile = await analyze_individual(
+            person_name=request.person_name,
+            linkedin_data=result.get("linkedin_data"),
+            web_summaries=result.get("web_summaries")
+        )
+        
+        # Store individual profile (TODO: Create database models)
+        # For now, create Pydantic models
+        individual_profile = IndividualProfile(
+            person_name=request.person_name,
+            linkedin_url=request.linkedin_url,
+            profile_data={
+                "linkedin_data": result.get("linkedin_data"),
+                "web_summaries": result.get("web_summaries"),
+                "research_report": result.get("final_report")
+            },
+            deal_id=request.deal_id,
+            created_at=datetime.now()
+        )
+        
+        # Extract credit check data
+        def _extract_credit_check_data(profile: PsychometricProfile) -> Dict[str, Any]:
+            """Extract credit check relevant data from psychometric profile."""
+            return {
+                "risk_tolerance": profile.risk_tolerance.value if profile.risk_tolerance else None,
+                "conscientiousness": profile.conscientiousness,
+                "savings_rate": profile.savings_behavior.savings_rate if profile.savings_behavior else None,
+                "payment_history_indicators": "reliable" if profile.conscientiousness and profile.conscientiousness > 0.7 else "unknown"
+            }
+        
+        # Generate audit report
+        audit_report = AuditReport(
+            report_type="individual",
+            profile_id=None,  # Will be set when database model is created
+            report_data={
+                "research_report": result.get("final_report"),
+                "psychometric_profile": psychometric_profile.model_dump(),
+                "credit_check_data": _extract_credit_check_data(psychometric_profile)
+            },
+            deal_id=request.deal_id,
+            created_at=datetime.now()
+        )
+        
+        # Generate CDM event
+        from app.models.cdm_events import generate_cdm_observation
+        research_event = generate_cdm_observation(
+            trade_id=str(request.deal_id) if request.deal_id else "unknown",
+            satellite_hash="",
+            ndvi_score=0.0,
+            status="RESEARCHED"
+        )
+        research_event["eventType"] = "PersonResearch"
+        research_event["personResearch"] = {
+            "person_name": request.person_name,
+            "research_report": result.get("final_report"),
+            "psychometric_profile": psychometric_profile.model_dump()
+        }
+        
+        # Link to deal if provided
+        if request.deal_id:
+            research_event["relatedEventIdentifier"] = [{
+                "eventIdentifier": {
+                    "issuer": "CreditNexus",
+                    "assignedIdentifier": [{"identifier": {"value": f"DEAL_{request.deal_id}"}}]
+                }
+            }]
+            
+            # Update deal timeline
+            try:
+                deal_service = DealService(db)
+                deal_service.add_timeline_event(
+                    deal_id=request.deal_id,
+                    event_type="person_research",
+                    event_data={
+                        "person_name": request.person_name,
+                        "audit_report": audit_report.model_dump()
+                    },
+                    user_id=current_user.id
+                )
+            except Exception as e:
+                logger.warning(f"Failed to update deal timeline: {e}")
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="person_research",
+            target_id=None,  # Will be set when database model is created
+            user_id=current_user.id,
+            metadata={
+                "person_name": request.person_name,
+                "deal_id": request.deal_id
+            }
+        )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "research_report": result.get("final_report"),
+            "psychometric_profile": psychometric_profile.model_dump(),
+            "audit_report": audit_report.model_dump(),
+            "cdm_event": research_event
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error researching person: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Person research failed: {str(e)}"}
+        )
+
+
+class KYCComplianceRequest(BaseModel):
+    """Request model for KYC compliance evaluation."""
+    profile_type: str = Field(..., description="Type of profile: 'individual' or 'business'")
+    profile_id: int = Field(..., description="ID of the individual or business profile to evaluate")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID for context")
+
+
+@router.post("/kyc/evaluate")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def evaluate_kyc_compliance(
+    request: KYCComplianceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Evaluate KYC (Know Your Customer) compliance for individual or business profiles.
+    
+    This endpoint:
+    - Retrieves profile data from database (IndividualProfile or BusinessProfile)
+    - Evaluates against KYC policy rules
+    - Generates CDM KYC evaluation event
+    - Updates deal timeline if deal_id provided
+    - Returns policy decision (ALLOW/BLOCK/FLAG) with rationale
+    
+    Args:
+        request: KYCComplianceRequest with profile_type, profile_id, and optional deal_id
+        db: Database session
+        current_user: Authenticated user
+        policy_service: Policy service instance
+        
+    Returns:
+        KYC evaluation result with decision, CDM event, and metadata
+    """
+    if not policy_service:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "error", "message": "Policy service not available"}
+        )
+    
+    try:
+        from app.db.models import IndividualProfile, BusinessProfile
+        from app.models.cdm_events import generate_cdm_kyc_evaluation
+        from app.services.deal_service import DealService
+        
+        # Retrieve profile from database
+        if request.profile_type == "individual":
+            profile_db = db.query(IndividualProfile).filter(IndividualProfile.id == request.profile_id).first()
+            if not profile_db:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"status": "error", "message": f"Individual profile with ID {request.profile_id} not found"}
+                )
+            profile_data = profile_db.to_dict() if hasattr(profile_db, 'to_dict') else {
+                "person_name": profile_db.person_name,
+                "linkedin_url": profile_db.linkedin_url,
+                "profile_data": profile_db.profile_data,
+                "deal_id": profile_db.deal_id,
+                "psychometric_profile": profile_db.psychometric_profile if hasattr(profile_db, 'psychometric_profile') else None
+            }
+            individual_profile_id = request.profile_id
+            business_profile_id = None
+            profile_name = profile_data.get("person_name", "Unknown")
+            
+        elif request.profile_type == "business":
+            profile_db = db.query(BusinessProfile).filter(BusinessProfile.id == request.profile_id).first()
+            if not profile_db:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"status": "error", "message": f"Business profile with ID {request.profile_id} not found"}
+                )
+            profile_data = profile_db.to_dict() if hasattr(profile_db, 'to_dict') else {
+                "business_name": profile_db.business_name,
+                "business_lei": profile_db.business_lei,
+                "business_type": profile_db.business_type,
+                "industry": profile_db.industry,
+                "profile_data": profile_db.profile_data,
+                "deal_id": profile_db.deal_id,
+                "key_executives": profile_db.key_executives if hasattr(profile_db, 'key_executives') else None,
+                "financial_summary": profile_db.financial_summary if hasattr(profile_db, 'financial_summary') else None
+            }
+            individual_profile_id = None
+            business_profile_id = request.profile_id
+            profile_name = profile_data.get("business_name", "Unknown")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Invalid profile_type: {request.profile_type}. Must be 'individual' or 'business'"}
+            )
+        
+        # Evaluate KYC compliance
+        logger.info(f"Evaluating KYC compliance for {request.profile_type} profile: {profile_name} (ID: {request.profile_id})")
+        policy_result = policy_service.evaluate_kyc_compliance(
+            profile=profile_data,
+            profile_type=request.profile_type,
+            deal_id=request.deal_id,
+            individual_profile_id=individual_profile_id,
+            business_profile_id=business_profile_id
+        )
+        
+        # Generate CDM KYC evaluation event
+        kyc_event = generate_cdm_kyc_evaluation(
+            profile_id=str(request.profile_id),
+            profile_type=request.profile_type,
+            profile_name=profile_name,
+            decision=policy_result.decision,
+            rule_applied=policy_result.rule_applied,
+            matched_rules=policy_result.matched_rules,
+            kyc_metrics={
+                "trace": policy_result.trace,
+                "rationale": f"KYC compliance check for {request.profile_type} profile: {profile_name}. Decision: {policy_result.decision}"
+            },
+            deal_id=str(request.deal_id) if request.deal_id else None
+        )
+        
+        # Update deal timeline if deal_id provided
+        if request.deal_id:
+            try:
+                deal_service = DealService(db)
+                deal_service.add_timeline_event(
+                    deal_id=request.deal_id,
+                    event_type="kyc_evaluation",
+                    timestamp=datetime.now().isoformat(),
+                    data={
+                        "profile_type": request.profile_type,
+                        "profile_id": request.profile_id,
+                        "profile_name": profile_name,
+                        "decision": policy_result.decision,
+                        "rule_applied": policy_result.rule_applied
+                    },
+                    user_id=current_user.id,
+                    status="success" if policy_result.decision == "ALLOW" else "warning" if policy_result.decision == "FLAG" else "failure"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to update deal timeline: {e}")
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="kyc_evaluation",
+            target_id=request.profile_id,
+            user_id=current_user.id,
+            metadata={
+                "profile_type": request.profile_type,
+                "profile_id": request.profile_id,
+                "profile_name": profile_name,
+                "decision": policy_result.decision,
+                "rule_applied": policy_result.rule_applied,
+                "deal_id": request.deal_id
+            }
+        )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "decision": policy_result.decision,
+            "rule_applied": policy_result.rule_applied,
+            "matched_rules": policy_result.matched_rules,
+            "trace": policy_result.trace,
+            "profile_name": profile_name,
+            "profile_type": request.profile_type,
+            "cdm_event": kyc_event
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error evaluating KYC compliance: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"KYC evaluation failed: {str(e)}"}
+        )
+
+
+# ============================================================================
+# Quantitative Analysis API Endpoints (LangAlpha)
+# ============================================================================
+
+
+class CompanyAnalysisRequest(BaseModel):
+    """Request model for company quantitative analysis."""
+    query: str = Field(..., description="Analysis query (e.g., 'Analyze Apple's financial health')")
+    ticker: Optional[str] = Field(None, description="Stock ticker symbol (e.g., 'AAPL')")
+    company_name: Optional[str] = Field(None, description="Company name")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID to associate with analysis")
+    time_range: Optional[str] = Field(None, description="Time range for analysis (e.g., '2024-01-01 to 2024-12-31')")
+
+
+@router.post("/quantitative-analysis/company")
+async def analyze_company(
+    request: CompanyAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service),
+    stream: bool = Query(False, description="Enable streaming response for long-running analyses")
+):
+    """
+    Analyze a company using LangAlpha multi-agent system.
+    
+    Args:
+        request: CompanyAnalysisRequest with query, ticker, company_name, etc.
+        db: Database session.
+        current_user: Current authenticated user.
+        policy_service: Policy service for compliance checks (optional).
+        stream: Whether to stream progress updates (default: False).
+        
+    Returns:
+        Analysis result with report, market_data, fundamental_data, and CDM events.
+        If stream=True, returns Server-Sent Events (SSE) stream.
+    """
+    from app.services.quantitative_analysis_service import QuantitativeAnalysisService
+    
+    try:
+        service = QuantitativeAnalysisService(db, policy_service=policy_service)
+        
+        if stream:
+            # Return streaming response with real-time progress
+            async def generate_stream():
+                """Generate Server-Sent Events stream with real-time progress."""
+                from queue import Queue
+                import asyncio
+                
+                progress_queue = Queue()
+                analysis_id = None
+                
+                async def progress_callback(progress_data: Dict[str, Any]):
+                    """Callback to receive progress updates from analysis."""
+                    progress_queue.put(progress_data)
+                
+                try:
+                    # Send initial status
+                    yield f"data: {json.dumps({'status': 'started', 'message': 'Analysis started', 'progress': 0})}\n\n"
+                    
+                    # Start analysis with progress callback
+                    analysis_task = asyncio.create_task(
+                        service.analyze_company(
+                            query=request.query,
+                            ticker=request.ticker,
+                            company_name=request.company_name,
+                            deal_id=request.deal_id,
+                            user_id=current_user.id,
+                            time_range=request.time_range,
+                            progress_callback=progress_callback
+                        )
+                    )
+                    
+                    # Poll for progress updates while analysis runs
+                    last_progress = 0
+                    while not analysis_task.done():
+                        try:
+                            # Check for progress updates (non-blocking)
+                            while not progress_queue.empty():
+                                progress_data = progress_queue.get_nowait()
+                                progress = progress_data.get('progress', last_progress)
+                                status = progress_data.get('status', 'in_progress')
+                                current_step = progress_data.get('current_step', 'Processing...')
+                                
+                                progress_payload = {
+                                    'status': status,
+                                    'progress': progress,
+                                    'current_step': current_step,
+                                    'message': progress_data.get('message', '')
+                                }
+                                yield f"data: {json.dumps(progress_payload)}\n\n"
+                                
+                                last_progress = progress
+                                if status in ['completed', 'error']:
+                                    break
+                            
+                            # Small delay to avoid busy waiting
+                            await asyncio.sleep(0.5)
+                        except Exception as e:
+                            logger.warning(f"Error in progress streaming: {e}")
+                            break
+                    
+                    # Get final result
+                    result = await analysis_task
+                    
+                    # Send completion
+                    completion_payload = {
+                        'status': 'completed',
+                        'progress': 100,
+                        'current_step': 'Analysis complete',
+                        'result': result
+                    }
+                    yield f"data: {json.dumps(completion_payload)}\n\n"
+                    
+                except Exception as e:
+                    logger.error(f"Error in streaming analysis: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'status': 'error', 'message': str(e), 'progress': 0})}\n\n"
+            
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        else:
+            # Standard synchronous response
+            result = await service.analyze_company(
+                query=request.query,
+                ticker=request.ticker,
+                company_name=request.company_name,
+                deal_id=request.deal_id,
+                user_id=current_user.id,
+                time_range=request.time_range
+            )
+            
+            return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in company analysis: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Company analysis failed: {str(e)}"}
+        )
+
+
+class MarketAnalysisRequest(BaseModel):
+    """Request model for market quantitative analysis."""
+    query: str = Field(..., description="Analysis query (e.g., 'Analyze the semiconductor market')")
+    market_type: Optional[str] = Field(None, description="Type of market (e.g., 'semiconductor', 'tech', 'overall')")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID to associate with analysis")
+    time_range: Optional[str] = Field(None, description="Time range for analysis")
+
+
+@router.post("/quantitative-analysis/market")
+async def analyze_market(
+    request: MarketAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service)
+):
+    """
+    Analyze market conditions using LangAlpha.
+    
+    Args:
+        request: MarketAnalysisRequest with query, market_type, etc.
+        db: Database session.
+        current_user: Current authenticated user.
+        policy_service: Policy service for compliance checks (optional).
+        
+    Returns:
+        Analysis result with report and CDM events.
+    """
+    from app.services.quantitative_analysis_service import QuantitativeAnalysisService
+    
+    try:
+        service = QuantitativeAnalysisService(db, policy_service=policy_service)
+        result = await service.analyze_market(
+            query=request.query,
+            market_type=request.market_type,
+            deal_id=request.deal_id,
+            user_id=current_user.id,
+            time_range=request.time_range
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in market analysis: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Market analysis failed: {str(e)}"}
+        )
+
+
+class LoanApplicationAnalysisRequest(BaseModel):
+    """Request model for loan application quantitative analysis."""
+    query: str = Field(..., description="Analysis query focused on loan application")
+    borrower_name: Optional[str] = Field(None, description="Name of the borrower")
+    deal_id: int = Field(..., description="Deal ID (required for loan analysis)")
+    time_range: Optional[str] = Field(None, description="Time range for analysis")
+
+
+@router.post("/quantitative-analysis/loan-application")
+async def analyze_loan_application(
+    request: LoanApplicationAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    policy_service: Optional[PolicyService] = Depends(get_policy_service),
+    stream: bool = Query(False, description="Enable streaming response for long-running analyses")
+):
+    """
+    Analyze a loan application using LangAlpha.
+    
+    Args:
+        request: LoanApplicationAnalysisRequest with query, borrower_name, deal_id.
+        db: Database session.
+        current_user: Current authenticated user.
+        policy_service: Policy service for compliance checks (optional).
+        stream: Whether to stream progress updates (default: False).
+        
+    Returns:
+        Analysis result with report and CDM events.
+        If stream=True, returns Server-Sent Events (SSE) stream.
+    """
+    from app.services.quantitative_analysis_service import QuantitativeAnalysisService
+    from typing import Dict
+    
+    try:
+        service = QuantitativeAnalysisService(db, policy_service=policy_service)
+        
+        if stream:
+            # Return streaming response with real-time progress
+            async def generate_stream():
+                """Generate Server-Sent Events stream with real-time progress."""
+                from queue import Queue
+                import asyncio
+                
+                progress_queue = Queue()
+                
+                async def progress_callback(progress_data: Dict[str, Any]):
+                    """Callback to receive progress updates from analysis."""
+                    progress_queue.put(progress_data)
+                
+                try:
+                    yield f"data: {json.dumps({'status': 'started', 'message': 'Loan application analysis started', 'progress': 0})}\n\n"
+                    
+                    analysis_task = asyncio.create_task(
+                        service.analyze_loan_application(
+                            query=request.query,
+                            borrower_name=request.borrower_name,
+                            deal_id=request.deal_id,
+                            user_id=current_user.id,
+                            time_range=request.time_range,
+                            progress_callback=progress_callback
+                        )
+                    )
+                    
+                    last_progress = 0
+                    while not analysis_task.done():
+                        try:
+                            while not progress_queue.empty():
+                                progress_data = progress_queue.get_nowait()
+                                progress = progress_data.get('progress', last_progress)
+                                status = progress_data.get('status', 'in_progress')
+                                current_step = progress_data.get('current_step', 'Processing...')
+                                
+                                progress_payload = {
+                                    'status': status,
+                                    'progress': progress,
+                                    'current_step': current_step,
+                                    'message': progress_data.get('message', '')
+                                }
+                                yield f"data: {json.dumps(progress_payload)}\n\n"
+                                
+                                last_progress = progress
+                                if status in ['completed', 'error']:
+                                    break
+                            
+                            await asyncio.sleep(0.5)
+                        except Exception as e:
+                            logger.warning(f"Error in progress streaming: {e}")
+                            break
+                    
+                    result = await analysis_task
+                    completion_payload = {
+                        'status': 'completed',
+                        'progress': 100,
+                        'current_step': 'Analysis complete',
+                        'result': result
+                    }
+                    yield f"data: {json.dumps(completion_payload)}\n\n"
+                    
+                except Exception as e:
+                    logger.error(f"Error in streaming loan application analysis: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'status': 'error', 'message': str(e), 'progress': 0})}\n\n"
+            
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        else:
+            result = await service.analyze_loan_application(
+                query=request.query,
+                borrower_name=request.borrower_name,
+                deal_id=request.deal_id,
+                user_id=current_user.id,
+                time_range=request.time_range
+            )
+            
+            return result
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Validation error in loan application analysis: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "error", "message": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"Error in loan application analysis: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Loan application analysis failed: {str(e)}"}
+        )
+
+
+@router.get("/quantitative-analysis/results/{analysis_id}")
+async def get_quantitative_analysis_result(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve quantitative analysis result by analysis_id.
+    
+    Args:
+        analysis_id: UUID of the analysis.
+        db: Database session.
+        current_user: Current authenticated user.
+        
+    Returns:
+        Analysis result with report, market_data, fundamental_data.
+    """
+    from app.services.quantitative_analysis_service import QuantitativeAnalysisService
+    from app.db.models import QuantitativeAnalysisResult
+    
+    try:
+        service = QuantitativeAnalysisService(db)
+        result = service.get_analysis_result(analysis_id)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": f"Analysis result with ID {analysis_id} not found"}
+            )
+        
+        # Basic authorization: ensure user can view their own analysis or is admin
+        if result.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "Not authorized to view this analysis result"}
+            )
+        
+        return {
+            "status": "success",
+            "analysis_id": result.analysis_id,
+            "analysis_type": result.analysis_type,
+            "query": result.query,
+            "report": result.report,
+            "market_data": result.market_data,
+            "fundamental_data": result.fundamental_data,
+            "status": result.status,
+            "error_message": result.error_message,
+            "created_at": result.created_at.isoformat() if result.created_at else None,
+            "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+            "deal_id": result.deal_id,
+            "workflow_id": result.workflow_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving analysis result: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to retrieve analysis result: {str(e)}"}
         )
 
 
@@ -2715,6 +3810,332 @@ async def chatbot_suggest_templates(
         raise HTTPException(
             status_code=500,
             detail={"status": "error", "message": f"Failed to suggest templates: {str(e)}"}
+        )
+
+
+# ============================================================================
+# Digitizer Chatbot API Endpoints
+# ============================================================================
+
+
+class DigitizerChatbotChatRequest(BaseModel):
+    """Request model for digitizer chatbot chat."""
+    message: str = Field(..., description="User message")
+    session_id: str = Field(..., description="Chat session ID")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID for context")
+    document_id: Optional[int] = Field(None, description="Optional document ID for context")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(None, description="Previous conversation messages")
+    document_context: Optional[Dict[str, Any]] = Field(None, description="Document context (extracted CDM data)")
+
+
+class DigitizerChatbotLaunchWorkflowRequest(BaseModel):
+    """Request model for launching workflow from chatbot."""
+    workflow_type: str = Field(..., description="Workflow type: peoplehub, deepresearch, langalpha")
+    session_id: str = Field(..., description="Chat session ID")
+    workflow_params: Dict[str, Any] = Field(..., description="Workflow-specific parameters")
+    deal_id: Optional[int] = Field(None, description="Optional deal ID")
+
+
+@router.post("/digitizer-chatbot/chat")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def digitizer_chatbot_chat(
+    request: DigitizerChatbotChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Process a chatbot message for the document digitizer UI.
+    
+    Args:
+        request: DigitizerChatbotChatRequest with message and context
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Chatbot response with message, workflow_launched, and CDM events
+    """
+    from app.services.digitizer_chatbot_service import DigitizerChatbotService
+    
+    try:
+        chatbot_service = DigitizerChatbotService(db)
+        
+        result = await chatbot_service.process_message(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=current_user.id,
+            deal_id=request.deal_id,
+            document_id=request.document_id,
+            conversation_history=request.conversation_history,
+            document_context=request.document_context
+        )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="digitizer_chatbot_message",
+            target_id=None,
+            user_id=current_user.id,
+            metadata={
+                "session_id": request.session_id,
+                "message_length": len(request.message),
+                "workflow_launched": result.get("workflow_launched"),
+                "deal_id": request.deal_id,
+                "document_id": request.document_id
+            }
+        )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "response": result.get("response", ""),
+            "workflow_launched": result.get("workflow_launched"),
+            "workflow_result": result.get("workflow_result"),
+            "cdm_events": result.get("cdm_events", [])
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Digitizer chatbot chat failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Chatbot failed: {str(e)}"}
+        )
+
+
+@router.post("/digitizer-chatbot/launch-workflow")
+# Rate limiting: Uses slowapi default_limits (60/minute) from server.py
+async def digitizer_chatbot_launch_workflow(
+    request: DigitizerChatbotLaunchWorkflowRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Launch a workflow from the digitizer chatbot.
+    
+    Args:
+        request: DigitizerChatbotLaunchWorkflowRequest with workflow type and params
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Workflow launch result with status and CDM events
+    """
+    from app.services.digitizer_chatbot_service import DigitizerChatbotService
+    
+    try:
+        chatbot_service = DigitizerChatbotService(db)
+        
+        workflow_type = request.workflow_type.lower()
+        workflow_params = request.workflow_params
+        
+        result = None
+        
+        if workflow_type == "peoplehub":
+            person_name = workflow_params.get("person_name")
+            if not person_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": "person_name is required for PeopleHub workflow"}
+                )
+            result = await chatbot_service._launch_peoplehub(
+                person_name=person_name,
+                deal_id=request.deal_id,
+                user_id=current_user.id
+            )
+        elif workflow_type == "deepresearch":
+            query = workflow_params.get("query")
+            if not query:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"status": "error", "message": "query is required for DeepResearch workflow"}
+                )
+            result = await chatbot_service._launch_deep_research(
+                query=query,
+                deal_id=request.deal_id,
+                user_id=current_user.id
+            )
+        elif workflow_type == "langalpha":
+            # Placeholder - not yet implemented
+            result = {
+                "workflow_type": "langalpha",
+                "message": "LangAlpha quantitative analysis workflow is not yet implemented.",
+                "result": None,
+                "cdm_events": []
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={"status": "error", "message": f"Unknown workflow type: {workflow_type}"}
+            )
+        
+        # Audit logging
+        log_audit_action(
+            db=db,
+            action=AuditAction.CREATE,
+            target_type="workflow_launch",
+            target_id=None,
+            user_id=current_user.id,
+            metadata={
+                "session_id": request.session_id,
+                "workflow_type": workflow_type,
+                "deal_id": request.deal_id
+            }
+        )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "workflow_type": result.get("workflow_type"),
+            "message": result.get("message"),
+            "workflow_result": result.get("result"),
+            "cdm_events": result.get("cdm_events", [])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Digitizer chatbot workflow launch failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Workflow launch failed: {str(e)}"}
+        )
+
+
+@router.get("/chatbot/summary/{session_id}")
+async def get_conversation_summary(
+    session_id: str,
+    force_refresh: bool = Query(False, description="Force regeneration of summary"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get conversation summary for a chatbot session.
+    
+    Args:
+        session_id: Chat session ID
+        force_refresh: Force regeneration even if summary exists
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Conversation summary with key points and metadata
+    """
+    from app.services.conversation_summary_service import ConversationSummaryService
+    
+    try:
+        summary_service = ConversationSummaryService(db)
+        
+        # Get or generate summary
+        summary = await summary_service.summarize_conversation(
+            session_id=session_id,
+            user_id=current_user.id,
+            max_messages=50,
+            force_refresh=force_refresh
+        )
+        
+        return {
+            "status": "success",
+            "summary": summary.get("summary"),
+            "key_points": summary.get("key_points", []),
+            "metadata": summary.get("metadata", {})
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"status": "error", "message": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"Failed to get conversation summary: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get conversation summary: {str(e)}"}
+        )
+
+
+@router.get("/digitizer-chatbot/history/{session_id}")
+async def get_digitizer_chatbot_history(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get conversation history for a chatbot session.
+    
+    Args:
+        session_id: Chat session ID
+        db: Database session
+        current_user: Authenticated user
+        
+    Returns:
+        Conversation history with messages and metadata
+    """
+    # TODO: Query chatbot_messages table when migration is applied
+    # For now, return placeholder
+    try:
+        from app.db.models import ChatbotSession, ChatbotMessage
+        
+        session = db.query(ChatbotSession).filter(
+            ChatbotSession.session_id == session_id
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=404,
+                detail={"status": "error", "message": "Session not found"}
+            )
+        
+        # Check authorization
+        if session.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail={"status": "error", "message": "Not authorized to view this session"}
+            )
+        
+        # Get messages
+        messages = db.query(ChatbotMessage).filter(
+            ChatbotMessage.session_id == session_id
+        ).order_by(ChatbotMessage.created_at.asc()).all()
+        
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "workflow_launched": msg.workflow_launched,
+                    "created_at": msg.created_at.isoformat() if msg.created_at else None
+                }
+                for msg in messages
+            ],
+            "session_metadata": {
+                "deal_id": session.deal_id,
+                "document_id": session.document_id,
+                "created_at": session.created_at.isoformat() if session.created_at else None
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except ImportError:
+        # Models not yet created - return placeholder
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "messages": [],
+            "session_metadata": {
+                "message": "Chatbot session models not yet created. History will be available after database migration."
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get chatbot history: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"Failed to get history: {str(e)}"}
         )
 
 
@@ -5758,7 +7179,41 @@ async def settle_trade_with_payment(
     
     try:
         # Step 1: Get trade execution event
+        # #region agent log
+        import json
+        log_data = {
+            "sessionId": "debug-session",
+            "runId": "trade-settlement",
+            "hypothesisId": "A",
+            "location": "routes.py:7182",
+            "message": "Attempting to get trade execution",
+            "data": {"trade_id": trade_id},
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+        try:
+            with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+                f.write(json.dumps(log_data) + "\n")
+        except Exception:
+            pass
+        # #endregion
         trade_event = get_trade_execution(trade_id, db)
+        
+        # #region agent log
+        log_data = {
+            "sessionId": "debug-session",
+            "runId": "trade-settlement",
+            "hypothesisId": "A",
+            "location": "routes.py:7184",
+            "message": "Trade lookup result",
+            "data": {"trade_id": trade_id, "found": trade_event is not None},
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+        try:
+            with open("c:\\Users\\MeMyself\\creditnexus\\.cursor\\debug.log", "a") as f:
+                f.write(json.dumps(log_data) + "\n")
+        except Exception:
+            pass
+        # #endregion
         
         if not trade_event:
             raise HTTPException(

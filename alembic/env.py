@@ -27,6 +27,8 @@ database_url = os.environ.pop("DATABASE_URL", None)
 # Import the app's database models (without DATABASE_URL, no engine will be created)
 from app.db import Base
 from app.db import models  # noqa: F401 - needed for model registration
+# Explicitly import new models to ensure they're registered
+from app.db.models import AccountingDocument, DeepResearchResult  # noqa: F401
 
 # Restore DATABASE_URL and set it in Alembic config
 if database_url and database_url.strip():

@@ -303,6 +303,14 @@ export const router = createBrowserRouter(
       </ProtectedRoute>
     ),
   },
+  {
+    path: '/app/agent-dashboard',
+    element: (
+      <ProtectedRoute>
+        <DesktopAppLayout />
+      </ProtectedRoute>
+    ),
+  },
   
   // Application routes
   {

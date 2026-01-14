@@ -25,7 +25,7 @@ export function Breadcrumb({ items, className = '', onHomeClick }: BreadcrumbPro
             onClick={() => {
               if (onHomeClick) onHomeClick();
             }}
-            className="flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+            className="flex items-center gap-1 text-[var(--color-breadcrumb-inactive)] hover:text-[var(--color-breadcrumb-hover)] transition-colors"
             aria-label="Go to Dashboard"
           >
             <Home className="h-4 w-4" />
@@ -34,9 +34,9 @@ export function Breadcrumb({ items, className = '', onHomeClick }: BreadcrumbPro
         </li>
         {items.map((item, index) => (
           <li key={index} className="flex items-center gap-1">
-            <ChevronRight className="h-4 w-4 text-slate-600" />
+            <ChevronRight className="h-4 w-4 text-[var(--color-breadcrumb-separator)]" />
             {index === items.length - 1 ? (
-              <span className="flex items-center gap-1.5 text-slate-200 font-medium">
+              <span className="flex items-center gap-1.5 text-[var(--color-breadcrumb-active)] font-medium">
                 {item.icon}
                 {item.label}
               </span>
@@ -49,7 +49,7 @@ export function Breadcrumb({ items, className = '', onHomeClick }: BreadcrumbPro
                     item.onClick();
                   }
                 }}
-                className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition-colors"
+                className="flex items-center gap-1.5 text-[var(--color-breadcrumb-inactive)] hover:text-[var(--color-breadcrumb-hover)] transition-colors"
               >
                 {item.icon}
                 {item.label}

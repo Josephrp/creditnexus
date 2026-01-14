@@ -125,7 +125,7 @@ export function ReceiptPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </div>
     );
@@ -133,12 +133,15 @@ export function ReceiptPage() {
 
   if (error && !receiptData) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 py-12 px-4">
+      <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4">
         <div className="max-w-4xl mx-auto">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="surface-panel">
             <CardContent className="p-8 text-center">
-              <p className="text-slate-400 mb-6">{error}</p>
-              <Button onClick={() => navigate('/dashboard')}>
+              <p className="text-[var(--color-muted-foreground)] mb-6">{error}</p>
+              <Button
+                onClick={() => navigate('/dashboard')}
+                className="gap-2"
+              >
                 Go to Dashboard
               </Button>
             </CardContent>
@@ -149,20 +152,20 @@ export function ReceiptPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100 py-12 px-4 print:bg-white print:text-black">
+    <div className="min-h-screen surface-gradient text-[var(--color-foreground)] py-12 px-4 print:bg-white print:text-black">
       <div className="max-w-4xl mx-auto">
         {/* Success Header */}
         <div className="text-center mb-8 print:hidden">
-          <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="h-8 w-8 text-emerald-400" />
+          <div className="w-16 h-16 bg-[var(--color-success-bg)] rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="h-8 w-8 text-[var(--color-success)]" />
           </div>
           <h1 className="text-4xl font-bold mb-2">Disbursement Successful</h1>
-          <p className="text-slate-400">Your loan has been disbursed successfully</p>
+          <p className="text-[var(--color-muted-foreground)]">Your loan has been disbursed successfully</p>
         </div>
 
         {receiptData && (
           <Fragment>
-            <Card className="bg-slate-800 border-slate-700 print:bg-white print:border-gray-300">
+            <Card className="surface-panel print:bg-white print:border-gray-300">
               <CardHeader className="print:border-b print:border-gray-300">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
@@ -175,11 +178,12 @@ export function ReceiptPage() {
                       size="sm"
                       onClick={downloadPDF}
                       disabled={downloading}
+                      className="gap-2"
                     >
                       {downloading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Download className="h-4 w-4 mr-2" />
+                        <Download className="h-4 w-4" />
                       )}
                       PDF
                     </Button>
@@ -187,16 +191,18 @@ export function ReceiptPage() {
                       variant="outline"
                       size="sm"
                       onClick={handlePrint}
+                      className="gap-2"
                     >
-                      <Printer className="h-4 w-4 mr-2" />
+                      <Printer className="h-4 w-4" />
                       Print
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleShare}
+                      className="gap-2"
                     >
-                      <Share2 className="h-4 w-4 mr-2" />
+                      <Share2 className="h-4 w-4" />
                       Share
                     </Button>
                   </div>
@@ -207,11 +213,11 @@ export function ReceiptPage() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-6 print:grid-cols-2">
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Loan ID</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Loan ID</p>
                       <p className="text-lg font-semibold">#{receiptData.loan_id}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Transaction Hash</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Transaction Hash</p>
                       <div className="flex items-center gap-2">
                         <p className="text-lg font-semibold font-mono text-sm break-all">
                           {receiptData.transaction_hash}
@@ -220,53 +226,53 @@ export function ReceiptPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => copyToClipboard(receiptData.transaction_hash)}
-                          className="print:hidden"
+                          className="print:hidden gap-2"
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Borrower</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Borrower</p>
                       <p className="text-lg font-semibold">{receiptData.borrower}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Disbursement Date</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Disbursement Date</p>
                       <p className="text-lg font-semibold">
                         {new Date(receiptData.disbursement_date).toLocaleDateString()}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Amount</p>
-                      <p className="text-2xl font-bold text-emerald-400 print:text-black">
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Amount</p>
+                      <p className="text-2xl font-bold text-[var(--color-success)] print:text-black">
                         {receiptData.currency} {receiptData.amount.toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-400 print:text-gray-600 mb-1">Interest Rate</p>
+                      <p className="text-sm text-[var(--color-muted-foreground)] print:text-gray-600 mb-1">Interest Rate</p>
                       <p className="text-lg font-semibold">{receiptData.interest_rate}%</p>
                     </div>
                   </div>
 
                   {/* Repayment Schedule */}
                   {receiptData.repayment_schedule && receiptData.repayment_schedule.length > 0 && (
-                    <div className="border-t border-slate-700 print:border-gray-300 pt-6">
+                    <div className="border-t border-[var(--color-border)] print:border-gray-300 pt-6">
                       <h3 className="text-lg font-semibold mb-4">Repayment Schedule</h3>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
-                            <tr className="border-b border-slate-700 print:border-gray-300">
-                              <th className="text-left py-2 text-sm text-slate-400 print:text-gray-600">Date</th>
-                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Principal</th>
-                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Interest</th>
-                              <th className="text-right py-2 text-sm text-slate-400 print:text-gray-600">Total</th>
+                            <tr className="border-b border-[var(--color-border)] print:border-gray-300">
+                              <th className="text-left py-2 text-sm text-[var(--color-muted-foreground)] print:text-gray-600">Date</th>
+                              <th className="text-right py-2 text-sm text-[var(--color-muted-foreground)] print:text-gray-600">Principal</th>
+                              <th className="text-right py-2 text-sm text-[var(--color-muted-foreground)] print:text-gray-600">Interest</th>
+                              <th className="text-right py-2 text-sm text-[var(--color-muted-foreground)] print:text-gray-600">Total</th>
                             </tr>
                           </thead>
                           <tbody>
                             {receiptData.repayment_schedule.map((payment, index) => (
                               <tr 
                                 key={index}
-                                className="border-b border-slate-800 print:border-gray-200"
+                                className="border-b border-[var(--color-divider)] print:border-gray-200"
                               >
                                 <td className="py-2 text-sm">
                                   {new Date(payment.date).toLocaleDateString()}
@@ -295,14 +301,14 @@ export function ReceiptPage() {
             <div className="flex flex-wrap gap-4 mt-6 print:hidden">
               <Button
                 onClick={() => navigate('/dashboard')}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="gap-2"
               >
                 Go to Dashboard
               </Button>
               <Button
                 variant="outline"
                 onClick={() => navigate(`/dashboard/applications`)}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="gap-2"
               >
                 View Applications
               </Button>

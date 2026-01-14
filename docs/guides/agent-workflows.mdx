@@ -1,0 +1,448 @@
+---
+title: Using Agent Workflows
+description: Step-by-step guide for using LangAlpha, DeepResearch, and PeopleHub agent workflows
+---
+
+<CardGroup cols={2}>
+  <Card
+    title="LangAlpha"
+    icon="chart-line"
+    href="#langalpha-quantitative-analysis"
+  >
+    Quantitative financial analysis
+  </Card>
+  <Card
+    title="DeepResearch"
+    icon="search"
+    href="#deepresearch"
+  >
+    Iterative web research
+  </Card>
+  <Card
+    title="PeopleHub"
+    icon="users"
+    href="#peoplehub"
+  >
+    Business intelligence
+  </Card>
+  <Card
+    title="Chatbot Integration"
+    icon="message-square"
+    href="#chatbot-integration"
+  >
+    Launch workflows via chatbot
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before using agent workflows, ensure you have:
+
+1. **API Keys Configured**:
+   - `POLYGON_API_KEY` (for LangAlpha market data)
+   - `ALPHA_VANTAGE_API_KEY` (for LangAlpha fundamentals)
+   - `SERPER_API_KEY` (optional, for web search)
+
+2. **LLM Provider Configured**:
+   - `OPENAI_API_KEY` (required)
+   - `LLM_PROVIDER` and `LLM_MODEL` set appropriately
+
+3. **Database Setup**:
+   - PostgreSQL running and accessible
+   - Migrations applied (`uv run alembic upgrade head`)
+
+> 📖 **Setup Guide**: See [Configuration Guide](/getting-started/configuration#agent-workflows-configuration) for complete setup instructions.
+
+---
+
+## LangAlpha: Quantitative Analysis
+
+### Step 1: Launch Company Analysis
+
+**Via API:**
+
+```bash
+curl -X POST http://localhost:8000/api/quantitative-analysis/company \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_name": "Apple Inc.",
+    "ticker": "AAPL",
+    "analysis_type": "comprehensive",
+    "deal_id": 123
+  }'
+```
+
+**Via Chatbot:**
+
+1. Open the **Document Digitizer** app
+2. Click the chatbot icon
+3. Type: `"Analyze Apple Inc. financials"`
+4. The chatbot will launch LangAlpha automatically
+
+### Step 2: Monitor Progress
+
+**With Streaming (API):**
+
+```bash
+curl -X POST "http://localhost:8000/api/quantitative-analysis/company?stream=true" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_name": "Apple Inc.",
+    "ticker": "AAPL"
+  }'
+```
+
+You'll receive Server-Sent Events with progress updates:
+
+```
+data: {"status": "started", "progress": 0, "message": "Analysis started"}
+
+data: {"status": "progress", "progress": 25, "current_step": "Fetching market data"}
+
+data: {"status": "progress", "progress": 50, "current_step": "Analyzing fundamentals"}
+
+data: {"status": "completed", "progress": 100, "result": {...}}
+```
+
+**Via UI:**
+
+- The **Agent Dashboard** shows real-time progress
+- The **Digitizer Chatbot** displays progress indicators
+- Check the **Agent Dashboard** for completed analyses
+
+### Step 3: View Results
+
+**Via API:**
+
+```bash
+curl http://localhost:8000/api/quantitative-analysis/results/{analysis_id} \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Via UI:**
+
+1. Navigate to **Agent Dashboard** in the sidebar
+2. Find your analysis in the list
+3. Click to view detailed results
+
+**Results Include:**
+- Executive summary
+- Financial metrics and ratios
+- Market analysis
+- Risk assessment
+- Investment recommendations
+- CDM-compliant events
+
+### Step 4: Export Reports
+
+Reports are automatically generated in multiple formats:
+
+- **Markdown**: Human-readable format
+- **PDF**: Formatted PDF (via report service)
+- **JSON**: Structured data for programmatic access
+
+Reports are:
+- Stored in the database
+- Attached to deals (if `deal_id` provided)
+- Available via API endpoints
+
+---
+
+## DeepResearch: Iterative Web Research
+
+### Step 1: Submit Research Query
+
+**Via API:**
+
+```bash
+curl -X POST http://localhost:8000/api/deep-research/query \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the latest developments in sustainable finance regulations?",
+    "deal_id": 123,
+    "max_iterations": 5
+  }'
+```
+
+**Via Chatbot:**
+
+1. Open the **Document Digitizer** app
+2. Click the chatbot icon
+3. Type: `"Deep research on sustainable finance regulations"`
+4. The chatbot will launch DeepResearch automatically
+
+### Step 2: Research Process
+
+DeepResearch follows an iterative pattern:
+
+1. **Search**: Initial web search for relevant information
+2. **Read**: Extract and analyze content from sources
+3. **Answer**: Generate initial answer based on findings
+4. **Reflect**: Evaluate answer quality and identify gaps
+5. **Iterate**: Perform additional research to fill gaps
+6. **Finalize**: Generate comprehensive final answer
+
+**Progress Tracking:**
+
+- Check the **Agent Dashboard** for research status
+- View progress in the **Digitizer Chatbot** (if launched via chatbot)
+- Monitor via API: `GET /api/deep-research/results/{research_id}`
+
+### Step 3: View Results
+
+**Via API:**
+
+```bash
+curl http://localhost:8000/api/deep-research/results/{research_id} \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Via UI:**
+
+1. Navigate to **Agent Dashboard** in the sidebar
+2. Find your research in the list
+3. Click to view detailed results
+
+**Results Include:**
+- Comprehensive research answer
+- Knowledge items with citations
+- Source URLs and metadata
+- Research statistics (sources used, iterations, time taken)
+
+### Step 4: Use Research Findings
+
+Research results are:
+- Linked to deals (if `deal_id` provided)
+- Added to deal timelines
+- Stored as agent notes
+- Available for policy evaluation
+- Included in audit reports
+
+---
+
+## PeopleHub: Business Intelligence
+
+### Step 1: Launch PeopleHub Research
+
+**Via Chatbot (Recommended):**
+
+1. Open the **Document Digitizer** app
+2. Click the chatbot icon
+3. Type: `"Research person John Doe"` or `"PeopleHub analysis for Jane Smith"`
+4. The chatbot will launch PeopleHub automatically
+
+**Via API:**
+
+```bash
+curl -X POST http://localhost:8000/api/digitizer-chatbot/launch-workflow \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_type": "peoplehub",
+    "session_id": "chatbot-session-123",
+    "workflow_params": {
+      "person_name": "John Doe"
+    },
+    "deal_id": 123
+  }'
+```
+
+### Step 2: Research Process
+
+PeopleHub performs:
+
+1. **LinkedIn Research**: Automated profile fetching and analysis
+2. **Web Research**: Comprehensive web research with content scraping
+3. **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
+4. **Credit Assessment**: Automated creditworthiness evaluation
+5. **Report Generation**: Comprehensive business intelligence report
+
+### Step 3: View Results
+
+**Via UI:**
+
+1. Navigate to **Agent Dashboard** in the sidebar
+2. Find your PeopleHub research in the list
+3. Click to view detailed results
+
+**Results Include:**
+- Psychometric profile (Big Five traits, risk tolerance, decision-making style)
+- Research summary
+- Credit assessment
+- Web research findings
+- Behavioral insights
+
+### Step 4: Use Business Intelligence
+
+PeopleHub results are:
+- Linked to deals (if `deal_id` provided)
+- Stored as agent notes
+- Available for policy evaluation (psychometric-based policies)
+- Included in credit risk assessments
+- Used in loan application analysis
+
+---
+
+## Chatbot Integration
+
+### Launching Workflows via Chatbot
+
+The document digitizer chatbot can automatically detect and launch agent workflows:
+
+**Example Commands:**
+
+- **LangAlpha**: 
+  - `"Analyze Apple Inc. financials"`
+  - `"Market analysis for tech sector"`
+  - `"Quantitative analysis for loan application"`
+
+- **DeepResearch**: 
+  - `"Deep research on sustainable finance regulations"`
+  - `"Research credit risk trends"`
+  - `"Find information about Basel III compliance"`
+
+- **PeopleHub**: 
+  - `"Research person John Doe"`
+  - `"PeopleHub analysis for Jane Smith"`
+  - `"Business intelligence for CEO of Acme Corp"`
+
+### Workflow Progress in Chatbot
+
+When a workflow is launched via chatbot:
+
+1. **Progress Indicator**: Real-time progress shown in chatbot UI
+2. **Status Updates**: Current step and percentage completion
+3. **Completion Notification**: Toast notification when workflow completes
+4. **Results Display**: Results shown in chatbot response
+
+### Conversation Summarization
+
+The chatbot automatically:
+- Summarizes conversations every 20 messages
+- Stores summaries in `ChatbotSession` model
+- Broadcasts summaries via FDC3 for memory sharing
+- Links summaries to deals and documents
+
+---
+
+## Agent Dashboard
+
+### Accessing the Dashboard
+
+1. Navigate to **Agent Dashboard** in the sidebar
+2. View all agent results in a unified interface
+
+### Dashboard Features
+
+- **Unified View**: All agent results (LangAlpha, DeepResearch, PeopleHub) in one place
+- **Search & Filter**: Search by query, filter by agent type, status, or date
+- **Statistics**: Overview of agent usage and results
+- **Detailed Views**: Click to view detailed results for any analysis
+- **Export**: Download results in multiple formats (Markdown, PDF, JSON)
+
+### Viewing Results
+
+1. **List View**: Browse all results with status badges
+2. **Filter**: Use filters to find specific results
+3. **Search**: Search by query text or person name
+4. **Details**: Click any result to view full details
+5. **Export**: Download results in your preferred format
+
+---
+
+## Best Practices
+
+### 1. Use Appropriate Analysis Types
+
+- **Company Analysis**: For evaluating companies, investments, or borrowers
+- **Market Analysis**: For sector trends, economic indicators, market opportunities
+- **Loan Application Analysis**: For credit risk assessment and loan evaluation
+
+### 2. Link to Deals
+
+Always provide `deal_id` when launching workflows:
+- Results automatically linked to deals
+- Added to deal timelines
+- Available in deal context
+- Included in deal reports
+
+### 3. Monitor Progress
+
+- Use streaming endpoints for long-running analyses
+- Check Agent Dashboard for status
+- Set up notifications for completion
+
+### 4. Review Results
+
+- Review all results before making decisions
+- Check source citations for DeepResearch
+- Verify psychometric profiles for PeopleHub
+- Validate financial metrics for LangAlpha
+
+### 5. Export and Archive
+
+- Export important results for archival
+- Store reports in document management system
+- Include in audit trails
+- Share with stakeholders
+
+---
+
+## Troubleshooting
+
+### Workflow Fails to Start
+
+**Issue**: Workflow doesn't start or returns error
+
+**Solutions**:
+1. Check API keys are configured correctly
+2. Verify LLM provider is accessible
+3. Check database connection
+4. Review error logs for details
+
+### Slow Performance
+
+**Issue**: Workflows take too long
+
+**Solutions**:
+1. Reduce `max_iterations` for DeepResearch
+2. Use `LANGALPHA_BUDGET_LEVEL=low` for faster LangAlpha runs
+3. Check API rate limits
+4. Verify network connectivity
+
+### Missing Results
+
+**Issue**: Results not appearing in dashboard
+
+**Solutions**:
+1. Check Agent Dashboard for error messages
+2. Review audit logs for failed operations
+3. Verify `deal_id` is correct if linking to deals
+4. Check database for stored results
+
+### API Errors
+
+**Issue**: API returns 400/500 errors
+
+**Solutions**:
+1. Verify request format matches API documentation
+2. Check authentication token is valid
+3. Review rate limits (60 requests/minute)
+4. Check server logs for detailed error messages
+
+---
+
+## Next Steps
+
+- [Agent Workflows Feature Documentation](/features/agent-workflows) - Complete feature overview
+- [API Reference](/api-reference/agents) - Complete API documentation
+- [Configuration Guide](/getting-started/configuration#agent-workflows-configuration) - Setup instructions
+- [Agent Tools Documentation](/features/agent-tools) - Available tools and capabilities
+
+---
+
+**Last Updated**: 2025-01-14  
+**Status**: Production Ready

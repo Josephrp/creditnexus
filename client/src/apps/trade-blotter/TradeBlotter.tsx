@@ -7,6 +7,7 @@ import type { CreditAgreementData, Facility, CreditNexusLoanContext } from '@/co
 import { FileText, Calendar, DollarSign, Building2, CheckCircle2, Clock, AlertTriangle, Shield, XCircle, Wallet, Loader2, Search, ChevronDown } from 'lucide-react';
 import { PermissionGate } from '@/components/PermissionGate';
 import { PERMISSION_TRADE_EXECUTE, PERMISSION_TRADE_VIEW } from '@/utils/permissions';
+import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
 
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -878,6 +879,11 @@ export function TradeBlotter({ state, setState }: TradeBlotterProps) {
           </div>
         </div>
       )}
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel dealId={loanData?.deal_id ? parseInt(loanData.deal_id) : null} />
+      </div>
     </div>
   );
 }

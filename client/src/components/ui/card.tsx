@@ -3,12 +3,15 @@ import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> & { size?: "sm" | "md" | "lg" }
+>(({ className, size = "md", ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
       "rounded-lg border bg-[var(--color-card)] text-[var(--color-card-foreground)] shadow-sm",
+      size === "sm" && "p-4",
+      size === "md" && "p-6",
+      size === "lg" && "p-8",
       className
     )}
     {...props}
@@ -18,11 +21,17 @@ Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> & { size?: "sm" | "md" | "lg" }
+>(({ className, size = "md", ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    className={cn(
+      "flex flex-col space-y-2",
+      size === "sm" && "p-4 pb-2",
+      size === "md" && "p-6 pb-4",
+      size === "lg" && "p-8 pb-6",
+      className
+    )}
     {...props}
   />
 ))
@@ -57,9 +66,18 @@ CardDescription.displayName = "CardDescription"
 
 const CardContent = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+  React.HTMLAttributes<HTMLDivElement> & { size?: "sm" | "md" | "lg" }
+>(({ className, size = "md", ...props }, ref) => (
+  <div 
+    ref={ref} 
+    className={cn(
+      size === "sm" && "p-4 pt-2",
+      size === "md" && "p-6 pt-4",
+      size === "lg" && "p-8 pt-6",
+      className
+    )} 
+    {...props} 
+  />
 ))
 CardContent.displayName = "CardContent"
 
@@ -76,4 +94,3 @@ const CardFooter = React.forwardRef<
 CardFooter.displayName = "CardFooter"
 
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
-

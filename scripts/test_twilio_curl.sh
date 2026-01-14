@@ -9,7 +9,7 @@
 ACCOUNT_SID="${TWILIO_ACCOUNT_SID}"
 AUTH_TOKEN="${TWILIO_AUTH_TOKEN}"
 FROM_PHONE="${TWILIO_PHONE_NUMBER}"
-TO_PHONE="+13022537220"
+TO_PHONE="+xxxxx"
 
 # Test message
 MESSAGE="Test message from CreditNexus loan recovery system via curl."

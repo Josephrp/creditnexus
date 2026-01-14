@@ -20,7 +20,8 @@ import {
   ArrowRight,
   Link as LinkIcon,
   Copy,
-  Check
+  Check,
+  X
 } from 'lucide-react'
 import { WorkflowLinkCreator } from '@/apps/workflow/WorkflowLinkCreator'
 import { WorkflowProcessingPage } from './WorkflowProcessingPage'
@@ -29,6 +30,7 @@ import { WorkflowLinkSharer } from './WorkflowLinkSharer'
 import { useFDC3 } from '@/context/FDC3Context'
 import type { WorkflowLinkContext } from '@/context/FDC3Context'
 import { useThemeClasses } from '@/utils/themeUtils'
+import { DashboardChatbotPanel } from './DashboardChatbotPanel'
 
 type ShareView = 'create' | 'process' | 'dashboard' | 'share'
 
@@ -326,6 +328,11 @@ export function WorkflowShareInterface({
 
       {/* Active View Content */}
       {renderView()}
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel dealId={dealId} documentId={documentId} />
+      </div>
     </div>
   )
 }

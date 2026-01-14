@@ -9,6 +9,7 @@ import { LocationTypeBadge } from '@/components/green-finance/LocationTypeBadge'
 import { AirQualityIndicator } from '@/components/green-finance/AirQualityIndicator';
 import { SustainabilityScoreCard } from '@/components/green-finance/SustainabilityScoreCard';
 import { RiskImpactCard } from '@/components/RiskImpactCard';
+import { DashboardChatbotPanel } from '@/components/DashboardChatbotPanel';
 
 const MOCK_ESG_DATA: ESGKPITarget[] = [
   {
@@ -699,6 +700,11 @@ export function GreenLens() {
         )}
         </>
       )}
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel dealId={loanData?.deal_id ? parseInt(loanData.deal_id) : null} />
+      </div>
     </div>
   );
 }

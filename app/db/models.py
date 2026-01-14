@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Foreign
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import enum
+import sqlalchemy as sa
 
 from app.db import Base
 
@@ -2504,5 +2505,328 @@ class BorrowerContact(Base):
             "metadata": self.contact_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class AccountingDocument(Base):
+    """Accounting document model for storing extracted accounting data."""
+    
+    __tablename__ = "accounting_documents"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    document_type = Column(String(50), nullable=False, index=True)  # balance_sheet, income_statement, etc.
+    extracted_data = Column(JSONB, nullable=True)  # Full accounting document structure
+    reporting_period_start = Column(Date, nullable=True)
+    reporting_period_end = Column(Date, nullable=True)
+    period_type = Column(String(20), nullable=True, index=True)  # quarterly, annual, monthly
+    currency = Column(String(10), nullable=True)  # ISO currency code
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    document = relationship("Document", backref="accounting_document")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "document_id": self.document_id,
+            "document_type": self.document_type,
+            "extracted_data": self.extracted_data,
+            "reporting_period_start": self.reporting_period_start.isoformat() if self.reporting_period_start else None,
+            "reporting_period_end": self.reporting_period_end.isoformat() if self.reporting_period_end else None,
+            "period_type": self.period_type,
+            "currency": self.currency,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DeepResearchResult(Base):
+    """Deep research result model for storing research query results."""
+    
+    __tablename__ = "deep_research_results"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    research_id = Column(String(36), nullable=False, unique=True, index=True)  # UUID as string
+    query = Column(Text, nullable=False)
+    answer = Column(Text, nullable=True)
+    knowledge_items = Column(JSONB, nullable=True)  # List of knowledge items
+    visited_urls = Column(ARRAY(String), nullable=True)
+    searched_queries = Column(ARRAY(String), nullable=True)
+    token_usage = Column(JSONB, nullable=True)
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    workflow_id = Column(Integer, ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True)
+    status = Column(String(20), server_default="pending", nullable=False, index=True)  # pending, processing, completed, failed
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Relationships
+    deal = relationship("Deal", backref="deep_research_results")
+    workflow = relationship("Workflow", backref="deep_research_results")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "research_id": self.research_id,
+            "query": self.query,
+            "answer": self.answer,
+            "knowledge_items": self.knowledge_items,
+            "visited_urls": self.visited_urls,
+            "searched_queries": self.searched_queries,
+            "token_usage": self.token_usage,
+            "deal_id": self.deal_id,
+            "workflow_id": self.workflow_id,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error_message": self.error_message,
+        }
+
+
+class IndividualProfile(Base):
+    """Individual profile model for business intelligence."""
+    
+    __tablename__ = "individual_profiles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    person_name = Column(String(255), nullable=False, index=True)
+    linkedin_url = Column(String(500), nullable=True)
+    profile_data = Column(JSONB, nullable=True)  # LinkedIn data, web summaries, research report
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", backref="individual_profiles")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "person_name": self.person_name,
+            "linkedin_url": self.linkedin_url,
+            "profile_data": self.profile_data,
+            "deal_id": self.deal_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class BusinessProfile(Base):
+    """Business profile model for business intelligence."""
+    
+    __tablename__ = "business_profiles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    business_name = Column(String(255), nullable=False, index=True)
+    business_lei = Column(String(20), nullable=True, index=True)
+    business_type = Column(String(50), nullable=True)
+    industry = Column(String(100), nullable=True)
+    profile_data = Column(JSONB, nullable=True)  # Business research data
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", backref="business_profiles")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "business_name": self.business_name,
+            "business_lei": self.business_lei,
+            "business_type": self.business_type,
+            "industry": self.industry,
+            "profile_data": self.profile_data,
+            "deal_id": self.deal_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class QuantitativeAnalysisStatus(str, enum.Enum):
+    """Status of quantitative analysis."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class QuantitativeAnalysisResult(Base):
+    """Quantitative analysis result model for LangAlpha analysis."""
+    
+    __tablename__ = "quantitative_analysis_results"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID as string
+    analysis_type = Column(String(50), nullable=False, index=True)  # company, market, loan_application
+    query = Column(Text, nullable=False)
+    report = Column(JSONB, nullable=True)  # Final analysis report
+    market_data = Column(JSONB, nullable=True)  # Market data collected
+    fundamental_data = Column(JSONB, nullable=True)  # Fundamental data collected
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    workflow_id = Column(Integer, ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    status = Column(String(20), default=QuantitativeAnalysisStatus.PENDING.value, nullable=False, index=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    deal = relationship("Deal", backref="quantitative_analyses")
+    workflow = relationship("Workflow", backref="quantitative_analyses")
+    user = relationship("User", foreign_keys=[user_id])
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "analysis_id": self.analysis_id,
+            "analysis_type": self.analysis_type,
+            "query": self.query,
+            "report": self.report,
+            "market_data": self.market_data,
+            "fundamental_data": self.fundamental_data,
+            "deal_id": self.deal_id,
+            "workflow_id": self.workflow_id,
+            "user_id": self.user_id,
+            "status": self.status,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
+
+
+class PsychometricProfile(Base):
+    """Psychometric profile model for business intelligence."""
+    
+    __tablename__ = "psychometric_profiles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    individual_profile_id = Column(Integer, ForeignKey("individual_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    psychometric_data = Column(JSONB, nullable=False)  # Full psychometric profile structure
+    buying_behavior = Column(JSONB, nullable=True)  # Buying behavior profile
+    savings_behavior = Column(JSONB, nullable=True)  # Savings behavior profile
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    individual_profile = relationship("IndividualProfile", backref="psychometric_profiles")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "individual_profile_id": self.individual_profile_id,
+            "psychometric_data": self.psychometric_data,
+            "buying_behavior": self.buying_behavior,
+            "savings_behavior": self.savings_behavior,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class AuditReport(Base):
+    """Audit report model for business intelligence."""
+    
+    __tablename__ = "audit_reports"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    report_type = Column(String(50), nullable=False, index=True)  # individual, business
+    profile_id = Column(Integer, nullable=True, index=True)  # Can reference individual or business profile
+    report_data = Column(JSONB, nullable=True)  # Report content including research, psychometric data, credit check
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    deal = relationship("Deal", backref="audit_reports")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "report_type": self.report_type,
+            "profile_id": self.profile_id,
+            "report_data": self.report_data,
+            "deal_id": self.deal_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ChatbotSession(Base):
+    """Chatbot session model for document digitizer chatbot."""
+    
+    __tablename__ = "chatbot_sessions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), nullable=False, unique=True, index=True)  # UUID as string
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=sa.text('now()'), onupdate=datetime.utcnow, nullable=False)
+    
+    # Conversation summary fields (for memory sharing across middleware)
+    conversation_summary = Column(Text, nullable=True)  # LLM-generated summary
+    summary_key_points = Column(JSONB, nullable=True)  # List of key points
+    summary_updated_at = Column(DateTime, nullable=True)  # When summary was last updated
+    message_count = Column(Integer, server_default='0', nullable=False)  # Total message count
+    
+    # Relationships
+    user = relationship("User", backref="chatbot_sessions")
+    deal = relationship("Deal", backref="chatbot_sessions")
+    document = relationship("Document", backref="chatbot_sessions")
+    messages = relationship("ChatbotMessage", back_populates="session", cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "deal_id": self.deal_id,
+            "document_id": self.document_id,
+            "conversation_summary": self.conversation_summary,
+            "summary_key_points": self.summary_key_points,
+            "summary_updated_at": self.summary_updated_at.isoformat() if self.summary_updated_at else None,
+            "message_count": self.message_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ChatbotMessage(Base):
+    """Chatbot message model for document digitizer chatbot."""
+    
+    __tablename__ = "chatbot_messages"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), ForeignKey("chatbot_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # user, assistant
+    content = Column(Text, nullable=False)
+    workflow_launched = Column(String(100), nullable=True)  # peoplehub, deepresearch, langalpha
+    cdm_events = Column(JSONB, nullable=True)  # CDM events generated for this message
+    created_at = Column(DateTime, server_default=sa.text('now()'), nullable=False)
+    
+    # Relationships
+    session = relationship("ChatbotSession", back_populates="messages")
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "role": self.role,
+            "content": self.content,
+            "workflow_launched": self.workflow_launched,
+            "cdm_events": self.cdm_events,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

@@ -1,0 +1,237 @@
+# KYC (Know Your Customer) Compliance Rules
+# 
+# These rules evaluate individual and business profiles from PeopleHub/Business Intelligence
+# against KYC requirements for credit agreements and loan facilities.
+#
+# Rule Structure:
+# - name: Unique rule identifier
+# - when: Conditions that trigger the rule (all/any logic)
+# - action: ALLOW, BLOCK, or FLAG
+# - priority: Higher priority rules are evaluated first (1-100)
+# - description: Human-readable description
+# - category: Rule category for grouping
+
+# ============================================================================
+# INDIVIDUAL PROFILE KYC RULES
+# ============================================================================
+
+# Block individuals with insufficient identity verification
+- name: block_individual_insufficient_identity
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - any:
+          - field: has_linkedin
+            op: eq
+            value: false
+          - field: has_profile_data
+            op: eq
+            value: false
+          - field: has_web_research
+            op: eq
+            value: false
+  action: block
+  priority: 95
+  description: "Block individuals without sufficient identity verification (LinkedIn, profile data, or web research)"
+  category: "kyc_identity_verification"
+
+# Flag individuals with low psychometric confidence
+- name: flag_low_psychometric_confidence
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: psychometric_confidence
+        op: lt
+        value: 0.5
+  action: flag
+  priority: 80
+  description: "Flag individuals with low psychometric analysis confidence (< 50%)"
+  category: "kyc_risk_assessment"
+
+# Flag individuals with high risk tolerance and low conscientiousness
+- name: flag_high_risk_individual
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: risk_tolerance
+        op: eq
+        value: "aggressive"
+      - field: conscientiousness
+        op: lt
+        value: 0.4
+  action: flag
+  priority: 85
+  description: "Flag individuals with aggressive risk tolerance and low conscientiousness"
+  category: "kyc_risk_assessment"
+
+# Flag individuals with high impulse buying tendency
+- name: flag_high_impulse_buying
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: impulse_buying_tendency
+        op: eq
+        value: "high"
+  action: flag
+  priority: 75
+  description: "Flag individuals with high impulse buying tendency"
+  category: "kyc_behavioral_risk"
+
+# Flag individuals with high credit risk score
+- name: flag_high_credit_risk
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: credit_risk_score
+        op: gt
+        value: 0.7
+  action: flag
+  priority: 90
+  description: "Flag individuals with high credit risk score (> 0.7)"
+  category: "kyc_credit_risk"
+
+# Block individuals with very high credit risk score
+- name: block_very_high_credit_risk
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: credit_risk_score
+        op: gt
+        value: 0.9
+  action: block
+  priority: 95
+  description: "Block individuals with very high credit risk score (> 0.9)"
+  category: "kyc_credit_risk"
+
+# Flag individuals with negative payment history indicators
+- name: flag_negative_payment_history
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "individual"
+      - field: payment_history_indicators
+        op: contains
+        value: "negative"
+  action: flag
+  priority: 85
+  description: "Flag individuals with negative payment history indicators"
+  category: "kyc_credit_risk"
+
+# ============================================================================
+# BUSINESS PROFILE KYC RULES
+# ============================================================================
+
+# Block businesses without LEI (Legal Entity Identifier)
+- name: block_business_without_lei
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "business"
+      - field: has_lei
+        op: eq
+        value: false
+  action: block
+  priority: 95
+  description: "Block businesses without Legal Entity Identifier (LEI) for KYC compliance"
+  category: "kyc_identity_verification"
+
+# Flag businesses without key executive profiles
+- name: flag_business_no_executives
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "business"
+      - field: has_executive_profiles
+        op: eq
+        value: false
+  action: flag
+  priority: 80
+  description: "Flag businesses without key executive profiles for KYC verification"
+  category: "kyc_identity_verification"
+
+# Flag businesses without financial data
+- name: flag_business_no_financial_data
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "business"
+      - field: has_financial_data
+        op: eq
+        value: false
+  action: flag
+  priority: 75
+  description: "Flag businesses without financial summary data"
+  category: "kyc_financial_verification"
+
+# Block businesses with insufficient profile data
+- name: block_business_insufficient_data
+  when:
+    all:
+      - field: profile_type
+        op: eq
+        value: "business"
+      - any:
+          - field: has_profile_data
+            op: eq
+            value: false
+          - field: has_business_research
+            op: eq
+            value: false
+  action: block
+  priority: 90
+  description: "Block businesses without sufficient profile data or business research"
+  category: "kyc_identity_verification"
+
+# ============================================================================
+# GENERAL KYC RULES (Both Individual and Business)
+# ============================================================================
+
+# Flag profiles with missing required KYC fields
+- name: flag_incomplete_kyc_profile
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "kyc_compliance_check"
+      - any:
+          - field: profile_type
+            op: eq
+            value: null
+          - field: person_name
+            op: eq
+            value: null
+          - field: business_name
+            op: eq
+            value: null
+  action: flag
+  priority: 70
+  description: "Flag profiles with missing required KYC fields"
+  category: "kyc_data_completeness"
+
+# Default: Allow if no other rules match
+- name: allow_kyc_compliant_profile
+  when:
+    all:
+      - field: transaction_type
+        op: eq
+        value: "kyc_compliance_check"
+  action: allow
+  priority: 1
+  description: "Default: Allow KYC-compliant profiles that pass all checks"
+  category: "kyc_default"

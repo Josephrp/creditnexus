@@ -20,7 +20,7 @@ if (Test-Path $envFile) {
 $ACCOUNT_SID = $env:TWILIO_ACCOUNT_SID
 $AUTH_TOKEN = $env:TWILIO_AUTH_TOKEN
 $FROM_PHONE = $env:TWILIO_PHONE_NUMBER
-$TO_PHONE = "+8618515979710"
+$TO_PHONE = "+xxxxx"
 
 # Validate required environment variables
 $missingVars = @()

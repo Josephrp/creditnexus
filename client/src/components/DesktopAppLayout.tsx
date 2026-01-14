@@ -33,6 +33,7 @@ import { WorkflowShareInterface } from '@/components/WorkflowShareInterface';
 import { WorkflowDelegationDashboard } from '@/components/WorkflowDelegationDashboard';
 import { WorkflowProcessingPage } from '@/components/WorkflowProcessingPage';
 import { LoanRecoverySidebar } from '@/components/LoanRecoverySidebar';
+import { AgentDashboard } from '@/apps/agent-dashboard/AgentDashboard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useThemeClasses } from '@/utils/themeUtils';
 import { Link } from 'react-router-dom';
@@ -50,7 +51,7 @@ import {
   PERMISSION_AUDIT_VIEW,
 } from '@/utils/permissions';
 
-type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor' | 'securitization' | 'verification-config' | 'workflow-processor' | 'workflow-share' | 'loan-recovery';
+type AppView = 'dashboard' | 'document-parser' | 'trade-blotter' | 'green-lens' | 'library' | 'ground-truth' | 'verification-demo' | 'demo-data' | 'risk-war-room' | 'document-generator' | 'applications' | 'calendar' | 'admin-signups' | 'policy-editor' | 'deals' | 'auditor' | 'securitization' | 'verification-config' | 'workflow-processor' | 'workflow-share' | 'loan-recovery' | 'agent-dashboard';
 
 interface AppConfig {
   id: AppView;
@@ -150,6 +151,13 @@ const sidebarApps: AppConfig[] = [
     icon: <User className="h-5 w-5 text-blue-400" />,
     description: 'Review platform user account signups (admin only)',
     requiredPermission: PERMISSION_USER_VIEW,
+  },
+  {
+    id: 'agent-dashboard',
+    name: 'Agent Dashboard',
+    icon: <Sparkles className="h-5 w-5 text-emerald-400" />,
+    description: 'View and manage all agent analysis results',
+    requiredPermission: PERMISSION_DOCUMENT_VIEW,
   },
   {
     id: 'deals',
@@ -272,6 +280,7 @@ export function DesktopAppLayout() {
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
+      '/app/agent-dashboard': 'agent-dashboard',
       '/library': 'library',
       '/auditor': 'auditor',
     };
@@ -457,6 +466,7 @@ export function DesktopAppLayout() {
       '/app/risk-war-room': 'risk-war-room',
       '/app/policy-editor': 'policy-editor',
       '/app/verification-config': 'verification-config',
+      '/app/agent-dashboard': 'agent-dashboard',
       '/app/loan-recovery': 'loan-recovery',
       '/library': 'library',
       '/auditor': 'auditor',
@@ -614,6 +624,7 @@ export function DesktopAppLayout() {
       'policy-editor': '/app/policy-editor',
       'verification-config': '/app/verification-config',
       'securitization': '/app/securitization',
+      'agent-dashboard': '/app/agent-dashboard',
       'library': '/library',
       'auditor': '/auditor',
       'workflow-share': '/app/workflow/share',
@@ -1020,6 +1031,7 @@ export function DesktopAppLayout() {
               <LoanRecoverySidebar />
             </div>
           )}
+          {activeApp === 'agent-dashboard' && <AgentDashboard />}
           {activeApp === 'securitization' && (() => {
             // Check if we're on a tranche purchase page
             if (location.pathname.includes('/tranches/') && location.pathname.includes('/purchase')) {

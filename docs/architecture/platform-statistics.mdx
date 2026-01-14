@@ -1,0 +1,373 @@
+---
+title: Platform Statistics
+description: Comprehensive breakdown of CreditNexus platform components, capabilities, and scale
+---
+
+## Overview
+
+CreditNexus is a comprehensive financial AI platform with extensive capabilities across document processing, policy enforcement, agent automation, and data management. The platform demonstrates significant depth and breadth in its implementation, built with enterprise-scale requirements in mind.
+
+---
+
+## Platform Statistics at a Glance
+
+<CardGroup cols={4}>
+  <Card title="215+" icon="file-text">
+    Prompt Templates
+    
+    Across 16 files with 159 helper functions
+  </Card>
+  
+  <Card title="11" icon="robot">
+    Specialized Agents
+    
+    9 classes and 30 functions for automation
+  </Card>
+  
+  <Card title="121" icon="shield-check">
+    Policy Rules
+    
+    Across 21 files covering major regulations
+  </Card>
+  
+  <Card title="94" icon="wrench">
+    Tool Modules
+    
+    60 services, 14 utils, 20 chains
+  </Card>
+  
+  <Card title="76" icon="database">
+    Data Models
+    
+    Pydantic models ensuring type safety
+  </Card>
+  
+  <Card title="54" icon="table">
+    Database Tables
+    
+    SQLAlchemy 2.0 models for data persistence
+  </Card>
+  
+  <Card title="147" icon="api">
+    API Endpoints
+    
+    Comprehensive programmatic access
+  </Card>
+  
+  <Card title="100%" icon="check-circle">
+    CDM Compliant
+    
+    Full FINOS CDM standardization
+  </Card>
+</CardGroup>
+
+---
+
+## Component Breakdown
+
+### Prompts
+
+**Total Count:** ~215 prompt templates across 16 files
+
+<CardGroup cols={2}>
+  <Card title="Breakdown">
+    - **Template Files:** 16 Python files
+    - **Prompt Templates:** ~215 distinct ChatPromptTemplate instances
+    - **Prompt Functions:** 159 helper functions for prompt generation
+  </Card>
+  
+  <Card title="Key Features">
+    - LMA-compliant clause generation
+    - Industry-specific templates
+    - Scenario-based prompts
+    - Multi-provider LLM support
+    - Multi-Model LLM Agents
+    - Multi-Modal Information Fusion
+  </Card>
+</CardGroup>
+
+**Categories:**
+- **Facility Agreement** - 40+ sections
+- **Term Sheet** - Core term extraction
+- **Confidentiality Agreement** - Privacy and disclosure terms
+- **Secondary Trading** - 7 sections for trade execution
+- **Security & Intercreditor** - 7 sections for security arrangements
+- **Origination Documents** - 3 sections for loan origination
+- **Sustainable Finance** - 7 sections for ESG compliance
+- **Regional Documents** - 2 sections for jurisdiction-specific terms
+- **Regulatory** - 11 sections covering MiCA, Basel III, FATF
+- **Restructuring** - 4 sections for workout agreements
+- **Supporting Documents** - Legal opinions and certificates
+- **Filing** - Regulatory filing requirements
+- **Signature** - E-signature workflows
+- **Demo Deal Generation** - Scenario-based deal creation
+
+---
+
+### Agents
+
+**Total Count:** 11 agent files with 9 classes and 30 functions
+
+<CardGroup cols={2}>
+  <Card title="Agent Types">
+    1. **Analyzer** - Document analysis and SPT extraction
+    2. **Audit Workflow** - Complete audit workflow automation
+    3. **Classifier** - Land use classification using TorchGeo
+    4. **Deadline Verifier** - Filing deadline verification
+    5. **Deep Research Agent** - Multi-source research capabilities
+    6. **Deep Research Tools** - Research tool integrations
+    7. **Filing Verifier** - Regulatory filing verification
+    8. **LangAlpha Tools** - LangAlpha integration tools
+    9. **Signature Verifier** - Document signature verification
+    10. **Vector Store** - Vector database operations
+    11. **Verifier** - Satellite verification (NDVI analysis)
+  </Card>
+  
+  <Card title="Capabilities">
+    - Multi-modal document processing
+    - Satellite imagery analysis
+    - Automated compliance checking
+    - Research and data gathering
+    - Workflow automation
+  </Card>
+</CardGroup>
+
+---
+
+### Policies
+
+**Total Count:** 21 policy files with 121 rules
+
+<CardGroup cols={3}>
+  <Card title="Compliance" icon="shield">
+    **2 files**
+    - KYC Compliance
+    - Sanctions Screening
+  </Card>
+  
+  <Card title="Credit Risk" icon="alert-triangle">
+    **8 files**
+    - Basel III Capital Requirements
+    - Collateral Requirements
+    - Creditworthiness Assessment
+    - Data Quality Standards
+    - IRB Ratings
+    - Model Validation
+    - Risk Rating
+    - Stress Testing
+  </Card>
+  
+  <Card title="ESG" icon="leaf">
+    **1 file**
+    - ESG Compliance
+  </Card>
+  
+  <Card title="Green Finance" icon="tree-pine">
+    **7 files**
+    - Climate Resilience
+    - Emissions Monitoring
+    - Pollution Compliance
+    - SDG Alignment
+    - Sustainable Infrastructure
+    - Urban Sustainability
+    - Vehicle Activity
+  </Card>
+  
+  <Card title="Filing" icon="file-check">
+    **2 files**
+    - Filing Compliance
+    - Filing Deadlines
+  </Card>
+  
+  <Card title="Syndicated Loans" icon="file-text">
+    **1 file**
+    - Syndicated Loan Rules
+  </Card>
+</CardGroup>
+
+**Policy Features:**
+- ✅ Real-time enforcement
+- ✅ CDM-compliant event generation
+- ✅ Three-tier decision system (ALLOW, BLOCK, FLAG)
+- ✅ YAML-based rule definitions
+- ✅ Hot-reload capability (development)
+
+---
+
+### Tools
+
+**Total Count:** 94 tool files across services, utils, and chains
+
+<CardGroup cols={3}>
+  <Card title="Services" icon="server">
+    **60 files**
+    - 63 classes
+    - 23 functions
+    
+    Key services include audit, blockchain, CDM payload generation, credit risk, deal management, deep research, filing, loan recovery, payment processing, policy enforcement, securitization, verification, and more.
+  </Card>
+  
+  <Card title="Utils" icon="tool">
+    **14 files**
+    - 24 functions
+    
+    Utilities for audit helpers, CDM operations, certificate generation, crypto verification, document splitting, file operations, PDF extraction, rate limiting, SSL configuration, and verification tokens.
+  </Card>
+  
+  <Card title="Chains" icon="link">
+    **20 files**
+    - 29 classes
+    - 52 functions
+    
+    LangChain integration chains for accounting extraction, agentic pipelines, audio transcription, audit reports, CDM operations, clause analysis, deal generation, document retrieval, extraction, filing, image processing, multimodal fusion, and profile extraction.
+  </Card>
+</CardGroup>
+
+---
+
+### Datapoints
+
+<CardGroup cols={4}>
+  <Card title="76" icon="database">
+    Pydantic Models
+    
+    Across 16 model files
+  </Card>
+  
+  <Card title="54" icon="table">
+    Database Tables
+    
+    SQLAlchemy 2.0 models
+  </Card>
+  
+  <Card title="147" icon="api">
+    API Endpoints
+    
+    RESTful programmatic access
+  </Card>
+  
+  <Card title="16" icon="folder">
+    Model Files
+    
+    Organized by domain
+  </Card>
+</CardGroup>
+
+#### Pydantic Models (76 models)
+
+**Key Model Categories:**
+
+| Category | File | Key Models |
+|----------|------|------------|
+| **CDM Models** | `cdm.py` | CreditAgreement, Party, LoanFacility, Money, Frequency, FloatingRateOption, InterestRatePayout, ESGKPITarget |
+| **CDM Events** | `cdm_events.py` | TradeExecution, Observation, PolicyEvaluation |
+| **CDM Payment** | `cdm_payment.py` | PaymentEvent, PaymentStatus, PaymentMethod, PaymentType |
+| **Credit Risk** | `credit_risk.py` | CreditRiskAssessment, InternalRatingModel, ExternalRatingMapper, RiskRating |
+| **Green Finance** | `green_finance.py` | EnvironmentalMetrics, UrbanActivityMetrics, SustainabilityScore, SDGAlignment |
+| **Business Intelligence** | `business_intelligence.py` | PsychometricProfile, IndividualProfile, BusinessProfile, CreditCheckData |
+| **Accounting** | `accounting_document.py` | BalanceSheet, IncomeStatement, CashFlowStatement, TaxReturn |
+| **Recovery** | `recovery_models.py` | LoanDefaultResponse, RecoveryActionResponse, BorrowerContactResponse |
+| **Filing** | `filing_*.py` | FilingRequirement, FilingFormData |
+| **Signature** | `signature_requests.py` | SignatureRequestGeneration, Signer |
+| **SPT Schema** | `spt_schema.py` | SustainabilityPerformanceTarget, FinancialConsequence |
+| **User Profile** | `user_profile.py` | UserProfileData, Address, CompanyInfo, FinancialInfo |
+
+#### Database Tables (54 tables)
+
+**Key Table Categories:**
+
+| Category | Tables |
+|----------|--------|
+| **User Management** | User, OAuth, RefreshToken, Permission, RolePermission |
+| **Documents** | Document, DocumentVersion, StagedExtraction, GeneratedDocument, TemplateFieldMapping, ClauseCache |
+| **Workflows** | Workflow, WorkflowDelegation, WorkflowDelegationState |
+| **Audit** | AuditLog, VerificationAuditLog, GeneratedReport |
+| **Policy** | Policy, PolicyVersion, PolicyApproval, PolicyTemplate, PolicyDecision |
+| **Deals** | Deal, DealNote, Application, Inquiry, Meeting |
+| **Verification** | VerificationRequest, GreenFinanceAssessment, NotarizationRecord |
+| **Securitization** | SecuritizationPool, SecuritizationTranche, SecuritizationPoolAsset |
+| **Loan Assets** | LoanAsset, LoanDefault, RecoveryAction, BorrowerContact |
+| **Filing** | DocumentFiling, RegulatoryFiling |
+| **Payments** | PaymentEvent |
+| **Accounting** | AccountingDocument |
+| **Research** | DeepResearchResult |
+| **Profiles** | IndividualProfile, BusinessProfile, RemoteAppProfile |
+| **Analysis** | QuantitativeAnalysisResult, PsychometricProfile, AuditReport |
+| **Chatbot** | ChatbotSession, ChatbotMessage |
+| **Layers** | SatelliteLayer |
+| **Signatures** | DocumentSignature |
+
+#### API Endpoints (147 endpoints)
+
+**Endpoint Categories:**
+
+| Category | Endpoints | Examples |
+|----------|-----------|----------|
+| **Document Extraction** | 3 | `/extract`, `/upload`, `/extract/accounting` |
+| **Deep Research** | 2 | `/deep-research/query`, `/deep-research/results/{id}` |
+| **Business Intelligence** | 1 | `/business-intelligence/research-person` |
+| **KYC** | 1 | `/kyc/evaluate` |
+| **Quantitative Analysis** | 4 | `/quantitative-analysis/company`, `/quantitative-analysis/market`, `/quantitative-analysis/loan-application`, `/quantitative-analysis/results/{id}` |
+| **Audio/Image** | 2 | `/audio/transcribe`, `/image/extract` |
+| **Health** | 2 | `/health`, `/health/database/ssl` |
+| **Document Management** | 8+ | `/documents`, `/documents/{id}`, `/documents/{id}/versions`, `/documents/{id}/export` |
+| **CDM Operations** | 4 | `/cdm/add`, `/cdm/edit`, `/cdm/remove`, `/cdm/events/{trade_id}` |
+| **Multimodal** | 1 | `/multimodal/fuse` |
+| **Chatbot** | 4 | `/chatbot/chat`, `/digitizer-chatbot/chat`, `/chatbot/suggest-templates`, `/chatbot/fill-fields` |
+| **Profile** | 1 | `/profile/extract` |
+| **Analytics** | 3 | `/analytics/portfolio`, `/analytics/dashboard`, `/analytics/template-metrics` |
+| **Workflow** | 6 | `/documents/{id}/workflow/submit`, `/approve`, `/reject`, `/publish`, `/archive` |
+| **Audit** | 3 | `/audit-logs`, `/audit/run/{asset_id}`, `/audit/status/{asset_id}` |
+| **Loan Assets** | 4 | `/loan-assets`, `/loan-assets/{id}`, `/loan-assets/demo` |
+| **Trades** | 3 | `/trades/execute`, `/trades/{id}/settle`, `/trades/{id}/terms-change` |
+| **Loans** | 2 | `/loans/{id}/disburse`, `/loans/{id}/penalty-payment` |
+| **Policy** | 2 | `/policy/statistics`, `/policy/decisions` |
+| **Templates** | 5 | `/templates`, `/templates/{id}`, `/templates/{id}/generate`, `/templates/{id}/requirements` |
+| **Clauses** | 4 | `/clauses`, `/clauses/{id}`, `/clauses/{id}` (PUT, DELETE) |
+| **Applications** | 6 | `/applications`, `/applications/{id}`, `/applications/{id}/create-deal`, `/applications/{id}/submit` |
+| **Deals** | 3 | `/deals`, `/deals/{id}` |
+| **Inquiries** | 3 | `/inquiries`, `/inquiries/{id}` |
+| **Meetings** | 3 | `/meetings`, `/meetings/{id}` |
+| **Search** | 2 | `/search`, `/classify` |
+
+---
+
+## Platform Capabilities Assessment
+
+### Strengths
+
+<CardGroup cols={2}>
+  <Card title="Comprehensive Coverage" icon="check-circle">
+    The platform covers the entire loan lifecycle from origination to recovery, with specialized components for each stage.
+  </Card>
+  
+  <Card title="Regulatory Compliance" icon="shield-check">
+    Extensive policy framework covering major regulations (MiCA, Basel III, FATF) with 121 rules across multiple categories.
+  </Card>
+  
+  <Card title="AI/ML Integration" icon="brain">
+    Deep integration with multiple LLM providers, specialized agents for various tasks, and 215+ prompt templates for consistent AI behavior.
+  </Card>
+  
+  <Card title="Data Standardization" icon="database">
+    Full FINOS CDM compliance with 76 Pydantic models ensuring data consistency and interoperability.
+  </Card>
+  
+  <Card title="Extensibility" icon="puzzle">
+    Modular architecture with 94 tool files allowing easy extension and customization.
+  </Card>
+  
+  <Card title="API-First Design" icon="api">
+    147 API endpoints provide comprehensive programmatic access to all platform features.
+  </Card>
+  
+  <Card title="Multi-Modal Processing" icon="image">
+    Support for text, images, audio, and satellite imagery processing.
+  </Card>
+  
+  <Card title="Blockchain Integration" icon="link">
+    Smart contract support for notarization and payment processing.
+  </Card>
+</CardGroup>
+
+---

@@ -22,6 +22,7 @@ import {
 import { fetchWithAuth } from '@/context/AuthContext'
 import { useFDC3 } from '@/context/FDC3Context'
 import type { WorkflowLinkContext } from '@/context/FDC3Context'
+import { DashboardChatbotPanel } from './DashboardChatbotPanel'
 
 interface WorkflowData {
   workflow_id: string
@@ -64,7 +65,7 @@ interface WorkflowData {
 }
 
 export function WorkflowProcessingPage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { context, listenForWorkflowLinks } = useFDC3()
   
@@ -74,6 +75,8 @@ export function WorkflowProcessingPage() {
   const [data, setData] = useState<WorkflowData | null>(null)
   const [declineReason, setDeclineReason] = useState('')
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
+  const [manualLinkInput, setManualLinkInput] = useState('')
+  const [showManualInput, setShowManualInput] = useState(false)
 
   // Get payload from URL or FDC3 context
   const payloadFromUrl = searchParams.get('payload')
@@ -84,9 +87,11 @@ export function WorkflowProcessingPage() {
     if (encryptedPayload) {
       loadWorkflowFromPayload(encryptedPayload)
     } else {
-      setError('No workflow payload provided')
+      // Don't show error immediately - allow manual input
       setLoading(false)
+      setShowManualInput(true)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encryptedPayload])
 
   // Listen for FDC3 workflow links
@@ -100,9 +105,42 @@ export function WorkflowProcessingPage() {
     }
   }, [encryptedPayload, listenForWorkflowLinks])
 
+  const extractPayloadFromLink = (link: string): string | null => {
+    try {
+      const url = new URL(link)
+      return url.searchParams.get('payload')
+    } catch {
+      // If it's not a full URL, assume it's just the payload
+      return link.trim() || null
+    }
+  }
+
+  const handleManualLinkSubmit = () => {
+    if (!manualLinkInput.trim()) {
+      setError('Please enter a workflow link or payload')
+      return
+    }
+
+    const payload = extractPayloadFromLink(manualLinkInput.trim())
+    if (!payload) {
+      setError('Could not extract payload from link. Please check the link format.')
+      return
+    }
+
+    // Update URL with payload
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('payload', payload)
+    setSearchParams(newParams)
+    
+    // Load the workflow
+    loadWorkflowFromPayload(payload)
+    setShowManualInput(false)
+  }
+
   const loadWorkflowFromPayload = async (payload: string) => {
     setLoading(true)
     setError(null)
+    setShowManualInput(false)
 
     try {
       const response = await fetchWithAuth('/api/workflows/process', {
@@ -120,6 +158,7 @@ export function WorkflowProcessingPage() {
       setData(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workflow')
+      setShowManualInput(true) // Show input again on error
     } finally {
       setLoading(false)
     }
@@ -201,7 +240,75 @@ export function WorkflowProcessingPage() {
     )
   }
 
-  if (error && !data) {
+  // Show manual input form if no payload and no data
+  if (showManualInput && !data && !loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+        <Card className="bg-slate-800 border-slate-700 max-w-2xl w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-slate-100">
+              <FileText className="h-5 w-5" />
+              Process Workflow Link
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              Enter a workflow link or encrypted payload to process
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-900/20 border border-red-700 rounded text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+            <div>
+              <Label htmlFor="workflow-link" className="text-slate-300 mb-2 block">
+                Workflow Link or Payload
+              </Label>
+              <Textarea
+                id="workflow-link"
+                value={manualLinkInput}
+                onChange={(e) => {
+                  setManualLinkInput(e.target.value)
+                  setError(null)
+                }}
+                placeholder="Paste workflow link here (e.g., https://...?payload=...) or enter encrypted payload"
+                rows={4}
+                className="bg-slate-900 border-slate-600 text-slate-200 font-mono text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleManualLinkSubmit}
+                disabled={!manualLinkInput.trim() || loading}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Process Workflow
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => navigate('/app/workflow/share')}
+                variant="outline"
+                className="border-slate-600"
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (error && !data && !showManualInput) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
         <Card className="bg-slate-800 border-slate-700 max-w-md w-full">
@@ -213,9 +320,20 @@ export function WorkflowProcessingPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-slate-300">{error}</p>
-            <Button onClick={() => navigate('/')} className="w-full">
-              Return to Home
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setError(null)
+                  setShowManualInput(true)
+                }}
+                className="flex-1"
+              >
+                Try Another Link
+              </Button>
+              <Button onClick={() => navigate('/app/workflow/share')} variant="outline">
+                Return to Workflow Share
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -481,6 +599,11 @@ export function WorkflowProcessingPage() {
             </CardContent>
           </Card>
         )}
+      </div>
+
+      {/* Chatbot Panel */}
+      <div className="mt-6">
+        <DashboardChatbotPanel dealId={data?.workflow_metadata?.dealId} documentId={data?.workflow_metadata?.documentId} />
       </div>
     </div>
   )

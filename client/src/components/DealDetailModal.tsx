@@ -3,15 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { 
-  X, 
-  FileText, 
-  Building2, 
-  Calendar, 
-  DollarSign, 
-  Clock,
-  CheckCircle,
-  AlertCircle,
+import {
+  X,
+  FileText,
+  Building2,
+  Calendar,
+  DollarSign,
   Loader2,
   Eye,
   Download,
@@ -84,7 +81,7 @@ export function DealDetailModal({
     try {
       // Fetch deal details with documents and workflows
       const response = await fetchWithAuth(`/api/deals/${deal.id}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch deal details');
       }
@@ -92,7 +89,7 @@ export function DealDetailModal({
       const data = await response.json();
       setDocuments(data.documents || []);
       setWorkflows(data.workflows || []);
-      
+
       // Try to extract CDM data from deal_data
       if (data.deal?.deal_data) {
         setCdmData(data.deal.deal_data);
@@ -104,14 +101,20 @@ export function DealDetailModal({
     }
   };
 
-  const formatCurrency = (amount: number | undefined, currency: string = 'USD') => {
+  const formatCurrency = (amount: number | undefined, currencyCode?: string | null) => {
     if (!amount) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    const currency = currencyCode || 'USD';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch (err) {
+      console.warn(`Invalid currency code: ${currency}`, err);
+      return `${currency} ${amount.toLocaleString()}`;
+    }
   };
 
   const formatDate = (dateString: string) => {

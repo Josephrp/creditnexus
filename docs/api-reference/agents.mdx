@@ -1,0 +1,565 @@
+---
+title: Agent Workflows API
+description: API endpoints for LangAlpha quantitative analysis, DeepResearch, and PeopleHub workflows
+---
+
+## Overview
+
+CreditNexus provides comprehensive API endpoints for three AI agent workflows:
+
+- **LangAlpha**: Quantitative financial analysis with multi-agent orchestration
+- **DeepResearch**: Iterative web research with knowledge accumulation
+- **PeopleHub**: Business intelligence and psychometric analysis
+
+All endpoints require authentication via JWT token in the `Authorization` header.
+
+---
+
+## LangAlpha: Quantitative Analysis
+
+### Analyze Company
+
+Perform comprehensive quantitative analysis of a company.
+
+<RequestExample>
+```bash
+POST /api/quantitative-analysis/company
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "company_name": "Apple Inc.",
+  "ticker": "AAPL",
+  "analysis_type": "comprehensive",
+  "deal_id": 123,
+  "stream": false
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="company_name" type="string" required>
+  Company name (e.g., "Apple Inc.")
+</ParamField>
+
+<ParamField body="ticker" type="string">
+  Stock ticker symbol (e.g., "AAPL"). Optional if company_name is provided.
+</ParamField>
+
+<ParamField body="analysis_type" type="string">
+  Analysis type: `"comprehensive"`, `"financial"`, `"market"`, or `"risk"`. Default: `"comprehensive"`
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID to link analysis results to a deal
+</ParamField>
+
+<ParamField body="stream" type="boolean">
+  Enable Server-Sent Events (SSE) for real-time progress updates. Default: `false`
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Response status: `"success"` or `"error"`
+</ResponseField>
+
+<ResponseField name="analysis_id" type="string">
+  Unique analysis ID for retrieving results
+</ResponseField>
+
+<ResponseField name="result" type="object">
+  Analysis results including:
+  - `summary`: Executive summary
+  - `findings`: Key findings
+  - `metrics`: Financial metrics and ratios
+  - `data`: Raw analysis data
+</ResponseField>
+
+<ResponseField name="cdm_events" type="array">
+  Array of FINOS CDM-compliant events generated during analysis
+</ResponseField>
+
+**Streaming Response (when `stream=true`):**
+
+Server-Sent Events with the following event types:
+
+- `started`: Analysis has begun
+  ```json
+  {"type": "started", "data": {"analysis_id": "analysis_123", "message": "Analysis started"}}
+  ```
+
+- `progress`: Progress update
+  ```json
+  {"type": "progress", "data": {"step": "Fetching market data", "progress": 25, "message": "25% complete"}}
+  ```
+
+- `completed`: Analysis completed
+  ```json
+  {"type": "completed", "data": {"analysis_id": "analysis_123", "result": {...}}}
+  ```
+
+**Code Reference**: `app/api/routes.py` (line ~1169), `app/services/quantitative_analysis_service.py`
+
+---
+
+### Analyze Market
+
+Perform market analysis for sectors, trends, or economic indicators.
+
+<RequestExample>
+```bash
+POST /api/quantitative-analysis/market
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "query": "Technology sector Q4 2024 performance",
+  "time_range": "3M",
+  "deal_id": 123,
+  "stream": false
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="query" type="string" required>
+  Market analysis query (e.g., "Technology sector trends", "S&P 500 performance")
+</ParamField>
+
+<ParamField body="time_range" type="string">
+  Time range for analysis: `"1M"`, `"3M"`, `"6M"`, `"1Y"`, or `"5Y"`. Default: `"3M"`
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID to link analysis results to a deal
+</ParamField>
+
+<ParamField body="stream" type="boolean">
+  Enable Server-Sent Events (SSE) for real-time progress updates. Default: `false`
+</ParamField>
+
+**Response:**
+
+Same structure as company analysis response.
+
+**Code Reference**: `app/api/routes.py` (line ~1310), `app/services/quantitative_analysis_service.py`
+
+---
+
+### Analyze Loan Application
+
+Evaluate loan applications with quantitative metrics.
+
+<RequestExample>
+```bash
+POST /api/quantitative-analysis/loan-application
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "borrower_name": "Acme Corp",
+  "loan_amount": 1000000,
+  "loan_type": "term_loan",
+  "deal_id": 123,
+  "stream": false
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="borrower_name" type="string" required>
+  Borrower company name
+</ParamField>
+
+<ParamField body="loan_amount" type="number" required>
+  Loan amount in USD
+</ParamField>
+
+<ParamField body="loan_type" type="string">
+  Loan type: `"term_loan"`, `"revolving"`, `"bridge"`, or `"other"`. Default: `"term_loan"`
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID to link analysis results to a deal
+</ParamField>
+
+<ParamField body="stream" type="boolean">
+  Enable Server-Sent Events (SSE) for real-time progress updates. Default: `false`
+</ParamField>
+
+**Response:**
+
+Same structure as company analysis response.
+
+**Code Reference**: `app/api/routes.py` (line ~1361), `app/services/quantitative_analysis_service.py`
+
+---
+
+### Get Analysis Results
+
+Retrieve completed analysis results by analysis ID.
+
+<RequestExample>
+```bash
+GET /api/quantitative-analysis/results/{analysis_id}
+Authorization: Bearer {jwt_token}
+```
+</RequestExample>
+
+**Path Parameters:**
+
+<ParamField body="analysis_id" type="string" required>
+  Analysis ID returned from analysis endpoint
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Analysis status: `"pending"`, `"running"`, `"completed"`, or `"failed"`
+</ResponseField>
+
+<ResponseField name="result" type="object">
+  Full analysis results (same as analysis endpoint response)
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp of analysis creation
+</ResponseField>
+
+<ResponseField name="completed_at" type="string">
+  ISO 8601 timestamp of analysis completion (if completed)
+</ResponseField>
+
+**Code Reference**: `app/api/routes.py` (line ~1489), `app/services/quantitative_analysis_service.py`
+
+---
+
+## DeepResearch: Iterative Web Research
+
+### Submit Research Query
+
+Submit a research query for iterative web research.
+
+<RequestExample>
+```bash
+POST /api/deep-research/query
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "query": "What are the latest developments in sustainable finance regulations?",
+  "deal_id": 123,
+  "max_iterations": 5
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="query" type="string" required>
+  Research query/question
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID to link research results to a deal
+</ParamField>
+
+<ParamField body="max_iterations" type="integer">
+  Maximum number of research iterations. Default: `5`
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Response status: `"success"` or `"error"`
+</ResponseField>
+
+<ResponseField name="research_id" type="string">
+  Unique research ID for retrieving results
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="cdm_events" type="array">
+  Array of FINOS CDM-compliant events generated during research
+</ResponseField>
+
+**Code Reference**: `app/api/routes.py` (line ~708), `app/services/deep_research_service.py`
+
+---
+
+### Get Research Results
+
+Retrieve completed research results by research ID.
+
+<RequestExample>
+```bash
+GET /api/deep-research/results/{research_id}
+Authorization: Bearer {jwt_token}
+```
+</RequestExample>
+
+**Path Parameters:**
+
+<ParamField body="research_id" type="string" required>
+  Research ID returned from query endpoint
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Research status: `"pending"`, `"running"`, `"completed"`, or `"failed"`
+</ResponseField>
+
+<ResponseField name="answer" type="string">
+  Comprehensive research answer
+</ResponseField>
+
+<ResponseField name="knowledge_items" type="array">
+  Array of knowledge items with:
+  - `title`: Knowledge item title
+  - `content`: Knowledge item content
+  - `sources`: Array of source citations
+</ResponseField>
+
+<ResponseField name="sources" type="array">
+  Array of source URLs and metadata
+</ResponseField>
+
+<ResponseField name="statistics" type="object">
+  Research statistics:
+  - `sources_used`: Number of sources consulted
+  - `iterations`: Number of research iterations
+  - `time_taken_seconds`: Research duration
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp of research creation
+</ResponseField>
+
+<ResponseField name="completed_at" type="string">
+  ISO 8601 timestamp of research completion (if completed)
+</ResponseField>
+
+**Code Reference**: `app/api/routes.py` (line ~793), `app/services/deep_research_service.py`
+
+---
+
+## PeopleHub: Business Intelligence
+
+### Launch PeopleHub Workflow
+
+Launch a PeopleHub research workflow via the digitizer chatbot API.
+
+<RequestExample>
+```bash
+POST /api/digitizer-chatbot/launch-workflow
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "workflow_type": "peoplehub",
+  "session_id": "chatbot-session-123",
+  "workflow_params": {
+    "person_name": "John Doe"
+  },
+  "deal_id": 123
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="workflow_type" type="string" required>
+  Workflow type: `"peoplehub"`, `"deepresearch"`, or `"langalpha"`
+</ParamField>
+
+<ParamField body="session_id" type="string" required>
+  Chatbot session ID
+</ParamField>
+
+<ParamField body="workflow_params" type="object" required>
+  Workflow-specific parameters:
+  - For `peoplehub`: `{"person_name": "John Doe"}`
+  - For `deepresearch`: `{"query": "research query"}`
+  - For `langalpha`: `{"analysis_type": "company", "company_name": "Apple Inc."}`
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID to link workflow results to a deal
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Response status: `"success"` or `"error"`
+</ResponseField>
+
+<ResponseField name="workflow_type" type="string">
+  Workflow type that was launched
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Status message
+</ResponseField>
+
+<ResponseField name="workflow_result" type="object">
+  Workflow result object with:
+  - For `peoplehub`: Psychometric profile, research summary, credit assessment
+  - For `deepresearch`: Research ID and status
+  - For `langalpha`: Analysis ID and status
+</ResponseField>
+
+<ResponseField name="cdm_events" type="array">
+  Array of FINOS CDM-compliant events generated during workflow
+</ResponseField>
+
+**Code Reference**: `app/api/routes.py` (line ~3903), `app/services/digitizer_chatbot_service.py`
+
+---
+
+## Chatbot Integration
+
+### Chat with Digitizer Chatbot
+
+Send a message to the digitizer chatbot, which can automatically launch agent workflows.
+
+<RequestExample>
+```bash
+POST /api/digitizer-chatbot/chat
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "message": "Analyze Apple Inc. financials",
+  "session_id": "chatbot-session-123",
+  "deal_id": 123,
+  "document_id": 456,
+  "conversation_history": [
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi! How can I help?"}
+  ],
+  "document_context": {
+    "borrower": "Apple Inc.",
+    "loan_amount": 1000000
+  }
+}
+```
+</RequestExample>
+
+**Request Body:**
+
+<ParamField body="message" type="string" required>
+  User message (can include workflow launch requests)
+</ParamField>
+
+<ParamField body="session_id" type="string" required>
+  Chatbot session ID
+</ParamField>
+
+<ParamField body="deal_id" type="integer">
+  Optional deal ID for context
+</ParamField>
+
+<ParamField body="document_id" type="integer">
+  Optional document ID for context
+</ParamField>
+
+<ParamField body="conversation_history" type="array">
+  Previous conversation messages (last 10 messages)
+</ParamField>
+
+<ParamField body="document_context" type="object">
+  Document context (extracted CDM data)
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Response status: `"success"` or `"error"`
+</ResponseField>
+
+<ResponseField name="response" type="string">
+  Chatbot response message
+</ResponseField>
+
+<ResponseField name="workflow_launched" type="string">
+  Workflow type that was launched (if any): `"langalpha"`, `"deepresearch"`, or `"peoplehub"`
+</ResponseField>
+
+<ResponseField name="workflow_result" type="object">
+  Workflow result object (if workflow was launched)
+</ResponseField>
+
+<ResponseField name="cdm_events" type="array">
+  Array of FINOS CDM-compliant events
+</ResponseField>
+
+**Code Reference**: `app/api/routes.py` (line ~3835), `app/services/digitizer_chatbot_service.py`
+
+---
+
+## Error Responses
+
+All endpoints return standard error responses:
+
+<ResponseField name="status" type="string">
+  Error status: `"error"`
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message describing what went wrong
+</ResponseField>
+
+<ResponseField name="detail" type="object">
+  Additional error details (if available)
+</ResponseField>
+
+**Common Error Codes:**
+
+- `400 Bad Request`: Invalid request parameters
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Analysis/research ID not found
+- `500 Internal Server Error`: Server error during processing
+
+---
+
+## Rate Limiting
+
+All agent workflow endpoints are rate-limited:
+
+- **Default**: 60 requests per minute per user
+- **Streaming endpoints**: Same rate limit applies
+- **Rate limit headers**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+
+---
+
+## Authentication
+
+All endpoints require JWT authentication:
+
+1. **Login** to get JWT token: `POST /api/auth/login`
+2. **Include token** in `Authorization` header: `Authorization: Bearer {jwt_token}`
+3. **Token expiration**: Tokens expire after configured TTL (default: 24 hours)
+
+**Code Reference**: `app/auth/jwt_auth.py`
+
+---
+
+## Next Steps
+
+- [Agent Workflows Feature Documentation](/features/agent-workflows) - Complete feature overview
+- [Configuration Guide](/getting-started/configuration#agent-workflows-configuration) - Setup instructions
+- [Agent Tools Documentation](/features/agent-tools) - Available tools and capabilities
+
+---
+
+**Last Updated**: 2025-01-14  
+**API Version**: 1.0

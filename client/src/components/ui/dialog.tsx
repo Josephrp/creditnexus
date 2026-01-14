@@ -50,7 +50,7 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-[var(--color-overlay)] backdrop-blur-[8px]"
         onClick={() => onOpenChange(false)}
         aria-hidden="true"
       />
@@ -122,7 +122,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       <div
         ref={combinedRef}
         className={cn(
-          "relative z-50 w-full max-w-lg rounded-lg border bg-slate-800 border-slate-700 p-6 shadow-lg",
+          "relative z-50 w-full max-w-lg rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-lg",
           className
         )}
         onClick={handleContentClick}
@@ -139,7 +139,7 @@ DialogContent.displayName = "DialogContent";
 
 const DialogHeader = ({ className, ...props }: DialogHeaderProps) => (
   <div
-    className={cn("flex flex-col space-y-1.5 text-center sm:text-left mb-4", className)}
+    className={cn("flex flex-col space-y-1.5 text-center sm:text-left mb-4 text-[var(--color-foreground)]", className)}
     {...props}
   />
 );
@@ -149,7 +149,7 @@ const DialogTitle = React.forwardRef<HTMLHeadingElement, DialogTitleProps>(
   ({ className, ...props }, ref) => (
     <h2
       ref={ref}
-      className={cn("text-lg font-semibold leading-none tracking-tight text-slate-100", className)}
+      className={cn("text-lg font-semibold leading-none tracking-tight text-[var(--color-foreground)]", className)}
       {...props}
     />
   )
@@ -160,7 +160,7 @@ const DialogDescription = React.forwardRef<HTMLParagraphElement, DialogDescripti
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn("text-sm text-slate-400", className)}
+      className={cn("text-sm text-[var(--color-muted-foreground)]", className)}
       {...props}
     />
   )
@@ -175,7 +175,7 @@ const DialogFooter = React.forwardRef<HTMLDivElement, DialogFooterProps>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-6", className)}
+      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-6 text-[var(--color-foreground)]", className)}
       {...props}
     />
   )
