@@ -147,10 +147,10 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
 
   if (loading && !asset) {
     return (
-      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 animate-pulse">
-        <div className="h-6 bg-slate-700 rounded w-1/3 mb-4"></div>
-        <div className="h-20 bg-slate-700 rounded mb-4"></div>
-        <div className="h-4 bg-slate-700 rounded w-2/3"></div>
+      <div className="bg-[var(--surface-panel)]/50 rounded-xl p-6 border border-[var(--surface-panel-border)]/50 animate-pulse">
+        <div className="h-6 bg-[var(--surface-panel-border)] rounded w-1/3 mb-4"></div>
+        <div className="h-20 bg-[var(--surface-panel-border)] rounded mb-4"></div>
+        <div className="h-4 bg-[var(--surface-panel-border)] rounded w-2/3"></div>
       </div>
     );
   }
@@ -171,24 +171,24 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
     asset.current_interest_rate > asset.base_interest_rate;
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+    <div className="bg-[var(--surface-panel)] rounded-xl border border-[var(--surface-panel-border)] overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+      <div className="p-4 border-b border-[var(--color-border)] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${status.bg}`}>
             <StatusIcon className={`w-5 h-5 ${status.color}`} />
           </div>
           <div>
-            <h3 className="font-semibold text-white">Loan Asset #{asset.loan_id}</h3>
-            <p className="text-sm text-slate-400">Ground Truth Status</p>
+            <h3 className="font-semibold text-[var(--color-foreground)]">Loan Asset #{asset.loan_id}</h3>
+            <p className="text-sm text-[var(--color-muted-foreground)]">Ground Truth Status</p>
           </div>
         </div>
         
         {/* CDM Badge */}
         {asset.spt_data && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 rounded-full border border-blue-500/30">
-            <FileCheck className="w-4 h-4 text-blue-400" />
-            <span className="text-xs font-medium text-blue-400">FINOS CDM Compliant</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--color-primary)]/20 rounded-full border border-[var(--color-primary)]/30">
+            <FileCheck className="w-4 h-4 text-[var(--color-primary)]" />
+            <span className="text-xs font-medium text-[var(--color-primary)]">FINOS CDM Compliant</span>
           </div>
         )}
       </div>
@@ -201,23 +201,23 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
       {/* Metrics Grid */}
       <div className="p-4 grid grid-cols-2 gap-4">
         {/* NDVI Score */}
-        <div className="bg-slate-900/50 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+        <div className="bg-[var(--surface-panel-secondary)] rounded-lg p-3">
+          <div className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-sm mb-1">
             <Leaf className="w-4 h-4" />
             <span>NDVI Score</span>
           </div>
-          <p className="text-2xl font-bold text-white">{formatNDVI(asset.last_verified_score)}</p>
-          <p className="text-xs text-slate-500">Threshold: {formatNDVI(asset.spt_threshold)}</p>
+          <p className="text-2xl font-bold text-[var(--color-foreground)]">{formatNDVI(asset.last_verified_score)}</p>
+          <p className="text-xs text-[var(--color-muted-foreground)]">Threshold: {formatNDVI(asset.spt_threshold)}</p>
         </div>
 
         {/* Interest Rate */}
-        <div className="bg-slate-900/50 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+        <div className="bg-[var(--surface-panel-secondary)] rounded-lg p-3">
+          <div className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-sm mb-1">
             <Percent className="w-4 h-4" />
             <span>Interest Rate</span>
             {hasRateIncrease && <TrendingUp className="w-4 h-4 text-red-400" />}
           </div>
-          <p className={`text-2xl font-bold ${hasRateIncrease ? 'text-red-400' : 'text-white'}`}>
+          <p className={`text-2xl font-bold ${hasRateIncrease ? 'text-red-400' : 'text-[var(--color-foreground)]'}`}>
             {asset.current_interest_rate?.toFixed(2)}%
           </p>
           {hasRateIncrease && (
@@ -231,7 +231,7 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
       {/* Location */}
       {asset.collateral_address && (
         <div className="px-4 pb-2">
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
+          <div className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-sm">
             <MapPin className="w-4 h-4" />
             <span className="truncate">{asset.collateral_address}</span>
           </div>
@@ -240,7 +240,7 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
 
       {/* Last Verified */}
       <div className="px-4 pb-2">
-        <div className="flex items-center gap-2 text-slate-500 text-xs">
+        <div className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-xs">
           <Clock className="w-3 h-3" />
           <span>Last verified: {formatDate(asset.last_verified_at)}</span>
         </div>
@@ -254,7 +254,7 @@ export function AssetVerificationCard({ assetId, onVerify }: AssetVerificationCa
       )}
 
       {/* Action Button */}
-      <div className="p-4 border-t border-slate-700/50">
+      <div className="p-4 border-t border-[var(--surface-panel-border)]">
         <button
           onClick={runVerification}
           disabled={verifying}

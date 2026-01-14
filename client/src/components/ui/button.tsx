@@ -38,17 +38,23 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant, size, children, ...props }, ref) => {
+    const isIconOnly = React.Children.count(children) === 1 && 
+      React.isValidElement(children) && 
+      children.type?.toString().includes('Icon')
+
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        aria-label={isIconOnly && !props['aria-label'] ? 'Icon button' : props['aria-label']}
         {...props}
-      />
+      >
+        {children}
+      </button>
     )
   }
 )
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
-

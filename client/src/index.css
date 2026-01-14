@@ -196,6 +196,76 @@ body {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+:root {
+  --font-sans: 'Inter', sans-serif;
+  
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+
+  --heading-1: var(--text-5xl);
+  --heading-2: var(--text-4xl);
+  --heading-3: var(--text-3xl);
+  --heading-4: var(--text-2xl);
+  --heading-5: var(--text-xl);
+  --heading-6: var(--text-lg);
+
+  --font-thin: 100;
+  --font-extralight: 200;
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+  --font-black: 900;
+  
+  --surface-gradient-start: oklch(14% 0.015 264);
+  --surface-gradient-end: oklch(4.5% 0.01 264);
+  --surface-panel: color-mix(in oklch, var(--color-background) 70%, black 30%);
+  --surface-panel-border: color-mix(in oklch, var(--color-border) 90%, black 10%);
+  --surface-panel-secondary: color-mix(in oklch, var(--color-background) 60%, black 40%);
+  --surface-panel-hover: color-mix(in oklch, var(--color-background) 50%, black 50%);
+  --surface-panel-active: color-mix(in oklch, var(--color-background) 40%, black 60%);
+  
+  /* Table Styling */
+  --color-table-border: color-mix(in oklch, var(--color-border) 90%, black 10%);
+  --color-table-footer: color-mix(in oklch, var(--color-secondary) 90%, black 10%);
+  --color-table-hover: color-mix(in oklch, var(--color-accent) 10%, transparent 90%);
+  --color-table-head-text: var(--color-foreground);
+  --color-table-cell-text: var(--color-foreground);
+}
+
+:root.light {
+  --surface-panel: color-mix(in oklch, var(--color-background) 80%, white 20%);
+  --surface-panel-border: color-mix(in oklch, var(--color-border) 85%, white 15%);
+  --surface-panel-secondary: color-mix(in oklch, var(--color-background) 90%, white 10%);
+  --surface-panel-hover: color-mix(in oklch, var(--color-background) 85%, white 15%);
+  --surface-panel-active: color-mix(in oklch, var(--color-background) 75%, white 25%);
+  
+  --color-table-border: color-mix(in oklch, var(--color-border) 85%, white 15%);
+  --color-table-footer: color-mix(in oklch, var(--color-secondary) 90%, white 10%);
+  --color-table-hover: color-mix(in oklch, var(--color-accent) 5%, transparent 95%);
+}
+
+.surface-gradient {
+  background-image: radial-gradient(circle at top, var(--surface-gradient-start), var(--surface-gradient-end));
+}
+
+.surface-panel {
+  background-color: var(--surface-panel);
+  border: 1px solid var(--surface-panel-border);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.45);
+}
+
 @keyframes pulse-subtle {
   0%, 100% {
     opacity: 1;
