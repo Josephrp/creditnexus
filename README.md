@@ -165,11 +165,12 @@ uv run alembic upgrade head
 This will create all necessary tables (documents, workflows, policy_decisions, users, etc.) based on the migration files in `alembic/versions/`.
 
 <details>
-<summary><h3>0.5. External Service Configuration (Click to expand)</h3></summary>
+<summary><b>0.5. External Service Configuration (Click to expand)</b></summary>
+
 <br>
 
 <details>
-<summary><h4>DigiSigner Webhook Setup (for Digital Signatures)</h4></summary>
+<summary><b>DigiSigner Webhook Setup (for Digital Signatures)</b></summary>
 
 CreditNexus integrates with DigiSigner for digital signature workflows. To enable webhook notifications:
 
@@ -234,7 +235,7 @@ DIGISIGNER_WEBHOOK_SECRET=your_webhook_secret_here  # Optional but recommended
 </details>
 
 <details>
-<summary><h4>Twilio Setup (for Loan Recovery)</h4></summary>
+<summary><b>Twilio Setup (for Loan Recovery)</b></summary>
 
 CreditNexus integrates with Twilio for SMS and voice communication in loan recovery workflows. To enable:
 
@@ -268,7 +269,7 @@ Configure webhook URLs in Twilio Console:
 </details>
 
 <details>
-<summary><h4>SentinelHub Setup (for Satellite Imagery)</h4></summary>
+<summary><b>SentinelHub Setup (for Satellite Imagery)</b></summary>
 
 CreditNexus uses SentinelHub for satellite imagery access. To enable:
 
@@ -285,7 +286,7 @@ SENTINELHUB_SECRET=your_client_secret_here
 </details>
 
 <details>
-<summary><h4>MetaMask/Blockchain Setup (for Securitization)</h4></summary>
+<summary><b>MetaMask/Blockchain Setup (for Securitization)</b></summary>
 
 CreditNexus uses Base network for blockchain operations. To configure:
 
@@ -301,7 +302,7 @@ USDC_TOKEN_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # Base Mainnet US
 </details>
 
 <details>
-<summary><h4>Companies House API (for UK Regulatory Filings)</h4></summary>
+<summary><b>Companies House API (for UK Regulatory Filings)</b></summary>
 
 For automated UK charge filings (MR01), configure:
 
@@ -316,7 +317,7 @@ COMPANIES_HOUSE_API_KEY=your_api_key_here
 </details>
 
 <details>
-<summary><h3>0.6. Smart Contract Deployment (Optional - for Securitization Features)</h3></summary>
+<summary><b>0.6. Smart Contract Deployment (Optional - for Securitization Features)</b></summary>
 
 CreditNexus includes smart contracts for securitization workflows. To enable blockchain features:
 
@@ -482,11 +483,12 @@ npm run dev
 ---
 
 <details>
-<summary><h2>🧩 Core Modules (Click to expand)</h2></summary>
+<summary><b>🧩 Core Modules (Click to expand)</b></summary>
+
 <br>
 
 <details>
-<summary><h3>1. The Verification Demo (Live Orchestration)</h3></summary>
+<summary><b>1. The Verification Demo (Live Orchestration)</b></summary>
 
 > **Access via: "Verification Demo" in Sidebar**
 The primary demonstration of the "Live Wire" workflow.
@@ -501,7 +503,7 @@ The primary demonstration of the "Live Wire" workflow.
 </details>
 
 <details>
-<summary><h3>2. Ground Truth Dashboard</h3></summary>
+<summary><b>2. Ground Truth Dashboard</b></summary>
 
 > **Access via: "Ground Truth" in Sidebar**
 The "Production View" for monitoring the entire portfolio of spatially-verified assets.
@@ -513,7 +515,7 @@ The "Production View" for monitoring the entire portfolio of spatially-verified 
 </details>
 
 <details>
-<summary><h3>3. Risk War Room</h3></summary>
+<summary><b>3. Risk War Room</b></summary>
 
 > **Access via: "Risk War Room" in Sidebar**
 A semantic search engine for risk officers, integrated with FDC3.
@@ -524,7 +526,7 @@ A semantic search engine for risk officers, integrated with FDC3.
 </details>
 
 <details>
-<summary><h3>4. GreenLens</h3></summary>
+<summary><b>4. GreenLens</b></summary>
 
 > **Access via: "GreenLens" in Sidebar**
 Visualizes the financial impact (Margin Ratchets) of ESG performance.
@@ -534,7 +536,7 @@ Visualizes the financial impact (Margin Ratchets) of ESG performance.
 </details>
 
 <details>
-<summary><h3>5. Document Parser</h3></summary>
+<summary><b>5. Document Parser</b></summary>
 
 > **Access via: "Document Parser" in Top Nav**
 The foundational tool for extracting structured data from unstructured PDF legal documents.
@@ -544,7 +546,7 @@ The foundational tool for extracting structured data from unstructured PDF legal
 </details>
 
 <details>
-<summary><h3>6. Loan Recovery System</h3></summary>
+<summary><b>6. Loan Recovery System</b></summary>
 
 > **Access via: "Loan Recovery" in Sidebar**
 Automated loan default detection and recovery workflow with Twilio integration.
@@ -559,7 +561,7 @@ Automated loan default detection and recovery workflow with Twilio integration.
 </details>
 
 <details>
-<summary><h3>7. Payment Systems (x402 Protocol)</h3></summary>
+<summary><b>7. Payment Systems (x402 Protocol)</b></summary>
 
 > **Access via: Securitization and Trade workflows**
 Blockchain-based payment processing using x402 protocol and USDC stablecoin.
@@ -574,7 +576,7 @@ Blockchain-based payment processing using x402 protocol and USDC stablecoin.
 </details>
 
 <details>
-<summary><h3>8. Notarization (Blockchain-Based)</h3></summary>
+<summary><b>8. Notarization (Blockchain-Based)</b></summary>
 
 > **Access via: Securitization Workflow**
 Blockchain-based document notarization using smart contracts.
@@ -589,7 +591,7 @@ Blockchain-based document notarization using smart contracts.
 </details>
 
 <details>
-<summary><h3>9. Digital Signing (DigiSigner Integration)</h3></summary>
+<summary><b>9. Digital Signing (DigiSigner Integration)</b></summary>
 
 > **Access via: Document workflows**
 Digital signature workflows with DigiSigner integration and webhook notifications.
@@ -604,7 +606,7 @@ Digital signature workflows with DigiSigner integration and webhook notification
 </details>
 
 <details>
-<summary><h3>10. Dealflow Management</h3></summary>
+<summary><b>10. Dealflow Management</b></summary>
 
 > **Access via: "Deals" in Sidebar**
 Comprehensive deal tracking and collaboration platform.
@@ -619,7 +621,7 @@ Comprehensive deal tracking and collaboration platform.
 </details>
 
 <details>
-<summary><h3>11. One-Click Audit Reports</h3></summary>
+<summary><b>11. One-Click Audit Reports</b></summary>
 
 > **Access via: "Auditor" in Sidebar**
 Automated audit report generation with CDM event exploration.
@@ -634,7 +636,7 @@ Automated audit report generation with CDM event exploration.
 </details>
 
 <details>
-<summary><h3>12. Securitization Workflow</h3></summary>
+<summary><b>12. Securitization Workflow</b></summary>
 
 > **Access via: "Securitization" in Sidebar**
 Complete securitization workflow from pool creation to token minting.
@@ -649,13 +651,13 @@ Complete securitization workflow from pool creation to token minting.
 </details>
 
 <details>
-<summary><h3>13. AI Agent Workflows</h3></summary>
+<summary><b>13. AI Agent Workflows</b></summary>
 
 > **Access via: "Agent Dashboard" in Sidebar or Document Digitizer Chatbot**
 Three powerful AI agent workflows for quantitative analysis, research, and business intelligence.
 
 <details>
-<summary><h4>LangAlpha: Quantitative Analysis</h4></summary>
+<summary><b>LangAlpha: Quantitative Analysis</b></summary>
 
 Multi-agent system for quantitative financial analysis:
 - **Company Analysis**: Financial health, market position, investment potential
@@ -672,7 +674,7 @@ Multi-agent system for quantitative financial analysis:
 </details>
 
 <details>
-<summary><h4>DeepResearch: Iterative Web Research</h4></summary>
+<summary><b>DeepResearch: Iterative Web Research</b></summary>
 
 Comprehensive web research with knowledge accumulation:
 - **Multi-Stage Research**: Search → Read → Answer → Reflect → Iterate
@@ -686,7 +688,7 @@ Comprehensive web research with knowledge accumulation:
 </details>
 
 <details>
-<summary><h4>PeopleHub: Business Intelligence</h4></summary>
+<summary><b>PeopleHub: Business Intelligence</b></summary>
 
 Business intelligence and psychometric analysis:
 - **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
@@ -714,7 +716,8 @@ Business intelligence and psychometric analysis:
 ---
 
 <details>
-<summary><h2>🔗 System Interoperability (FDC3) (Click to expand)</h2></summary>
+<summary><b>🔗 System Interoperability (FDC3) (Click to expand)</b></summary>
+
 <br>
 
 CreditNexus is **fully compliant with FDC3 2.0** standards, enabling seamless desktop interoperability with other financial applications. The platform components are designed to work as a "Chain of Command" using the **FDC3 Standard** for seamless data flow:
@@ -794,7 +797,8 @@ This script automatically:
 ```
 
 <details>
-<summary><h3>Manual Startup (Advanced) (Click to expand)</h3></summary>
+<summary><b>Manual Startup (Advanced) (Click to expand)</b></summary>
+
 <br>
 
 If you prefer to run services separately, open multiple terminals:
@@ -1034,13 +1038,14 @@ Then configure `openfin/app.json` to point to the production build location.
 ---
 
 <details>
-<summary><h2>🚀 Demonstration & Quick Start Guide (Click to expand)</h2></summary>
+<summary><b>🚀 Demonstration & Quick Start Guide (Click to expand)</b></summary>
+
 <br>
 
 This guide explains how to use CreditNexus for demonstration purposes, from first login to executing a complex satellite-verified trade.
 
 <details>
-<summary><h3>1. Accessing the Platform (Login)</h3></summary>
+<summary><b>1. Accessing the Platform (Login)</b></summary>
 
 CreditNexus automatically initializes a default administrative user on first startup for easy exploration.
 
@@ -1052,7 +1057,7 @@ CreditNexus automatically initializes a default administrative user on first sta
 </details>
 
 <details>
-<summary><h3>2. Initializing Demo Data (The Demo Tab)</h3></summary>
+<summary><b>2. Initializing Demo Data (The Demo Tab)</b></summary>
 
 To populate the application with a realistic portfolio of deals, documents, and events without manual entry, use the built-in seeding engine.
 
@@ -1068,7 +1073,7 @@ To populate the application with a realistic portfolio of deals, documents, and 
 </details>
 
 <details>
-<summary><h3>3. Role-Based Demonstration Flows</h3></summary>
+<summary><b>3. Role-Based Demonstration Flows</b></summary>
 
 Logout and log back in as different users to see how CreditNexus adapts to various financial personas:
 
@@ -1085,7 +1090,7 @@ Logout and log back in as different users to see how CreditNexus adapts to vario
 </details>
 
 <details>
-<summary><h3>4. Verification Demo (Satellite Ground Truth)</h3></summary>
+<summary><b>4. Verification Demo (Satellite Ground Truth)</b></summary>
 
 This is the "Live Wire" workflow connecting legal covenants to physical reality.
 
@@ -1102,7 +1107,7 @@ This is the "Live Wire" workflow connecting legal covenants to physical reality.
 </details>
 
 <details>
-<summary><h3>5. The CDM Event Ledger</h3></summary>
+<summary><b>5. The CDM Event Ledger</b></summary>
 
 Every action taken in the steps above—from a banker creating a deal to a satellite detecting a breach—generates a **FINOS Common Domain Model (CDM)** event.
 
