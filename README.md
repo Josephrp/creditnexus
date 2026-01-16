@@ -1,4 +1,4 @@
-# Algorithmic Nature-Finance Platform (CreditNexus)
+# CreditNexus
 
 **"Price & Create Structured Financial Products"**
 
@@ -37,6 +37,46 @@ CreditNexus is a next-generation financial operating system that bridges the gap
 - **GitHub**: [@fintechtonic](https://github.com/fintechtonic)
 - **HuggingFace**: [@tonic](https://hf.co/tonic)
 - **Discord**: [Join our community](https://discord.gg/7YS4Cz2Deq) - [![Discord Online](https://img.shields.io/discord/INVITE_ID?label=Discord&logo=discord&logoColor=white&style=flat-square)](https://discord.gg/7YS4Cz2Deq)
+
+
+---
+
+## 📊 Platform Scale & Capabilities
+
+CreditNexus is built with enterprise-scale architecture and comprehensive feature coverage:
+
+### Component Statistics
+
+- **215+ Prompt Templates** - AI prompts across 16 files covering LMA-compliant clause generation, industry-specific templates, and multi-scenario support
+- **11 Specialized Agents** - AI agents for document analysis, satellite verification, classification, research, and workflow automation
+- **121 Policy Rules** - Regulatory compliance rules across 21 files covering MiCA, Basel III, FATF, ESG, and green finance
+- **94 Tool Modules** - Service modules, utilities, and LangChain integration chains for comprehensive functionality
+- **76 Data Models** - Pydantic models ensuring type safety and FINOS CDM compliance across all data structures
+- **54 Database Tables** - SQLAlchemy 2.0 models covering users, documents, workflows, deals, payments, and analytics
+- **147 API Endpoints** - RESTful endpoints providing comprehensive programmatic access to all platform features
+- **100% CDM Compliant** - Full FINOS Common Domain Model compliance ensuring interoperability with financial systems
+
+### Platform Architecture Highlights
+
+**AI & Automation:**
+- 215+ prompt templates for consistent AI behavior
+- 11 specialized agents for complex workflows
+- Multi-provider LLM support (OpenAI, vLLM, HuggingFace)
+- 20 LangChain integration chains
+
+**Compliance & Policy:**
+- 121 policy rules across 8 categories
+- Real-time policy enforcement engine
+- CDM-compliant event generation
+- Three-tier decision system (ALLOW/BLOCK/FLAG)
+
+**Data & Integration:**
+- 76 Pydantic models for type safety
+- 54 database tables with SQLAlchemy 2.0
+- 147 API endpoints for programmatic access
+- Full CDM standardization
+
+> 📖 **Learn More**: See [Platform Statistics Documentation](https://tonic-ai.mintlify.app/architecture/platform-statistics) for detailed component breakdown and capabilities assessment.
 
 ## 🚀 Quick Start
 
@@ -124,9 +164,12 @@ uv run alembic upgrade head
 
 This will create all necessary tables (documents, workflows, policy_decisions, users, etc.) based on the migration files in `alembic/versions/`.
 
-### 0.5. External Service Configuration
+<details>
+<summary><h3>0.5. External Service Configuration (Click to expand)</h3></summary>
+<br>
 
-#### DigiSigner Webhook Setup (for Digital Signatures)
+<details>
+<summary><h4>DigiSigner Webhook Setup (for Digital Signatures)</h4></summary>
 
 CreditNexus integrates with DigiSigner for digital signature workflows. To enable webhook notifications:
 
@@ -188,7 +231,10 @@ DIGISIGNER_WEBHOOK_SECRET=your_webhook_secret_here  # Optional but recommended
 
 > 📖 **Full Setup Guide**: See [DigiSigner Setup Guide](https://tonic-ai.mintlify.app/guides/digisigner-setup) for detailed configuration, troubleshooting, and security considerations.
 
-#### Twilio Setup (for Loan Recovery)
+</details>
+
+<details>
+<summary><h4>Twilio Setup (for Loan Recovery)</h4></summary>
 
 CreditNexus integrates with Twilio for SMS and voice communication in loan recovery workflows. To enable:
 
@@ -219,7 +265,10 @@ Configure webhook URLs in Twilio Console:
 
 > 📖 **Full Setup Guide**: See [Loan Recovery Feature Documentation](https://tonic-ai.mintlify.app/features/recovery) for complete details and [Twilio Setup Guide](https://tonic-ai.mintlify.app/guides/twilio-setup) for configuration.
 
-#### SentinelHub Setup (for Satellite Imagery)
+</details>
+
+<details>
+<summary><h4>SentinelHub Setup (for Satellite Imagery)</h4></summary>
 
 CreditNexus uses SentinelHub for satellite imagery access. To enable:
 
@@ -233,7 +282,10 @@ SENTINELHUB_SECRET=your_client_secret_here
 
 > 📖 **Configuration Guide**: See [Documentation - Configuration](https://tonic-ai.mintlify.app/getting-started/configuration#sentinelhub-configuration) for detailed setup.
 
-#### MetaMask/Blockchain Setup (for Securitization)
+</details>
+
+<details>
+<summary><h4>MetaMask/Blockchain Setup (for Securitization)</h4></summary>
 
 CreditNexus uses Base network for blockchain operations. To configure:
 
@@ -246,7 +298,10 @@ USDC_TOKEN_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # Base Mainnet US
 
 > 📖 **Full Setup Guide**: See [MetaMask Setup Guide](https://tonic-ai.mintlify.app/guides/metamask-setup) for complete network configuration, contract addresses, and troubleshooting.
 
-#### Companies House API (for UK Regulatory Filings)
+</details>
+
+<details>
+<summary><h4>Companies House API (for UK Regulatory Filings)</h4></summary>
 
 For automated UK charge filings (MR01), configure:
 
@@ -258,7 +313,10 @@ COMPANIES_HOUSE_API_KEY=your_api_key_here
 
 > 📖 **Environment Configuration**: See [Configuration Guide](https://tonic-ai.mintlify.app/getting-started/configuration) for all available environment variables.
 
-### 0.6. Smart Contract Deployment (Optional - for Securitization Features)
+</details>
+
+<details>
+<summary><h3>0.6. Smart Contract Deployment (Optional - for Securitization Features)</h3></summary>
 
 CreditNexus includes smart contracts for securitization workflows. To enable blockchain features:
 
@@ -374,6 +432,10 @@ npx hardhat verify --network base 0x... 0x[TOKEN_ADDRESS]
 
 > 📖 **Smart Contract Documentation**: See [`contracts/README.md`](contracts/README.md) for detailed contract specifications and [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for integration details.
 
+</details>
+
+</details>
+
 ### 1. Backend (The Brain)
 
 The backend powers the AI agents, satellite imagery fetching, and FINOS CDM event generation.
@@ -419,9 +481,13 @@ npm run dev
 
 ---
 
-## 🧩 Core Modules
+<details>
+<summary><h2>🧩 Core Modules (Click to expand)</h2></summary>
+<br>
 
-### 1. The Verification Demo (Live Orchestration)
+<details>
+<summary><h3>1. The Verification Demo (Live Orchestration)</h3></summary>
+
 > **Access via: "Verification Demo" in Sidebar**
 The primary demonstration of the "Live Wire" workflow.
 - **Input**: Upload a PDF Credit Agreement.
@@ -432,7 +498,10 @@ The primary demonstration of the "Live Wire" workflow.
     4.  **NDVI Calculation**: Computes the Normalized Difference Vegetation Index to verify crop health.
 - **Output**: Determines if the borrower is in **COMPLIANCE** or **BREACH** based on the satellite evidence.
 
-### 2. Ground Truth Dashboard
+</details>
+
+<details>
+<summary><h3>2. Ground Truth Dashboard</h3></summary>
 
 > **Access via: "Ground Truth" in Sidebar**
 The "Production View" for monitoring the entire portfolio of spatially-verified assets.
@@ -441,7 +510,10 @@ The "Production View" for monitoring the entire portfolio of spatially-verified 
 - **Status Indicators**: Green (Compliant), Red (Breach), Yellow (Warning).
 - **Asset Creation**: Manually onboard new loans for verification.
 
-### 3. Risk War Room
+</details>
+
+<details>
+<summary><h3>3. Risk War Room</h3></summary>
 
 > **Access via: "Risk War Room" in Sidebar**
 A semantic search engine for risk officers, integrated with FDC3.
@@ -449,21 +521,30 @@ A semantic search engine for risk officers, integrated with FDC3.
 - **Capabilities**: Ask questions like "Find all vineyards in California with NDVI < 0.6".
 - **FDC3**: Listens for context broadcasts from other apps (e.g., when the dashboard detects a breach, the War Room automatically focuses on that asset).
 
-### 4. GreenLens
+</details>
+
+<details>
+<summary><h3>4. GreenLens</h3></summary>
 
 > **Access via: "GreenLens" in Sidebar**
 Visualizes the financial impact (Margin Ratchets) of ESG performance.
 
 - **Dynamic Pricing**: Shows how the loan's interest rate changes based on real-time ESG metrics (e.g., +25bps penalty for missed target).
 
-### 5. Document Parser
+</details>
+
+<details>
+<summary><h3>5. Document Parser</h3></summary>
 
 > **Access via: "Document Parser" in Top Nav**
 The foundational tool for extracting structured data from unstructured PDF legal documents.
 
 > 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features) for detailed feature descriptions and [Documentation - Guides](https://tonic-ai.mintlify.app/guides) for step-by-step workflows.
 
-### 6. Loan Recovery System
+</details>
+
+<details>
+<summary><h3>6. Loan Recovery System</h3></summary>
 
 > **Access via: "Loan Recovery" in Sidebar**
 Automated loan default detection and recovery workflow with Twilio integration.
@@ -475,7 +556,10 @@ Automated loan default detection and recovery workflow with Twilio integration.
 
 > 📖 **Learn More**: See [Loan Recovery Feature Documentation](https://tonic-ai.mintlify.app/features/recovery) for complete details and [Twilio Setup Guide](https://tonic-ai.mintlify.app/guides/twilio-setup) for configuration.
 
-### 7. Payment Systems (x402 Protocol)
+</details>
+
+<details>
+<summary><h3>7. Payment Systems (x402 Protocol)</h3></summary>
 
 > **Access via: Securitization and Trade workflows**
 Blockchain-based payment processing using x402 protocol and USDC stablecoin.
@@ -487,7 +571,10 @@ Blockchain-based payment processing using x402 protocol and USDC stablecoin.
 
 > 📖 **Learn More**: See [MetaMask Setup Guide](https://tonic-ai.mintlify.app/guides/metamask-setup) for network setup.
 
-### 8. Notarization (Blockchain-Based)
+</details>
+
+<details>
+<summary><h3>8. Notarization (Blockchain-Based)</h3></summary>
 
 > **Access via: Securitization Workflow**
 Blockchain-based document notarization using smart contracts.
@@ -499,7 +586,10 @@ Blockchain-based document notarization using smart contracts.
 
 > 📖 **Learn More**: See [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for implementation details.
 
-### 9. Digital Signing (DigiSigner Integration)
+</details>
+
+<details>
+<summary><h3>9. Digital Signing (DigiSigner Integration)</h3></summary>
 
 > **Access via: Document workflows**
 Digital signature workflows with DigiSigner integration and webhook notifications.
@@ -511,7 +601,10 @@ Digital signature workflows with DigiSigner integration and webhook notification
 
 > 📖 **Learn More**: See [DigiSigner Setup Guide](https://tonic-ai.mintlify.app/guides/digisigner-setup) for setup guide.
 
-### 10. Dealflow Management
+</details>
+
+<details>
+<summary><h3>10. Dealflow Management</h3></summary>
 
 > **Access via: "Deals" in Sidebar**
 Comprehensive deal tracking and collaboration platform.
@@ -523,7 +616,10 @@ Comprehensive deal tracking and collaboration platform.
 
 > 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features/dealflow-management) for detailed workflows.
 
-### 11. One-Click Audit Reports
+</details>
+
+<details>
+<summary><h3>11. One-Click Audit Reports</h3></summary>
 
 > **Access via: "Auditor" in Sidebar**
 Automated audit report generation with CDM event exploration.
@@ -535,7 +631,10 @@ Automated audit report generation with CDM event exploration.
 
 > 📖 **Learn More**: See [Documentation - Features](https://tonic-ai.mintlify.app/features/audit-reports) for report generation guide.
 
-### 12. Securitization Workflow
+</details>
+
+<details>
+<summary><h3>12. Securitization Workflow</h3></summary>
 
 > **Access via: "Securitization" in Sidebar**
 Complete securitization workflow from pool creation to token minting.
@@ -547,12 +646,16 @@ Complete securitization workflow from pool creation to token minting.
 
 > 📖 **Learn More**: See [Securitization Feature Documentation](https://tonic-ai.mintlify.app/features/securitization) for complete workflow.
 
-### 13. AI Agent Workflows
+</details>
+
+<details>
+<summary><h3>13. AI Agent Workflows</h3></summary>
 
 > **Access via: "Agent Dashboard" in Sidebar or Document Digitizer Chatbot**
 Three powerful AI agent workflows for quantitative analysis, research, and business intelligence.
 
-#### LangAlpha: Quantitative Analysis
+<details>
+<summary><h4>LangAlpha: Quantitative Analysis</h4></summary>
 
 Multi-agent system for quantitative financial analysis:
 - **Company Analysis**: Financial health, market position, investment potential
@@ -566,7 +669,10 @@ Multi-agent system for quantitative financial analysis:
 - `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key for fundamentals
 - `SERPER_API_KEY`: Serper API key for web search (optional)
 
-#### DeepResearch: Iterative Web Research
+</details>
+
+<details>
+<summary><h4>DeepResearch: Iterative Web Research</h4></summary>
 
 Comprehensive web research with knowledge accumulation:
 - **Multi-Stage Research**: Search → Read → Answer → Reflect → Iterate
@@ -577,7 +683,10 @@ Comprehensive web research with knowledge accumulation:
 **Configuration Required:**
 - `SERPER_API_KEY`: Serper API key for Google search (optional, uses WebSearchService fallback)
 
-#### PeopleHub: Business Intelligence
+</details>
+
+<details>
+<summary><h4>PeopleHub: Business Intelligence</h4></summary>
 
 Business intelligence and psychometric analysis:
 - **Psychometric Analysis**: Big Five personality traits, risk tolerance, decision-making style
@@ -588,6 +697,8 @@ Business intelligence and psychometric analysis:
 **Configuration Required:**
 - No additional API keys (uses existing WebSearchService and LLM configuration)
 
+</details>
+
 **Agent Dashboard Features:**
 - Unified view of all agent results
 - Search and filter by agent type, status, or date
@@ -596,9 +707,15 @@ Business intelligence and psychometric analysis:
 
 > 📖 **Learn More**: See [Agent Workflows Documentation](https://tonic-ai.mintlify.app/features/agent-workflows) for complete details and [Configuration Guide](https://tonic-ai.mintlify.app/getting-started/configuration#agent-workflows-configuration) for setup.
 
+</details>
+
+</details>
+
 ---
 
-## 🔗 System Interoperability (FDC3)
+<details>
+<summary><h2>🔗 System Interoperability (FDC3) (Click to expand)</h2></summary>
+<br>
 
 CreditNexus is **fully compliant with FDC3 2.0** standards, enabling seamless desktop interoperability with other financial applications. The platform components are designed to work as a "Chain of Command" using the **FDC3 Standard** for seamless data flow:
 
@@ -629,6 +746,8 @@ CreditNexus is **fully compliant with FDC3 2.0** standards, enabling seamless de
 - `finos.cdm.greenFinanceAssessment` - Green finance assessment
 
 > 📖 **Learn More**: See [Documentation - Architecture](https://tonic-ai.mintlify.app/architecture/overview) for detailed system design and [Documentation - FDC3 Compliance](https://tonic-ai.mintlify.app/compliance/fdc3-compliance) for interoperability standards.
+
+</details>
 
 ---
 
@@ -674,7 +793,9 @@ This script automatically:
 .\scripts\launch_openfin.ps1
 ```
 
-### Manual Startup (Advanced)
+<details>
+<summary><h3>Manual Startup (Advanced) (Click to expand)</h3></summary>
+<br>
 
 If you prefer to run services separately, open multiple terminals:
 
@@ -878,6 +999,8 @@ Then configure `openfin/app.json` to point to the production build location.
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Vite Documentation](https://vitejs.dev/)
 
+</details>
+
 ---
 
 ## 🏗️ Architecture Stack
@@ -910,61 +1033,87 @@ Then configure `openfin/app.json` to point to the production build location.
 
 ---
 
-## 📊 Platform Scale & Capabilities
+<details>
+<summary><h2>🚀 Demonstration & Quick Start Guide (Click to expand)</h2></summary>
+<br>
 
-CreditNexus is built with enterprise-scale architecture and comprehensive feature coverage:
+This guide explains how to use CreditNexus for demonstration purposes, from first login to executing a complex satellite-verified trade.
 
-### Component Statistics
+<details>
+<summary><h3>1. Accessing the Platform (Login)</h3></summary>
 
-- **215+ Prompt Templates** - AI prompts across 16 files covering LMA-compliant clause generation, industry-specific templates, and multi-scenario support
-- **11 Specialized Agents** - AI agents for document analysis, satellite verification, classification, research, and workflow automation
-- **121 Policy Rules** - Regulatory compliance rules across 21 files covering MiCA, Basel III, FATF, ESG, and green finance
-- **94 Tool Modules** - Service modules, utilities, and LangChain integration chains for comprehensive functionality
-- **76 Data Models** - Pydantic models ensuring type safety and FINOS CDM compliance across all data structures
-- **54 Database Tables** - SQLAlchemy 2.0 models covering users, documents, workflows, deals, payments, and analytics
-- **147 API Endpoints** - RESTful endpoints providing comprehensive programmatic access to all platform features
-- **100% CDM Compliant** - Full FINOS Common Domain Model compliance ensuring interoperability with financial systems
+CreditNexus automatically initializes a default administrative user on first startup for easy exploration.
 
-### Platform Architecture Highlights
+- **URL**: `http://localhost:5173`
+- **Default Email**: `demo@creditnexus.app`
+- **Default Password**: `DemoPassword123!`
+- **Role**: `admin` (Full system access)
 
-**AI & Automation:**
-- 215+ prompt templates for consistent AI behavior
-- 11 specialized agents for complex workflows
-- Multi-provider LLM support (OpenAI, vLLM, HuggingFace)
-- 20 LangChain integration chains
+</details>
 
-**Compliance & Policy:**
-- 121 policy rules across 8 categories
-- Real-time policy enforcement engine
-- CDM-compliant event generation
-- Three-tier decision system (ALLOW/BLOCK/FLAG)
+<details>
+<summary><h3>2. Initializing Demo Data (The Demo Tab)</h3></summary>
 
-**Data & Integration:**
-- 76 Pydantic models for type safety
-- 54 database tables with SQLAlchemy 2.0
-- 147 API endpoints for programmatic access
-- Full CDM standardization
+To populate the application with a realistic portfolio of deals, documents, and events without manual entry, use the built-in seeding engine.
 
-> 📖 **Learn More**: See [Platform Statistics Documentation](https://tonic-ai.mintlify.app/architecture/platform-statistics) for detailed component breakdown and capabilities assessment.
+1.  Navigate to the **"Demo"** tab in the top navigation or sidebar.
+2.  Select the datasets you wish to seed:
+    - **Users**: Creates a suite of role-based demo users (Auditor, Banker, etc.).
+    - **Templates**: Seeds LMA-compliant document templates.
+    - **Policies**: Loads regulatory and ESG policy rules (Basel III, MiCA, etc.).
+    - **Generate Deals**: Synthetically creates 12+ complex deals with full AI-generated legal histories.
+3.  Click **"Run Seeding Process"**.
+4.  Watch the real-time logs as the **DemoDataService** orchestrates the creation of a complete financial environment.
 
----
+</details>
 
-## 🎯 The "Verification Demo" Flow
+<details>
+<summary><h3>3. Role-Based Demonstration Flows</h3></summary>
 
-To demonstrate the full power of the system:
+Logout and log back in as different users to see how CreditNexus adapts to various financial personas:
 
-  1.Navigate to **"Verification Demo"**.
-  2.Drag & Drop the sample **Credit Agreement PDF**.
-  3.Watch the logs as the **Legal Agent** extracts the "Napa Valley Vineyards" entity and the "NDVI > 0.75" covenant.
-  4.Click **"Securitize & Verify"**.
-  5.Observe the **"Ground Truth Protocol"** in action:
-    -   Satellite imagery is requested.
-    -   TorchGeo classifies the land (e.g., "Annual Crop").
-    -   NDVI is calculated (e.g., 0.65).
-    -   **Result**: Breach Detected!
-  6.  See the **FDC3 Broadcast** trigger updates in the **Risk War Room** (if open) and generate a **Terms Change** event in the CDM ledger.
+- **The Banker (`banker@creditnexus.app` / `Banker123!`)**:
+  - Focuses on the **Trade Blotter** and **Deals Dashboard**.
+  - Can initiate new credit agreements and track workflow approvals.
+- **The Law Officer (`lawofficer@creditnexus.app` / `LawOfficer123!`)**:
+  - Reviews document extractions in the **Document Parser**.
+  - Approves or flags specific legal clauses and covenants.
+- **The Auditor (`auditor@creditnexus.app` / `Auditor123!`)**:
+  - Uses the **One-Click Audit Report** and the **CDM Event Explorer**.
+  - Has a read-only oversight of all policy decisions and state transitions.
 
-> 📖 **Learn More**: See [Documentation - Verification Guide](https://tonic-ai.mintlify.app/guides/verification) for detailed verification workflows.
+</details>
+
+<details>
+<summary><h3>4. Verification Demo (Satellite Ground Truth)</h3></summary>
+
+This is the "Live Wire" workflow connecting legal covenants to physical reality.
+
+1.  Navigate to **"Verification Demo"**.
+2.  Drag & Drop the sample **Credit Agreement PDF** (or use a generated demo deal).
+3.  The **Legal Agent** extracts covenants (e.g., "NDVI > 0.75" for a sustainable farm).
+4.  Click **"Securitize & Verify"**.
+5.  **Ground Truth Protocol**:
+    - If no SentinelHub API key is provided, the system uses its **Synthetic Satellite Engine** to generate plausible multispectral data based on the asset's geocoded coordinates.
+    - The **NDVI Service** calculates vegetation health.
+    - The **TorchGeo Classifier** verifies the land use (e.g., "Vineyard").
+6.  **Result**: The system determines **COMPLIANCE** or **BREACH** and automatically broadcasts the update via **FDC3** to the Risk War Room.
+
+</details>
+
+<details>
+<summary><h3>5. The CDM Event Ledger</h3></summary>
+
+Every action taken in the steps above—from a banker creating a deal to a satellite detecting a breach—generates a **FINOS Common Domain Model (CDM)** event.
+
+- Navigate to **"Auditor > Event Explorer"** to see the immutable ledger.
+- Each event is stored as a standard JSON structure, ensuring that legal data is interoperable with any other CDM-compliant banking system.
+
+</details>
+
+> 📖 **Pro Tip**: Use the **FDC3 Desktop Integration** by opening the app in **OpenFin**. This allows the Document Parser, Trade Blotter, and GreenLens to stay synchronized in real-time as you click through a deal.
+
+</details>
 
 ---
 

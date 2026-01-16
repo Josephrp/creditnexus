@@ -1,8 +1,18 @@
+import { useState } from 'react';
 import { Github, BookOpen, Rocket, Sparkles, Shield, Leaf, ArrowRight, CheckCircle, Users, Building2, FileCheck, TrendingUp, Phone, FileText, ArrowLeftRight } from 'lucide-react';
+import { LicenseViewer } from './components/LicenseViewer';
 
 function App() {
+  const [activeLicense, setActiveLicense] = useState<'license' | 'rail' | null>(null);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-slate-100">
+      {activeLicense && (
+        <LicenseViewer 
+          licenseType={activeLicense} 
+          onClose={() => setActiveLicense(null)} 
+        />
+      )}
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 px-4">
         <div className="max-w-7xl mx-auto">
@@ -787,19 +797,19 @@ function App() {
               <p>&copy; 2026 CreditNexus. Price & create structured financial products.</p>
             </div>
             <div className="flex items-center gap-6">
-              <a
-                href="/LICENSE.md"
+              <button
+                onClick={() => setActiveLicense('license')}
                 className="text-slate-400 hover:text-slate-100 transition-colors text-sm"
               >
                 License
-              </a>
+              </button>
               <span className="text-slate-400">•</span>
-              <a
-                href="/RAIL.md"
+              <button
+                onClick={() => setActiveLicense('rail')}
                 className="text-slate-400 hover:text-slate-100 transition-colors text-sm"
               >
                 RAIL
-              </a>
+              </button>
               <a
                 href="https://github.com/josephrp/creditnexus"
                 target="_blank"
