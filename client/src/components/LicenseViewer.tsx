@@ -98,7 +98,9 @@ export function LicenseViewer({ licenseType, onClose }: LicenseViewerProps) {
         // Fallback: try to fetch directly from public folder or root
         try {
           const fileName = normalizedType === 'license' ? 'LICENSE.md' : 'RAIL.md';
-          const response = await fetch(`/${fileName}`);
+          const baseUrl = import.meta.env.BASE_URL || '/';
+          const filePath = baseUrl.endsWith('/') ? `${baseUrl}${fileName}` : `${baseUrl}/${fileName}`;
+          const response = await fetch(filePath);
           if (response.ok) {
             const text = await response.text();
             setContent(text);
