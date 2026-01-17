@@ -4,7 +4,7 @@
 
 [![Documentation](https://img.shields.io/badge/📖-Read%20The%20Docs-blue?style=flat-square)](https://tonic-ai.mintlify.app)
 [![Company Site](https://img.shields.io/badge/Company%20Site-Visit-green?style=flat-square)](https://josephrp.github.io/creditnexus)
-[![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](YOUTUBE_URL)
+[![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat-square&logo=youtube)](https://www.youtube.com/watch?v=jg25So46Wks)
 
 [![Enforced](https://img.shields.io/badge/Enforced-Sanctions-red?style=flat-square)](https://tonic-ai.mintlify.app/compliance/sanctions)
 [![Enforced](https://img.shields.io/badge/Enforced-BASEL%20II-blue?style=flat-square)](https://tonic-ai.mintlify.app/compliance/basel)
@@ -29,7 +29,7 @@
 
 CreditNexus is a next-generation financial operating system that bridges the gap between **Sustainabiity-Linked Loans (Legal Contracts)** and **Physical Reality (Satellite Data)**. It uses AI agents to extract covenants from PDF agreements and orchestrates "Ground Truth" verification using geospatial deep learning.
 
-> 📚 **[Full Documentation](https://tonic-ai.mintlify.app)** | 🏢 **[Company Site](https://josephrp.github.io/creditnexus)** | 🎥 **[Demo Video](YOUTUBE_URL)**
+> 📚 **[Full Documentation](https://tonic-ai.mintlify.app)** | 🏢 **[Company Site](https://josephrp.github.io/creditnexus)** | 🎥 **[Demo Video](https://www.youtube.com/watch?v=jg25So46Wks)**
 
 ## 🌐 Connect With Us
 
@@ -472,7 +472,7 @@ npm run dev
 
 - **[📚 Full Documentation](https://tonic-ai.mintlify.app)** - Comprehensive technical documentation, API reference, guides, and architecture details
 - **[🏢 Company Site](https://josephrp.github.io/creditnexus)** - Learn about our team, market positioning, and business model
-- **[🎥 Demo Video](YOUTUBE_URL)** - Watch CreditNexus in action
+- **[🎥 Demo Video](https://www.youtube.com/watch?v=jg25So46Wks)** - Watch CreditNexus in action
 - **[⚖️ License](LICENSE.md)** - GPL-2 + Rail.md dual license
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Guidelines for contributing to the project
 - **[🔧 Environment Configuration](https://tonic-ai.mintlify.app/getting-started/configuration)** - Complete list of environment variables and configuration options
